@@ -4,12 +4,13 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type { ColumnDef } from "@tanstack/react-table";
-import { SearchIcon, TriangleAlert, XIcon } from "lucide-react";
+import { CheckCircle2, SearchIcon, TriangleAlert, XCircle, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UrlCombobox } from "@/components/url-combobox";
 import { CrawlActions } from "@/components/crawl-actions";
 import { CrawlOptionsSheet } from "@/components/crawl-options-sheet";
@@ -17,6 +18,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
 import { DetailModal } from "./components/DetailModal";
+import { LinkCell } from "./components/link-cell";
 import { SiteInfoPanel } from "./components/SiteInfoPanel";
 import {
   DEFAULT_CONFIG,
@@ -45,12 +47,38 @@ import {
   searchResources,
 } from "./lib/filters";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
+import { cn } from "@/lib/utils";
 
 type Tab = "overview" | "pages" | "resources";
 
 /** Wraps a cell's rendered value in destructive styling when `bad` is true — the inline, at-a-glance counterpart to DetailModal's `isError` fields. */
 function flagCell(value: React.ReactNode, bad: boolean) {
   return bad ? <span className="font-medium text-destructive">{value}</span> : value;
+}
+
+/**
+ * Renders a boolean as a colored icon instead of "Yes"/"No" text.
+ * `badWhen` marks which boolean state (true or false) should render as a destructive red icon;
+ * omit it when neither state is bad (just an informational true/false indicator).
+ */
+function boolCell(value: boolean, opts: { na?: boolean; badWhen?: boolean } = {}) {
+  if (opts.na) return <span className="text-muted-foreground">–</span>;
+  const isBad = opts.badWhen === value;
+  const Icon = value ? CheckCircle2 : XCircle;
+  return (
+    <Icon
+      className={cn(
+        "size-4",
+        isBad ? "text-destructive" : value ? "text-emerald-500" : "text-muted-foreground/40",
+      )}
+    />
+  );
+}
+
+/** Renders a URL value as a clickable link (with a custom tooltip) that opens in the system browser. */
+function linkCell(value: string | null | undefined) {
+  if (!value) return value ?? "";
+  return <LinkCell value={value} className="block w-full truncate" />;
 }
 
 interface PageColumnsContext {
@@ -63,11 +91,18 @@ interface PageColumnsContext {
 
 function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[] {
   return [
-    { accessorKey: "url", header: "URL", size: 360 },
+    {
+      accessorKey: "url",
+      header: "URL",
+      size: 430,
+      cell: (c) => linkCell(c.getValue()),
+      meta: { description: "The page's crawled URL. Click to open it in your browser." },
+    },
     {
       id: "issues",
       header: "Issues",
-      size: 70,
+      size: 80,
+      meta: { description: "Number of SEO issues detected for this page — hover the warning icon in a row for details." },
       accessorFn: (page) =>
         getPageIssueKeys(
           page,
@@ -88,32 +123,48 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
           ctx.canonicalStatusMap,
           ctx.linkedUrls,
         );
-        const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean).join("; ");
+        const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean);
         return (
-          <span
-            title={titles}
-            className="inline-flex items-center gap-1 font-medium text-destructive"
-          >
-            <TriangleAlert className="size-3.5" />
-            {count}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 font-medium text-destructive">
+                <TriangleAlert className="size-3.5" />
+                {count}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs items-start gap-2 text-left break-words">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span className="flex flex-col gap-0.5">
+                {titles.map((t) => (
+                  <span key={t}>{t}</span>
+                ))}
+              </span>
+            </TooltipContent>
+          </Tooltip>
         );
       },
     },
     {
       accessorKey: "status",
       header: "Status",
-      size: 70,
+      size: 80,
+      meta: { description: "The HTTP response status code returned when the page was crawled (e.g. 200, 404, 500)." },
       cell: (c) => {
         const v = c.getValue();
         return flagCell(v ?? "-", v === null || v >= 400);
       },
     },
-    { accessorKey: "indexability", header: "Indexability", size: 160 },
+    {
+      accessorKey: "indexability",
+      header: "Indexability",
+      size: 190,
+      meta: { description: "Whether search engines are allowed to index this page, based on robots meta tags and headers." },
+    },
     {
       accessorKey: "title",
       header: "Title",
-      size: 260,
+      size: 310,
+      meta: { description: "The page's <title> tag content, as shown in search results and browser tabs." },
       cell: (c) => {
         const v = c.getValue() as string | null;
         return flagCell(v ?? "", !v || ctx.duplicateTitles.has(v));
@@ -122,7 +173,8 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
     {
       accessorKey: "titleLength",
       header: "Title Len",
-      size: 80,
+      size: 100,
+      meta: { description: `Character length of the title tag. Flagged outside the recommended ${TITLE_MIN_LENGTH}–${TITLE_MAX_LENGTH} range.` },
       cell: (c) => {
         const v = c.getValue() as number;
         const hasTitle = !!c.row.original.title;
@@ -132,30 +184,44 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
     {
       accessorKey: "metaDescription",
       header: "Meta Description",
-      size: 260,
+      size: 310,
+      meta: { description: "The page's meta description tag content, often shown as the snippet in search results." },
       cell: (c) => {
         const v = c.getValue() as string | null;
         return flagCell(v ?? "", !v || ctx.duplicateMeta.has(v));
       },
     },
-    { accessorKey: "metaDescriptionLength", header: "Meta Len", size: 80 },
+    {
+      accessorKey: "metaDescriptionLength",
+      header: "Meta Len",
+      size: 100,
+      meta: { description: "Character length of the meta description tag." },
+    },
     {
       accessorKey: "h1",
       header: "H1",
-      size: 200,
+      size: 240,
+      meta: { description: "The page's first <h1> heading text." },
       cell: (c) => flagCell(c.getValue() ?? "", c.row.original.h1Count !== 1),
     },
     {
       accessorKey: "h1Count",
       header: "H1 Count",
-      size: 80,
+      size: 100,
+      meta: { description: "Number of <h1> tags found on the page. Flagged when not exactly one." },
       cell: (c) => flagCell(c.getValue(), c.getValue() !== 1),
     },
-    { accessorKey: "wordCount", header: "Word Count", size: 100 },
+    {
+      accessorKey: "wordCount",
+      header: "Word Count",
+      size: 120,
+      meta: { description: "Number of words in the page's visible text content." },
+    },
     {
       accessorKey: "canonical",
       header: "Canonical",
-      size: 260,
+      size: 310,
+      meta: { description: "The canonical URL declared for this page, telling search engines which version to index." },
       cell: (c) => {
         const page = c.row.original;
         const target = page.canonical;
@@ -164,63 +230,96 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
           target !== page.url &&
           ctx.canonicalStatusMap.has(target) &&
           (ctx.canonicalStatusMap.get(target) === null || (ctx.canonicalStatusMap.get(target) as number) >= 400);
-        return flagCell(c.getValue() ?? "", page.canonicalCount > 1 || brokenTarget);
+        return flagCell(target ? linkCell(target) : "", page.canonicalCount > 1 || brokenTarget);
       },
     },
-    { accessorKey: "responseTimeMs", header: "Time (ms)", size: 90 },
-    { accessorKey: "internalLinkCount", header: "Inlinks", size: 80 },
-    { accessorKey: "externalLinkCount", header: "Outlinks", size: 80 },
-    { accessorKey: "imageCount", header: "Images", size: 70 },
+    {
+      accessorKey: "responseTimeMs",
+      header: "Time (ms)",
+      size: 110,
+      meta: { description: "Server response time, in milliseconds." },
+    },
+    {
+      accessorKey: "internalLinkCount",
+      header: "Inlinks",
+      size: 100,
+      meta: { description: "Number of internal links found on this page." },
+    },
+    {
+      accessorKey: "externalLinkCount",
+      header: "Outlinks",
+      size: 100,
+      meta: { description: "Number of external (off-site) links found on this page." },
+    },
+    {
+      accessorKey: "imageCount",
+      header: "Images",
+      size: 80,
+      meta: { description: "Number of images found on this page." },
+    },
     {
       accessorKey: "htmlSizeBytes",
       header: "Size (KB)",
-      size: 90,
+      size: 110,
+      meta: { description: "Size of the raw HTML response." },
       cell: (c) => (c.getValue() ? (c.getValue() / 1024).toFixed(1) : "-"),
     },
     {
       accessorKey: "isMinified",
       header: "Minified",
-      size: 90,
-      cell: (c) => (c.row.original.htmlSizeBytes ? (c.getValue() ? "Yes" : "No") : "-"),
+      size: 110,
+      meta: { description: "Whether the HTML appears minified (extra whitespace and comments stripped)." },
+      cell: (c) => boolCell(c.getValue() as boolean, { na: !c.row.original.htmlSizeBytes }),
     },
     {
       accessorKey: "minifySavingsPct",
       header: "Minify Savings",
-      size: 110,
+      size: 130,
+      meta: { description: "Estimated percentage the HTML's size could shrink by if it were minified." },
       cell: (c) => (c.row.original.htmlSizeBytes ? `${(c.getValue() as number).toFixed(0)}%` : "-"),
     },
-    { accessorKey: "depth", header: "Depth", size: 60 },
+    {
+      accessorKey: "depth",
+      header: "Depth",
+      size: 70,
+      meta: { description: "Number of clicks from the crawl's start URL needed to reach this page." },
+    },
     {
       accessorKey: "rendered",
       header: "JS Rendered",
-      size: 100,
-      cell: (c) => (c.getValue() ? "Yes" : "No"),
+      size: 120,
+      meta: { description: "Whether this page was rendered with JavaScript execution during the crawl." },
+      cell: (c) => boolCell(c.getValue() as boolean),
     },
     {
       accessorKey: "hsts",
       header: "HSTS",
-      size: 80,
+      size: 100,
+      meta: { description: "Whether the Strict-Transport-Security header was present on this HTTPS response." },
       cell: (c) => {
         const isHttps = c.row.original.url.startsWith("https:");
-        return flagCell(isHttps ? (c.getValue() ? "Yes" : "No") : "-", isHttps && !c.getValue());
+        return boolCell(c.getValue() as boolean, { na: !isHttps, badWhen: false });
       },
     },
     {
       accessorKey: "insecureLinkCount",
       header: "Insecure Links",
-      size: 110,
+      size: 130,
+      meta: { description: "Number of links on this page pointing to insecure (HTTP) URLs." },
       cell: (c) => flagCell(c.getValue(), (c.getValue() as number) > 0),
     },
     {
       accessorKey: "missingAltCount",
       header: "Missing Alt",
-      size: 100,
+      size: 120,
+      meta: { description: "Number of images on this page missing alt text." },
       cell: (c) => flagCell(c.getValue(), (c.getValue() as number) > 0),
     },
     {
       accessorKey: "lang",
       header: "Lang",
-      size: 80,
+      size: 100,
+      meta: { description: "The declared language (lang attribute) of the HTML document." },
       cell: (c) => {
         const hasHtml = !!c.row.original.htmlSizeBytes;
         return flagCell(hasHtml ? (c.getValue() ?? "-") : "-", hasHtml && !c.getValue());
@@ -229,93 +328,145 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
     {
       accessorKey: "hreflangValues",
       header: "Hreflang",
-      size: 140,
+      size: 170,
+      meta: { description: "Declared hreflang alternate language/region values for this page." },
       cell: (c) => (c.getValue() as string[]).join(", "),
     },
-    { accessorKey: "internalNofollowCount", header: "Nofollow Links", size: 110 },
+    {
+      accessorKey: "internalNofollowCount",
+      header: "Nofollow Links",
+      size: 130,
+      meta: { description: "Number of internal links on this page marked rel=\"nofollow\"." },
+    },
     {
       accessorKey: "textRatioPct",
       header: "Text/HTML Ratio",
-      size: 120,
+      size: 140,
+      meta: { description: "Percentage of visible text relative to the total HTML size — low ratios can signal thin content." },
       cell: (c) => (c.row.original.htmlSizeBytes ? `${(c.getValue() as number).toFixed(1)}%` : "-"),
     },
     {
       accessorKey: "viewport",
       header: "Viewport",
-      size: 90,
-      cell: (c) => (c.row.original.htmlSizeBytes ? (c.getValue() ? "Yes" : "No") : "-"),
+      size: 110,
+      meta: { description: "Whether a responsive viewport meta tag is present." },
+      cell: (c) => boolCell(c.getValue() as boolean, { na: !c.row.original.htmlSizeBytes }),
     },
     {
       accessorKey: "hasOpenGraph",
       header: "Open Graph",
-      size: 100,
-      cell: (c) => (c.getValue() ? "Yes" : "No"),
+      size: 120,
+      meta: { description: "Whether Open Graph (og:) social sharing meta tags are present." },
+      cell: (c) => boolCell(c.getValue() as boolean),
     },
     {
       accessorKey: "hasTwitterCard",
       header: "Twitter Card",
-      size: 100,
-      cell: (c) => (c.getValue() ? "Yes" : "No"),
+      size: 120,
+      meta: { description: "Whether Twitter Card meta tags are present." },
+      cell: (c) => boolCell(c.getValue() as boolean),
     },
     {
       accessorKey: "canonicalCount",
       header: "Canonical Count",
-      size: 110,
+      size: 130,
+      meta: { description: "Number of canonical tags declared on the page. Flagged when more than one." },
       cell: (c) => flagCell(c.getValue(), (c.getValue() as number) > 1),
     },
     {
       accessorKey: "redirectChain",
       header: "Redirect Hops",
-      size: 110,
+      size: 130,
+      meta: { description: "Number of redirects followed to reach the final URL. Flagged when more than one hop." },
       cell: (c) => flagCell((c.getValue() as string[]).length, (c.getValue() as string[]).length > 1),
     },
     {
       accessorKey: "discoveredViaSitemap",
       header: "Via Sitemap",
-      size: 100,
-      cell: (c) => (c.getValue() ? "Yes" : "No"),
+      size: 120,
+      meta: { description: "Whether this page was discovered via the XML sitemap rather than by crawling links." },
+      cell: (c) => boolCell(c.getValue() as boolean),
     },
     {
       accessorKey: "structuredDataTypes",
       header: "Structured Data",
-      size: 150,
+      size: 180,
+      meta: { description: "Schema.org structured data types detected on the page (e.g. Article, Product)." },
       cell: (c) => (c.getValue() as string[]).join(", "),
     },
     {
       accessorKey: "accessibilityViolations",
       header: "A11y Issues",
-      size: 100,
+      size: 120,
+      meta: { description: "Number of accessibility violations detected on the page." },
       cell: (c) => flagCell((c.getValue() as unknown[]).length, (c.getValue() as unknown[]).length > 0),
     },
   ];
 }
 
 const resourceColumns: ColumnDef<ResourceResult, any>[] = [
-  { accessorKey: "url", header: "URL", size: 380 },
-  { accessorKey: "resourceType", header: "Type", size: 80 },
+  {
+    accessorKey: "url",
+    header: "URL",
+    size: 460,
+    meta: { description: "The resource's URL (a link or image). Click to open it in your browser." },
+    cell: (c) => linkCell(c.getValue()),
+  },
+  {
+    accessorKey: "resourceType",
+    header: "Type",
+    size: 100,
+    meta: { description: "Whether this resource is a link or an image." },
+  },
   {
     accessorKey: "status",
     header: "Status",
-    size: 70,
+    size: 80,
+    meta: { description: "The HTTP response status code returned for this resource." },
     cell: (c) => {
       const v = c.getValue();
       return flagCell(v ?? "-", v === null || v >= 400);
     },
   },
-  { accessorKey: "statusText", header: "Status Text", size: 160 },
-  { accessorKey: "sourcePage", header: "Source Page", size: 360 },
-  { accessorKey: "isInternal", header: "Internal", size: 80, cell: (c) => (c.getValue() ? "Yes" : "No") },
-  { accessorKey: "altText", header: "Alt Text", size: 200, cell: (c) => c.getValue() ?? "" },
+  {
+    accessorKey: "statusText",
+    header: "Status Text",
+    size: 190,
+    meta: { description: "The HTTP status message returned for this resource." },
+  },
+  {
+    accessorKey: "sourcePage",
+    header: "Source Page",
+    size: 430,
+    meta: { description: "The page this resource was found on. Click to open it in your browser." },
+    cell: (c) => linkCell(c.getValue()),
+  },
+  {
+    accessorKey: "isInternal",
+    header: "Internal",
+    size: 100,
+    meta: { description: "Whether the resource is hosted on the same site as the crawled page." },
+    cell: (c) => boolCell(c.getValue() as boolean),
+  },
+  {
+    accessorKey: "altText",
+    header: "Alt Text",
+    size: 240,
+    meta: { description: "The alt attribute text for image resources." },
+    cell: (c) => c.getValue() ?? "",
+  },
   {
     accessorKey: "isInsecure",
     header: "Insecure",
-    size: 80,
-    cell: (c) => flagCell(c.getValue() ? "Yes" : "No", !!c.getValue()),
+    size: 100,
+    meta: { description: "Whether the resource is served over an insecure (HTTP) connection." },
+    cell: (c) => boolCell(c.getValue() as boolean, { badWhen: true }),
   },
   {
     accessorKey: "error",
     header: "Error",
-    size: 200,
+    size: 240,
+    meta: { description: "The error message if this resource failed to load." },
     cell: (c) => flagCell(c.getValue() ?? "", !!c.getValue()),
   },
 ];
@@ -714,6 +865,7 @@ function App() {
             columns={pageColumns}
             emptyLabel="No pages crawled yet — start a crawl above."
             onRowClick={setSelectedPage}
+            storageKey="pages"
           />
         </TabsContent>
 
@@ -723,6 +875,7 @@ function App() {
             columns={resourceColumns}
             emptyLabel="No external links or images checked yet."
             onRowClick={setSelectedResource}
+            storageKey="resources"
           />
         </TabsContent>
       </Tabs>

@@ -65,47 +65,91 @@ pub enum ResourceType {
 #[serde(rename_all = "camelCase")]
 pub struct PageResult {
     pub url: String,
+    #[serde(default)]
     pub depth: usize,
+    #[serde(default)]
     pub status: Option<u16>,
+    #[serde(default)]
     pub status_text: String,
+    #[serde(default)]
     pub content_type: Option<String>,
+    #[serde(default)]
     pub title: Option<String>,
+    #[serde(default)]
     pub title_length: usize,
+    #[serde(default)]
     pub meta_description: Option<String>,
+    #[serde(default)]
     pub meta_description_length: usize,
+    #[serde(default)]
     pub h1: Option<String>,
+    #[serde(default)]
     pub h1_count: usize,
+    #[serde(default)]
     pub word_count: usize,
+    #[serde(default)]
     pub canonical: Option<String>,
+    #[serde(default)]
     pub meta_robots: Option<String>,
+    #[serde(default)]
     pub redirect_url: Option<String>,
+    #[serde(default)]
     pub indexability: String,
+    #[serde(default)]
     pub response_time_ms: u64,
+    #[serde(default)]
     pub internal_link_count: usize,
+    #[serde(default)]
     pub external_link_count: usize,
+    #[serde(default)]
     pub image_count: usize,
+    #[serde(default)]
     pub html_size_bytes: usize,
+    #[serde(default)]
     pub minify_savings_pct: f64,
+    #[serde(default)]
     pub is_minified: bool,
+    /// Added after the initial save-file format shipped — must default so older saved crawls
+    /// (which predate this field) still deserialize instead of failing to load.
+    #[serde(default)]
     pub rendered: bool,
+    #[serde(default)]
     pub hsts: bool,
+    #[serde(default)]
     pub insecure_link_count: usize,
+    #[serde(default)]
     pub missing_alt_count: usize,
+    #[serde(default)]
     pub lang: Option<String>,
+    #[serde(default)]
     pub hreflang_values: Vec<String>,
+    #[serde(default)]
     pub internal_nofollow_count: usize,
+    #[serde(default)]
     pub text_ratio_pct: f64,
+    #[serde(default)]
     pub content_hash: String,
+    #[serde(default)]
     pub x_robots_tag: Option<String>,
+    #[serde(default)]
     pub viewport: Option<String>,
+    #[serde(default)]
     pub has_open_graph: bool,
+    #[serde(default)]
     pub has_twitter_card: bool,
+    #[serde(default)]
     pub canonical_count: usize,
+    #[serde(default)]
     pub discovered_via_sitemap: bool,
+    #[serde(default)]
     pub redirect_chain: Vec<String>,
+    #[serde(default)]
     pub structured_data_types: Vec<String>,
+    #[serde(default)]
     pub structured_data_errors: Vec<String>,
+    #[serde(default)]
     pub accessibility_violations: Vec<AccessibilityViolation>,
+    #[serde(default)]
     pub error: Option<String>,
 }
 
@@ -124,12 +168,19 @@ pub struct AccessibilityViolation {
 pub struct ResourceResult {
     pub url: String,
     pub resource_type: ResourceType,
+    #[serde(default)]
     pub source_page: String,
+    #[serde(default)]
     pub alt_text: Option<String>,
+    #[serde(default)]
     pub status: Option<u16>,
+    #[serde(default)]
     pub status_text: String,
+    #[serde(default)]
     pub is_internal: bool,
+    #[serde(default)]
     pub is_insecure: bool,
+    #[serde(default)]
     pub error: Option<String>,
 }
 

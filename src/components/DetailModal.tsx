@@ -3,8 +3,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LinkCell } from "@/components/link-cell";
 import { cn } from "@/lib/utils";
 import type { IssueSolution } from "../lib/issueSolutions";
 
@@ -15,12 +15,22 @@ interface DetailModalProps {
   onClose: () => void;
 }
 
+function isLinkValue(value: string | number | boolean | null | undefined): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
 export function DetailModal({ title, fields, issues, onClose }: DetailModalProps) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className="flex w-full max-w-2xl! flex-col gap-3 overflow-hidden sm:max-w-2xl!"
         style={{ maxHeight: "85vh" }}
+        onOpenAutoFocus={(e) => {
+          // Radix's default autofocus lands on the first focusable field (often a link),
+          // which opens its tooltip immediately — focus the dialog itself instead.
+          e.preventDefault();
+          (e.currentTarget as HTMLElement | null)?.focus();
+        }}
       >
         <DialogHeader className="shrink-0">
           <DialogTitle className="truncate pr-6" title={title}>
@@ -32,6 +42,7 @@ export function DetailModal({ title, fields, issues, onClose }: DetailModalProps
             <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
               {fields.map((f) => {
                 const isEmpty = f.value === null || f.value === undefined || f.value === "";
+                const isLink = !isEmpty && isLinkValue(f.value);
                 return (
                   <div key={f.label} className="flex flex-col gap-0.5 border-b py-1">
                     <div className="text-xs text-muted-foreground">{f.label}</div>
@@ -42,9 +53,9 @@ export function DetailModal({ title, fields, issues, onClose }: DetailModalProps
                       )}
                     >
                       {isEmpty ? (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          —
-                        </Badge>
+                        <span className="text-muted-foreground">—</span>
+                      ) : isLink ? (
+                        <LinkCell value={f.value as string} className="break-words" />
                       ) : (
                         String(f.value)
                       )}

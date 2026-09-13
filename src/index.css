@@ -168,6 +168,42 @@
   }
 }
 
+/* Bouncy "pop in like a comic caption" entrance/exit, used instead of the
+   plain fade/zoom Tailwind `animate-in` on cartoon-chrome popups (tooltip). */
+@keyframes comic-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-8deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12) rotate(3deg);
+  }
+  75% {
+    transform: scale(0.96) rotate(-1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes comic-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.5) rotate(-6deg);
+  }
+}
+@utility comic-pop {
+  transform-origin: var(--radix-tooltip-content-transform-origin, center);
+  &[data-state="closed"] {
+    animation: comic-pop-out 120ms ease-in forwards;
+  }
+  &[data-state="delayed-open"],
+  &[data-state="instant-open"] {
+    animation: comic-pop-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+
 /* Thin native scrollbars (e.g. the data table's horizontal/vertical scroll) —
    Radix ScrollArea (the detail modal) draws its own thumb and isn't affected. */
 * {

@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type ColumnDef,
   type ColumnPinningState,
+  type ColumnSizingState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -18,7 +19,15 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+
+declare module "@tanstack/react-table" {
+  interface ColumnMeta<TData, TValue> {
+    /** Shown in a tooltip on the column header to explain what the column means. */
+    description?: string;
+  }
+}
 
 interface DataTableProps<T> {
   data: T[];
@@ -28,6 +37,18 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
   /** Column ids permanently pinned to the left — always visible while scrolling, cannot be unpinned or reordered. */
   pinnedColumns?: string[];
+  /** When set, persists this table's column widths to localStorage under this key so resizes survive reloads. */
+  storageKey?: string;
+}
+
+function loadColumnSizing(storageKey: string | undefined): ColumnSizingState {
+  if (!storageKey) return {};
+  try {
+    const raw = localStorage.getItem(`dataTable.columnSizing.${storageKey}`);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
 
 export function DataTable<T>({
@@ -37,10 +58,21 @@ export function DataTable<T>({
   emptyLabel = "No rows yet",
   onRowClick,
   pinnedColumns = ["url"],
+  storageKey,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({ left: pinnedColumns });
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => loadColumnSizing(storageKey));
   const parentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(`dataTable.columnSizing.${storageKey}`, JSON.stringify(columnSizing));
+    } catch {
+      // localStorage unavailable (e.g. private mode) — widths just won't persist.
+    }
+  }, [storageKey, columnSizing]);
 
   const resolvedColumns = useMemo(
     () =>
@@ -54,9 +86,10 @@ export function DataTable<T>({
   const table = useReactTable({
     data,
     columns: resolvedColumns,
-    state: { sorting, columnPinning },
+    state: { sorting, columnPinning, columnSizing },
     onSortingChange: setSorting,
     onColumnPinningChange: setColumnPinning,
+    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     enableColumnResizing: true,
@@ -100,6 +133,8 @@ export function DataTable<T>({
               {hg.headers.map((h) => {
                 const pinned = h.column.getIsPinned();
                 const locked = pinnedColumns.includes(h.column.id);
+                const description = h.column.columnDef.meta?.description;
+                const label = flexRender(h.column.columnDef.header, h.getContext());
                 return (
                   <ContextMenu key={h.id}>
                     <ContextMenuTrigger asChild>
@@ -118,7 +153,18 @@ export function DataTable<T>({
                             h.column.getCanSort() && "cursor-pointer select-none",
                           )}
                         >
-                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          {description ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>{label}</span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-2xs text-left font-normal normal-case">
+                                {description}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            label
+                          )}
                           {h.column.getIsSorted() === "asc" && <ChevronUp className="size-3.5" />}
                           {h.column.getIsSorted() === "desc" && <ChevronDown className="size-3.5" />}
                           {pinned && <Pin className="size-3 text-muted-foreground" aria-label="Pinned" />}
@@ -178,13 +224,11 @@ export function DataTable<T>({
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
               >
                 {row.getVisibleCells().map((cell) => {
-                  const value = cell.getValue();
                   const pinned = cell.column.getIsPinned();
                   return (
                     <TableCell
                       key={cell.id}
                       style={{ width: cell.column.getSize(), ...pinnedStyle(cell.column) }}
-                      title={value === null || value === undefined || value === "" ? undefined : String(value)}
                       className={cn(
                         pinned && "sticky z-10 bg-background",
                         isLastLeftPinned(cell.column) && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]",
