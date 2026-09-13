@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/banner.png" alt="GSEO Crawler" width="100%" />
+  <img src="docs/banner.png" alt="Scary Spider SEO" width="100%" />
 </p>
 
-# GSEO Crawler
+# Scary Spider SEO
 
 A desktop site crawler and SEO auditor built with **Tauri**, **React**, and **Rust**. Point it at a URL, crawl the site, and get a searchable, sortable table of every page and resource — with SEO/accessibility issues flagged inline, not buried in a report.
 
@@ -12,7 +12,7 @@ No build tools, no source code, no install wizard needed — grab a build for yo
 
 | Platform | Just want to run it | Prefer a proper install |
 | --- | --- | --- |
-| Windows | `GSEO-Crawler-portable-windows-x64.zip` — unzip, double-click `gseo-crawler.exe` | `.msi` or `.exe` installer |
+| Windows | `ScarySpiderSEO-portable-windows-x64.zip` — unzip, double-click `scary-spider-seo.exe` | `.msi` or `.exe` installer |
 | macOS (Apple Silicon) | — | `.dmg` (aarch64) |
 | macOS (Intel) | — | `.dmg` (x64) |
 | Linux | `.AppImage` — mark executable, double-click | `.deb` |

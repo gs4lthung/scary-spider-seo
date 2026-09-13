@@ -54,12 +54,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "GSEO Crawler ${{ github.ref_name }}"
+          releaseName: "Scary Spider SEO ${{ github.ref_name }}"
           releaseBody: |
             See the assets below to download and install this version.
 
-            **Windows**: `GSEO-Crawler-portable-windows-x64.zip` needs no install — unzip
-            it and double-click `gseo-crawler.exe` to run. The `.msi`/`.exe` files are
+            **Windows**: `ScarySpiderSEO-portable-windows-x64.zip` needs no install — unzip
+            it and double-click `scary-spider-seo.exe` to run. The `.msi`/`.exe` files are
             regular installers if you'd rather have a Start Menu shortcut.
 
             Builds are unsigned — Windows SmartScreen and macOS Gatekeeper will warn
@@ -74,7 +74,7 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          Compress-Archive -Path src-tauri/target/release/gseo-crawler.exe -DestinationPath GSEO-Crawler-portable-windows-x64.zip
+          Compress-Archive -Path src-tauri/target/release/scary-spider-seo.exe -DestinationPath ScarySpiderSEO-portable-windows-x64.zip
 
       # The release is a draft at this point, and GitHub's "get release by tag" API
       # (which a plain `gh release upload <tag>` relies on) only resolves published
@@ -92,6 +92,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: Number(process.env.RELEASE_ID),
-              name: 'GSEO-Crawler-portable-windows-x64.zip',
-              data: fs.readFileSync('GSEO-Crawler-portable-windows-x64.zip'),
+              name: 'ScarySpiderSEO-portable-windows-x64.zip',
+              data: fs.readFileSync('ScarySpiderSEO-portable-windows-x64.zip'),
             });

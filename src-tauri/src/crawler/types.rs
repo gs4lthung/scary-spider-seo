@@ -45,7 +45,7 @@ fn default_concurrency() -> usize {
     5
 }
 fn default_user_agent() -> String {
-    "GSEOCrawler/0.1 (+https://worldcraftlogistics.com)".to_string()
+    "ScarySpiderSEO/0.1 (+https://worldcraftlogistics.com)".to_string()
 }
 fn default_timeout() -> u64 {
     15

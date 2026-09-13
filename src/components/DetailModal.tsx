@@ -63,7 +63,7 @@ export function DetailModal({ title, fields, issues, onClose }: DetailModalProps
                 </CollapsibleTrigger>
                 <CollapsibleContent className="flex flex-col gap-3">
                   {issues.map((issue) => (
-                    <div key={issue.title} className="flex flex-col gap-1 rounded-md bg-card p-3 ring-1 ring-foreground/10">
+                    <div key={issue.title} className="comic-panel-sm flex flex-col gap-1 rounded-md border-2! border-(--comic-ink)! bg-card p-3">
                       <div className="text-sm font-medium">{issue.title}</div>
                       <p className="text-sm text-muted-foreground">{issue.problem}</p>
                       <p className="text-sm">{issue.fix}</p>

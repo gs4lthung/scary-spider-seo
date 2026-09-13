@@ -430,7 +430,7 @@ function App() {
         const message = running
           ? "A crawl is currently running. Quitting now will stop it and lose progress. Quit anyway?"
           : "You have crawl results that haven't been saved. Quit anyway?";
-        const confirmed = await ask(message, { title: "Quit GSEO Crawler?", kind: "warning" });
+        const confirmed = await ask(message, { title: "Quit Scary Spider SEO?", kind: "warning" });
         if (!confirmed) {
           event.preventDefault();
         }
@@ -511,7 +511,7 @@ function App() {
   const handleSaveCrawl = useCallback(async () => {
     try {
       const path = await save({
-        filters: [{ name: "GSEO Crawl", extensions: ["json"] }],
+        filters: [{ name: "Scary Spider SEO Crawl", extensions: ["json"] }],
         defaultPath: "crawl.json",
       });
       if (!path) return;
@@ -525,7 +525,7 @@ function App() {
     try {
       const path = await open({
         multiple: false,
-        filters: [{ name: "GSEO Crawl", extensions: ["json"] }],
+        filters: [{ name: "Scary Spider SEO Crawl", extensions: ["json"] }],
       });
       if (!path || typeof path !== "string") return;
       const snapshot = await invoke<CrawlSnapshot>("load_crawl", { path });
@@ -598,8 +598,10 @@ function App() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-2.5 border-b bg-card px-4 py-2.5">
-        <h1 className="text-sm font-semibold whitespace-nowrap">GSEO Crawler</h1>
+      <header className="flex items-center gap-2.5 border-b-[3px]! border-(--comic-ink)! bg-card px-4 py-2">
+        <h1>
+          <img src="/logo-wordmark.png" alt="Scary Spider SEO" className="h-24 w-auto" />
+        </h1>
         <UrlCombobox
           value={config.startUrl}
           disabled={running}

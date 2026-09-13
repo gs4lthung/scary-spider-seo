@@ -126,7 +126,7 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   maxPages: 500,
   maxDepth: 10,
   concurrency: 5,
-  userAgent: "GSEOCrawler/0.1 (+https://worldcraftlogistics.com)",
+  userAgent: "ScarySpiderSEO/0.1 (+https://worldcraftlogistics.com)",
   timeoutSecs: 15,
   delayMs: 0,
   checkExternalLinks: true,

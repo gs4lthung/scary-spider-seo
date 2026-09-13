@@ -60,8 +60,8 @@ function StatTile({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-start gap-0 rounded-lg px-3 py-1.5 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/60",
-        active && "bg-muted ring-ring/50",
+        "comic-panel-sm comic-wobble flex flex-col items-start gap-0 rounded-lg border-2! border-(--comic-ink)! px-3 py-1.5 text-left transition-colors hover:bg-muted/60",
+        active && "bg-muted",
       )}
     >
       <span className={cn("text-lg leading-tight font-semibold", tone && TONE_TEXT[tone])}>{value}</span>
