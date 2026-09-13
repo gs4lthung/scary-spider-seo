@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="GSEO Crawler" width="100%" />
+  <img src="docs/banner.png" alt="GSEO Crawler" width="100%" />
 </p>
 
 # GSEO Crawler
