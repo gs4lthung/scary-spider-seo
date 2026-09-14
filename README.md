@@ -82,11 +82,21 @@ src-tauri/src/
   crawler/             Crawl loop, HTML parsing, robots.txt/sitemap, rendering, tech detection
   commands.rs          Tauri commands exposed to the frontend
 docs/                  Assets referenced from this README
+website/              Marketing site (separate Next.js project, see website/README.md)
 ```
 
-## Releasing (maintainers)
+## Contributing
 
-Pushing a tag matching `v*` (e.g. `v0.1.0`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds installers for Windows, macOS (Intel + Apple Silicon), and Linux, and publishes them as a **draft** GitHub Release for review before it goes public:
+Bug reports, fixes, and features are welcome via pull request — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, testing, and PR
+guidelines.
+
+**Releases are cut by the maintainer only** — see below.
+
+## Releasing (maintainer only)
+
+Only the maintainer pushes version tags or publishes releases. Pushing a
+tag matching `v*` (e.g. `v0.1.0`) triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds installers for Windows, macOS (Intel + Apple Silicon), and Linux, and publishes them as a **draft** GitHub Release for review before it goes public:
 
 ```bash
 git tag v0.1.0
@@ -94,3 +104,6 @@ git push origin v0.1.0
 ```
 
 It can also be run manually from the Actions tab (`workflow_dispatch`) without a tag push.
+
+Contributors: please don't create or push version tags in a PR — open the
+PR against `main` and the maintainer will handle versioning and release.
