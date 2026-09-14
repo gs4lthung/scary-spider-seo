@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
-import { SITE_URL } from "@/lib/site";
+import { REPO_URL, RELEASES_URL, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const geist = Geist({
@@ -24,13 +24,20 @@ export const metadata: Metadata = {
     "SEO auditor",
     "site crawler",
     "desktop SEO tool",
+    "free SEO crawler",
     "accessibility audit",
     "broken link checker",
+    "sitemap crawler",
+    "SEO checker Windows",
+    "SEO checker Mac",
     "Tauri app",
   ],
   authors: [{ name: shortTitle }],
   alternates: {
     canonical: "/",
+  },
+  verification: {
+    google: "hxLezdTHHzh_1mLRs2HE7bAzZ-s5-7vUZga9x7vzkPk",
   },
   robots: {
     index: true,
@@ -92,8 +99,8 @@ const jsonLd = {
     price: "0",
     priceCurrency: "USD",
   },
-  downloadUrl: "https://github.com/gs4lthung/gseo/releases",
-  softwareHelp: "https://github.com/gs4lthung/gseo",
+  downloadUrl: RELEASES_URL,
+  softwareHelp: REPO_URL,
 };
 
 export default function RootLayout({

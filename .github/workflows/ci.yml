@@ -3,6 +3,12 @@ name: CI
 # Runs on every PR into main (and pushes to main) so branch protection has
 # something to require before merge. Release builds are separate — see
 # release.yml, which only maintainers trigger by pushing a version tag.
+#
+# app-frontend/app-backend and website are path-gated via the `changes` job
+# below (job-level `if`, not a top-level `on.paths` filter) — a website-only
+# change skips the irrelevant Rust/frontend jobs entirely. They still post a
+# "skipped" status for the required-checks names in branch protection, and
+# GitHub treats skipped as passing, so this doesn't block merging.
 on:
   pull_request:
     branches: [main]
@@ -13,7 +19,31 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      website: ${{ steps.filter.outputs.website }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'src/**'
+              - 'src-tauri/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'vite.config.ts'
+              - 'tsconfig*.json'
+              - '.github/workflows/ci.yml'
+            website:
+              - 'website/**'
+
   app-frontend:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +56,8 @@ jobs:
       - run: npm run build
 
   app-backend:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +70,8 @@ jobs:
         run: cargo test
 
   website:
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

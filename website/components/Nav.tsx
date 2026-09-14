@@ -17,7 +17,7 @@ export function Nav() {
           />
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm font-semibold sm:flex">
+        <nav className="hidden items-center gap-5 text-sm font-semibold lg:flex">
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}
