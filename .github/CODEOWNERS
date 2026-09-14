@@ -1,0 +1,5 @@
+# The marketing website is maintained solely by the project owner —
+# external PRs shouldn't touch it. Combined with the "require review from
+# Code Owners" branch ruleset on main, any PR touching this path needs
+# @gs4lthung's approval before it can merge.
+/website/ @gs4lthung

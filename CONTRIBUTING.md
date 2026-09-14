@@ -33,9 +33,12 @@ Please add or update tests for behavior changes.
 
 ## The website
 
-`website/` is a separate Next.js project for the marketing site — its own
-`package.json`, independent of the app. See [`website/README.md`](website/README.md)
-to run it.
+`website/` is the marketing site (separate Next.js project, its own
+`package.json`, independent of the app) — **maintained solely by the
+project owner. Please don't open PRs that touch it**; contributions
+should focus on the app (`src/`, `src-tauri/`). It's listed in
+[`.github/CODEOWNERS`](.github/CODEOWNERS), so any PR touching it needs
+the owner's review regardless.
 
 ## Pull requests
 

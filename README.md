@@ -82,7 +82,7 @@ src-tauri/src/
   crawler/             Crawl loop, HTML parsing, robots.txt/sitemap, rendering, tech detection
   commands.rs          Tauri commands exposed to the frontend
 docs/                  Assets referenced from this README
-website/              Marketing site (separate Next.js project, see website/README.md)
+website/              Marketing site (separate Next.js project, maintainer-only — see CONTRIBUTING.md)
 ```
 
 ## Contributing
