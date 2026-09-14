@@ -24,7 +24,7 @@ export function Download() {
             No build tools. No install wizard. Just crawl.
           </h2>
           <p className="mt-4 text-primary-foreground/80">
-            Grab a build for your OS from the Releases page — free and open
+            Grab a build for your OS from the Releases page. Free and open
             source.
           </p>
 
@@ -56,8 +56,8 @@ export function Download() {
         </div>
 
         <p className="mt-8 text-center text-xs text-primary-foreground/60">
-          Builds aren&apos;t code-signed yet — Windows SmartScreen and macOS
-          Gatekeeper will warn before the first run.
+          Builds aren&apos;t code-signed yet, so Windows SmartScreen and
+          macOS Gatekeeper will warn before the first run.
         </p>
       </div>
     </section>

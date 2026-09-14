@@ -8,16 +8,16 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
-const title = "Scary Spider SEO — Desktop Site Crawler & SEO Auditor";
+const title = "Scary Spider SEO | Desktop Site Crawler & SEO Auditor";
 const shortTitle = "Scary Spider SEO";
 const description =
-  "Crawl any site and get a sortable table of every page — SEO and accessibility issues flagged inline. Free desktop app for Windows, macOS, and Linux.";
+  "Crawl any site and get a sortable table of every page. SEO and accessibility issues are flagged inline. Free desktop app for Windows, macOS, and Linux.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: title,
-    template: `%s — ${shortTitle}`,
+    template: `%s | ${shortTitle}`,
   },
   description,
   keywords: [

@@ -20,3 +20,6 @@ export const CONTACT = {
   linkedin: "https://www.linkedin.com/in/hung-felix-lam/",
   phone: null as string | null,
 };
+
+// TODO: swap in the real Stripe payment link.
+export const SPONSOR_URL = "https://buy.stripe.com/your-link";

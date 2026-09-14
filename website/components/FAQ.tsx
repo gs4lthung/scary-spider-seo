@@ -1,11 +1,11 @@
 const FAQS = [
   {
     q: "Is Scary Spider SEO free?",
-    a: "Yes — it's free and open source. Grab a build from the GitHub Releases page for Windows, macOS, or Linux.",
+    a: "Yes, it's free and open source. Grab a build from the GitHub Releases page for Windows, macOS, or Linux.",
   },
   {
     q: "Does it send my crawl data anywhere?",
-    a: "No. It's a native desktop app (Tauri + Rust) — crawling happens locally on your machine, and nothing gets uploaded to a server.",
+    a: "No. It's a native desktop app (Tauri + Rust), so crawling happens locally on your machine and nothing gets uploaded to a server.",
   },
   {
     q: "What platforms are supported?",
@@ -17,11 +17,11 @@ const FAQS = [
   },
   {
     q: "How is this different from a hosted/online SEO crawler?",
-    a: "It runs locally as a desktop app instead of a hosted SaaS — no page limits, no crawl-credit pricing, and your data never leaves your machine.",
+    a: "It runs locally as a desktop app instead of a hosted SaaS, so there are no page limits, no crawl-credit pricing, and your data never leaves your machine.",
   },
   {
     q: "Can I export the results?",
-    a: "Yes — save or load a full crawl snapshot, or export pages and resources to CSV for further analysis.",
+    a: "Yes, save or load a full crawl snapshot, or export pages and resources to CSV for further analysis.",
   },
 ] as const;
 

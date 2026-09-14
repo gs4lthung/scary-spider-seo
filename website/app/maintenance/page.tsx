@@ -28,13 +28,13 @@ export default function MaintenancePage() {
         className="mb-6"
       />
       <p className="text-sm font-bold tracking-widest text-primary uppercase">
-        503 — Maintenance
+        Maintenance
       </p>
       <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl">
         Spinning some new web.
       </h1>
       <p className="mt-4 max-w-md text-muted-foreground">
-        We&apos;re doing planned maintenance. This won&apos;t take long —
+        We&apos;re doing planned maintenance. This won&apos;t take long, so
         check back in a few minutes.
       </p>
     </main>

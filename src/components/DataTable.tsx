@@ -185,7 +185,7 @@ export function DataTable<T>({
                     <ContextMenuContent>
                       {locked ? (
                         <ContextMenuLabel className="text-muted-foreground">
-                          Always pinned — can't be unpinned
+                          Always pinned, can't be unpinned
                         </ContextMenuLabel>
                       ) : (
                         h.column.getCanPin() && (

@@ -12,7 +12,7 @@ const FEATURE_GROUPS = [
   {
     title: "Auditing",
     items: [
-      "25+ built-in issue checks — broken links, missing/duplicate titles & meta descriptions",
+      "25+ built-in issue checks: broken links, missing/duplicate titles & meta descriptions",
       "Title length, H1 issues, canonical problems, insecure links, missing alt text",
       "HSTS, hreflang, and structured data errors, flagged inline in the table",
       "A detail modal per page with plain-language explanations and fixes",
@@ -21,7 +21,7 @@ const FEATURE_GROUPS = [
   {
     title: "Working with results",
     items: [
-      "Virtualized tables handle large crawls smoothly — resizable, sortable columns",
+      "Virtualized tables handle large crawls smoothly, with resizable, sortable columns",
       "The URL column stays pinned while scrolling; any column can be pinned too",
       "Quick text search plus canned filters (status codes, missing titles, duplicates)",
       "Save/load a full crawl snapshot, or export pages and resources to CSV",
@@ -37,8 +37,8 @@ export function Features() {
           Everything you need, nothing buried in a PDF.
         </h2>
         <p className="mt-4 text-lg text-muted-foreground">
-          Every issue shows up inline, right where the page lives — not in a
-          separate report you have to cross-reference.
+          Every issue shows up inline, right where the page lives, instead
+          of in a separate report you have to cross-reference.
         </p>
       </div>
 

@@ -1,13 +1,28 @@
-const STACK = [
-  "React 19",
-  "TypeScript",
-  "Vite",
-  "Tailwind CSS v4",
-  "shadcn/Radix UI",
-  "TanStack Table",
-  "Rust",
-  "Tauri 2",
-  "Tokio",
+import type { IconType } from "react-icons";
+import {
+  SiReact,
+  SiTypescript,
+  SiVite,
+  SiTailwindcss,
+  SiShadcnui,
+  SiRadixui,
+  SiTanstack,
+  SiRust,
+  SiTauri,
+  SiTokio,
+} from "react-icons/si";
+
+const STACK: Array<{ label: string; icon: IconType }> = [
+  { label: "React 19", icon: SiReact },
+  { label: "TypeScript", icon: SiTypescript },
+  { label: "Vite", icon: SiVite },
+  { label: "Tailwind CSS v4", icon: SiTailwindcss },
+  { label: "shadcn/ui", icon: SiShadcnui },
+  { label: "Radix UI", icon: SiRadixui },
+  { label: "TanStack Table", icon: SiTanstack },
+  { label: "Rust", icon: SiRust },
+  { label: "Tauri 2", icon: SiTauri },
+  { label: "Tokio", icon: SiTokio },
 ];
 
 export function TechStack() {
@@ -18,12 +33,13 @@ export function TechStack() {
           Built with
         </h2>
         <div className="flex flex-wrap justify-center gap-3">
-          {STACK.map((tech) => (
+          {STACK.map(({ label, icon: Icon }) => (
             <span
-              key={tech}
-              className="comic-panel-sm rounded-full border-2 border-(--color-ink) bg-card px-4 py-2 text-sm font-bold"
+              key={label}
+              className="comic-panel-sm flex items-center gap-2 rounded-full border-2 border-(--color-ink) bg-card px-4 py-2 text-sm font-bold"
             >
-              {tech}
+              <Icon aria-hidden="true" className="h-4.5 w-4.5" />
+              {label}
             </span>
           ))}
         </div>

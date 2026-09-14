@@ -2,7 +2,7 @@ const STEPS = [
   {
     step: "1",
     title: "Enter a URL",
-    body: "Point Scary Spider SEO at any site — no account, no setup, nothing to configure to get started.",
+    body: "Point Scary Spider SEO at any site. No account, no setup, nothing to configure to get started.",
   },
   {
     step: "2",
@@ -12,7 +12,7 @@ const STEPS = [
   {
     step: "3",
     title: "Fix what's flagged",
-    body: "SEO and accessibility issues show up inline in the results table — each with a plain-language explanation and fix.",
+    body: "SEO and accessibility issues show up inline in the results table, each with a plain-language explanation and fix.",
   },
 ];
 
@@ -24,7 +24,7 @@ export function HowItWorks() {
           How it works
         </h2>
         <p className="mt-4 text-lg text-muted-foreground">
-          No dashboards to log into, no crawl budget to buy — it runs as a
+          No dashboards to log into, no crawl budget to buy. It runs as a
           desktop app on your own machine.
         </p>
       </div>

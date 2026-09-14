@@ -167,7 +167,7 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">Accessibility audit</span>
                 <span className="text-xs text-muted-foreground">
-                  Runs axe-core on the rendered page. Requires Render JavaScript — enabling this turns it on
+                  Runs axe-core on the rendered page. Requires Render JavaScript, so enabling this turns it on
                   automatically.
                 </span>
               </div>
