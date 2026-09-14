@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LATEST_RELEASE_URL, NAV_LINKS, REPO_URL } from "@/lib/site";
+import { LATEST_RELEASE_URL, NAV_LINKS, REPO_URL, SPONSOR_URL } from "@/lib/site";
 
 export function Nav() {
   return (
@@ -37,14 +37,24 @@ export function Nav() {
           </a>
         </nav>
 
-        <a
-          href={LATEST_RELEASE_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="comic-panel-sm comic-wobble rounded-full border-2 border-(--color-ink) bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
-        >
-          Download
-        </a>
+        <div className="flex items-center gap-3">
+          <a
+            href={SPONSOR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="comic-panel-sm comic-wobble hidden items-center gap-1.5 rounded-full border-2 border-(--color-ink) bg-secondary px-4 py-2 text-sm font-bold text-secondary-foreground sm:flex"
+          >
+            <span aria-hidden="true">♥</span> Sponsor
+          </a>
+          <a
+            href={LATEST_RELEASE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="comic-panel-sm comic-wobble rounded-full border-2 border-(--color-ink) bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+          >
+            Download
+          </a>
+        </div>
       </div>
     </header>
   );

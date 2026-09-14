@@ -30,8 +30,8 @@ export function Hero() {
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted-foreground">
             Point Scary Spider SEO at a URL, crawl the whole site, and get a
-            searchable, sortable table of every page and resource — with
-            SEO and accessibility issues flagged inline, not buried in a
+            searchable, sortable table of every page and resource, with SEO
+            and accessibility issues flagged inline instead of buried in a
             report.
           </p>
 

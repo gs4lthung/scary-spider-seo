@@ -102,7 +102,7 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       id: "issues",
       header: "Issues",
       size: 80,
-      meta: { description: "Number of SEO issues detected for this page — hover the warning icon in a row for details." },
+      meta: { description: "Number of SEO issues detected for this page. Hover the warning icon in a row for details." },
       accessorFn: (page) =>
         getPageIssueKeys(
           page,
@@ -342,7 +342,7 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       accessorKey: "textRatioPct",
       header: "Text/HTML Ratio",
       size: 140,
-      meta: { description: "Percentage of visible text relative to the total HTML size — low ratios can signal thin content." },
+      meta: { description: "Percentage of visible text relative to the total HTML size. Low ratios can signal thin content." },
       cell: (c) => (c.row.original.htmlSizeBytes ? `${(c.getValue() as number).toFixed(1)}%` : "-"),
     },
     {
@@ -863,7 +863,7 @@ function App() {
           <DataTable
             data={filteredPages}
             columns={pageColumns}
-            emptyLabel="No pages crawled yet — start a crawl above."
+            emptyLabel="No pages crawled yet. Start a crawl above."
             onRowClick={setSelectedPage}
             storageKey="pages"
           />
