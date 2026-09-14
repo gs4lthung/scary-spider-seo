@@ -1,8 +1,11 @@
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
+import { HowItWorks } from "@/components/HowItWorks";
 import { Features } from "@/components/Features";
 import { TechStack } from "@/components/TechStack";
 import { Download } from "@/components/Download";
+import { FAQ } from "@/components/FAQ";
+import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -12,9 +15,12 @@ export default function Home() {
       <Nav />
       <main>
         <Hero />
+        <HowItWorks />
         <Features />
         <TechStack />
         <Download />
+        <FAQ />
+        <Contact />
       </main>
       <Footer />
       <Analytics />
