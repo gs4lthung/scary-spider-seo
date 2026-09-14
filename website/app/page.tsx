@@ -4,7 +4,7 @@ import { Features } from "@/components/Features";
 import { TechStack } from "@/components/TechStack";
 import { Download } from "@/components/Download";
 import { Footer } from "@/components/Footer";
-
+import { Analytics } from "@vercel/analytics/next"
 export default function Home() {
   return (
     <>
@@ -16,6 +16,7 @@ export default function Home() {
         <Download />
       </main>
       <Footer />
+      <Analytics />
     </>
   );
 }
