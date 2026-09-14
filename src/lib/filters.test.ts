@@ -5,6 +5,7 @@ import {
   SLOW_RESPONSE_THRESHOLD_MS,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
+  createDuplicateTracker,
   filterPages,
   filterResources,
   filterTab,
@@ -14,6 +15,7 @@ import {
   getDuplicateTitleSet,
   getPageIssueKeys,
   getResourceIssueKeys,
+  ingestDuplicateValue,
   searchPages,
   searchResources,
 } from "./filters";
@@ -125,6 +127,40 @@ describe("getCanonicalStatusMap", () => {
     expect(map.get("https://example.com/a")).toBe(200);
     expect(map.get("https://example.com/b")).toBe(404);
     expect(map.has("https://example.com/missing")).toBe(false);
+  });
+});
+
+describe("DuplicateTracker (incremental duplicate detection)", () => {
+  it("adds a value to `duplicates` the moment a second occurrence is ingested", () => {
+    const tracker = createDuplicateTracker();
+    ingestDuplicateValue(tracker, "Same");
+    expect(tracker.duplicates.has("Same")).toBe(false);
+    ingestDuplicateValue(tracker, "Same");
+    expect(tracker.duplicates.has("Same")).toBe(true);
+  });
+
+  it("ignores null/undefined/empty values", () => {
+    const tracker = createDuplicateTracker();
+    ingestDuplicateValue(tracker, null);
+    ingestDuplicateValue(tracker, undefined);
+    ingestDuplicateValue(tracker, "");
+    expect(tracker.duplicates.size).toBe(0);
+    expect(tracker.counts.size).toBe(0);
+  });
+
+  it("matches getDuplicateTitleSet when fed the same pages one at a time, in any batching", () => {
+    const pages = [
+      makePage({ title: "A" }),
+      makePage({ title: "B" }),
+      makePage({ title: "A" }),
+      makePage({ title: null }),
+      makePage({ title: "C" }),
+      makePage({ title: "B" }),
+      makePage({ title: "A" }),
+    ];
+    const tracker = createDuplicateTracker();
+    for (const p of pages) ingestDuplicateValue(tracker, p.title);
+    expect(tracker.duplicates).toEqual(getDuplicateTitleSet(pages));
   });
 });
 

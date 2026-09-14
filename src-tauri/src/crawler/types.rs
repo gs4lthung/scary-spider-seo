@@ -217,6 +217,11 @@ pub struct CrawlSummary {
     pub pages_crawled: usize,
     pub resources_checked: usize,
     pub cancelled: bool,
+    /// True when the crawl was stopped with URLs still queued and a matching
+    /// `CrawlResumeState` was saved — i.e. the next `start_crawl` for this same start URL
+    /// will continue rather than start over. False for a crawl that ran to completion, or
+    /// one stopped with nothing left queued (nothing to resume either way).
+    pub resumable: bool,
     pub linked_urls: Vec<String>,
 }
 

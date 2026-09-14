@@ -27,6 +27,21 @@ struct PageFetchOutcome {
     discovered_images: Vec<(Url, Option<String>)>,
 }
 
+/// The crawl loop's in-progress frontier state, captured when a crawl is stopped with
+/// pages still queued so a later `run_crawl` call for the same `start_url` can carry on
+/// instead of starting over. Not a complete pause/resume of everything in flight: page
+/// fetches already dispatched at the moment of cancellation are aborted and their URLs
+/// are not re-queued (a small, bounded loss — at most `concurrency` URLs), but the bulk
+/// of the frontier (whatever hadn't been dispatched yet) is preserved exactly.
+pub struct CrawlResumeState {
+    pub start_url: String,
+    pub frontier: VecDeque<(Url, usize, bool)>,
+    pub visited: HashSet<String>,
+    pub scheduled_count: usize,
+    pub crawled_count: usize,
+    pub linked_urls: HashSet<String>,
+}
+
 fn normalize(url: &Url) -> String {
     let mut u = url.clone();
     u.set_fragment(None);
@@ -136,6 +151,7 @@ async fn fetch_and_parse(
     client: &Client,
     browser: Option<Arc<Browser>>,
     axe_source: Option<Arc<String>>,
+    render_semaphore: Option<Arc<Semaphore>>,
     url: Url,
     depth: usize,
 ) -> PageFetchOutcome {
@@ -214,6 +230,14 @@ async fn fetch_and_parse(
     let mut rendered = false;
     let mut accessibility_violations = Vec::new();
     let body: String = if let Some(browser) = browser {
+        // A rendered page opens a full Chrome tab — much heavier than a plain fetch —
+        // so it's throttled by its own (CPU-core-scaled) semaphore independent of
+        // `config.concurrency`, keeping a high page-fetch concurrency from also meaning
+        // "open that many Chrome tabs at once" on a low-core/low-RAM machine.
+        let _render_permit = match &render_semaphore {
+            Some(sem) => Some(sem.clone().acquire_owned().await.unwrap()),
+            None => None,
+        };
         match render::render_page(browser, final_url.clone(), axe_source).await {
             Ok((html, violations)) => {
                 rendered = true;
@@ -403,6 +427,8 @@ pub async fn run_crawl(
     pages: Arc<StdMutex<Vec<PageResult>>>,
     resources: Arc<DashMap<String, ResourceResult>>,
     resources_checked: Arc<AtomicUsize>,
+    resume: Option<CrawlResumeState>,
+    resume_slot: Arc<StdMutex<Option<CrawlResumeState>>>,
 ) -> Vec<String> {
     let start_url = match Url::parse(&config.start_url) {
         Ok(u) => u,
@@ -524,6 +550,14 @@ pub async fn run_crawl(
         None
     };
 
+    // Caps how many Chrome tabs can be open/rendering at once, scaled to the machine's
+    // CPU core count rather than the (potentially much higher) page-fetch `concurrency`
+    // setting — see the comment at its acquire site in `fetch_and_parse`.
+    let render_semaphore: Option<Arc<Semaphore>> = browser.as_ref().map(|_| {
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        Arc::new(Semaphore::new(cores.min(config.concurrency).max(1)))
+    });
+
     // Accessibility audits only run when we already have a browser tab open for JS
     // rendering, since that avoids a second, separate page navigation per URL.
     let axe_source: Option<Arc<String>> = if config.run_accessibility_audit && browser.is_some() {
@@ -553,11 +587,18 @@ pub async fn run_crawl(
     };
     let max_pages = config.max_pages.max(1);
 
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
-    visited.insert(normalize(&start_url));
-    frontier.push_back((start_url.clone(), 0, false));
-    let mut scheduled_count: usize = 1;
+    // Continuing a stopped crawl seeds the frontier/visited/linked-urls from where it left
+    // off instead of restarting at just `start_url` — see `CrawlResumeState`.
+    let (mut visited, mut frontier, mut scheduled_count, mut crawled_count, mut linked_urls) = match resume {
+        Some(r) => (r.visited, r.frontier, r.scheduled_count, r.crawled_count, r.linked_urls),
+        None => {
+            let mut visited: HashSet<String> = HashSet::new();
+            let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
+            visited.insert(normalize(&start_url));
+            frontier.push_back((start_url.clone(), 0, false));
+            (visited, frontier, 1usize, 0usize, HashSet::<String>::new())
+        }
+    };
 
     if config.use_sitemap {
         let sitemap_urls = sitemap::fetch_sitemap_urls(&client, &start_url).await;
@@ -574,13 +615,8 @@ pub async fn run_crawl(
         }
     }
 
-    // Every internal link target discovered anywhere, used to flag orphan pages
-    // (sitemap-only URLs nothing on the site actually links to).
-    let mut linked_urls: HashSet<String> = HashSet::new();
-
     let mut page_tasks: JoinSet<PageFetchOutcome> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
-    let mut crawled_count: usize = 0;
 
     // The site's robots.txt Crawl-delay (if any) always wins over a shorter configured
     // delay — a user can politely ask to go slower than robots.txt requires, but not faster.
@@ -627,8 +663,10 @@ pub async fn run_crawl(
                 let page_client = page_client.clone();
                 let browser = browser.clone();
                 let axe_source = axe_source.clone();
+                let render_semaphore = render_semaphore.clone();
                 page_tasks.spawn(async move {
-                    let mut outcome = fetch_and_parse(&page_client, browser, axe_source, url, depth).await;
+                    let mut outcome =
+                        fetch_and_parse(&page_client, browser, axe_source, render_semaphore, url, depth).await;
                     outcome.result.discovered_via_sitemap = via_sitemap;
                     outcome
                 });
@@ -733,10 +771,28 @@ pub async fn run_crawl(
         }
     }
 
-    if cancel.load(Ordering::SeqCst) {
+    let cancelled = cancel.load(Ordering::SeqCst);
+    if cancelled {
         page_tasks.abort_all();
         resource_tasks.abort_all();
     }
+
+    // Only worth resuming if the frontier still has unfetched URLs — if it was empty when
+    // stopped, the crawl had nothing left to do anyway. (Pages whose fetch was already
+    // in flight at the moment of cancellation are aborted above and not re-queued here —
+    // see `CrawlResumeState`'s doc comment.)
+    *resume_slot.lock().unwrap() = if cancelled && !frontier.is_empty() {
+        Some(CrawlResumeState {
+            start_url: config.start_url.clone(),
+            frontier,
+            visited,
+            scheduled_count,
+            crawled_count,
+            linked_urls: linked_urls.clone(),
+        })
+    } else {
+        None
+    };
 
     linked_urls.into_iter().collect()
 }

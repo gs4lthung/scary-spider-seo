@@ -4,11 +4,141 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <title>Scary Spider SEO</title>
+    <script>
+      // Resolves the color theme before first paint, mirroring next-themes' own
+      // resolution (localStorage "theme", falling back to system preference — see
+      // src/components/theme-toggle.tsx). Without this, the page briefly flashes
+      // light/white for dark-mode users until next-themes' effect runs post-mount.
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var dark = stored === "dark" || (stored !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.add(dark ? "dark" : "light");
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      /* Mirrors :root/.dark's --background in src/index.css, so neither the loading
+         screen below nor the page itself ever shows blank white before the real
+         stylesheet loads (or, in dev, before Vite injects it at all). */
+      html.dark,
+      html.dark body {
+        background: oklch(0.145 0.025 293);
+      }
+      html:not(.dark),
+      html:not(.dark) body {
+        background: oklch(0.99 0.005 293);
+      }
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #initial-loader img {
+        width: min(220px, 60vw);
+        height: auto;
+        animation: initial-loader-pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes initial-loader-pulse {
+        0%,
+        100% {
+          opacity: 0.5;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      /* One quarter-web SVG, reused at all four corners via flips — its anchor point
+         (the corner it fans out from) is drawn at the shape's own top-left. */
+      .spider-corner {
+        position: fixed;
+        width: min(30vw, 220px);
+        height: min(30vw, 220px);
+        pointer-events: none;
+      }
+      html.dark .spider-corner {
+        color: oklch(0.85 0.02 293 / 30%);
+      }
+      html:not(.dark) .spider-corner {
+        color: oklch(0.3 0.02 293 / 20%);
+      }
+      .spider-corner--tl {
+        top: 0;
+        left: 0;
+      }
+      .spider-corner--tr {
+        top: 0;
+        right: 0;
+        transform: scaleX(-1);
+      }
+      .spider-corner--bl {
+        bottom: 0;
+        left: 0;
+        transform: scaleY(-1);
+      }
+      .spider-corner--br {
+        bottom: 0;
+        right: 0;
+        transform: scale(-1, -1);
+      }
+    </style>
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static fallback shown until React mounts and replaces it — covers the gap
+           between first paint and the app actually rendering, instead of blank white. -->
+      <div id="initial-loader">
+        <svg class="spider-corner spider-corner--tl" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+          <line x1="0" y1="0" x2="100" y2="0" />
+          <line x1="0" y1="0" x2="92.39" y2="38.27" />
+          <line x1="0" y1="0" x2="70.71" y2="70.71" />
+          <line x1="0" y1="0" x2="38.27" y2="92.39" />
+          <line x1="0" y1="0" x2="0" y2="100" />
+          <polyline points="25,0 23.10,9.57 17.68,17.68 9.57,23.10 0,25" />
+          <polyline points="50,0 46.19,19.13 35.36,35.36 19.13,46.19 0,50" />
+          <polyline points="75,0 69.29,28.70 53.03,53.03 28.70,69.29 0,75" />
+          <polyline points="100,0 92.39,38.27 70.71,70.71 38.27,92.39 0,100" />
+        </svg>
+        <svg class="spider-corner spider-corner--tr" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+          <line x1="0" y1="0" x2="100" y2="0" />
+          <line x1="0" y1="0" x2="92.39" y2="38.27" />
+          <line x1="0" y1="0" x2="70.71" y2="70.71" />
+          <line x1="0" y1="0" x2="38.27" y2="92.39" />
+          <line x1="0" y1="0" x2="0" y2="100" />
+          <polyline points="25,0 23.10,9.57 17.68,17.68 9.57,23.10 0,25" />
+          <polyline points="50,0 46.19,19.13 35.36,35.36 19.13,46.19 0,50" />
+          <polyline points="75,0 69.29,28.70 53.03,53.03 28.70,69.29 0,75" />
+          <polyline points="100,0 92.39,38.27 70.71,70.71 38.27,92.39 0,100" />
+        </svg>
+        <svg class="spider-corner spider-corner--bl" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+          <line x1="0" y1="0" x2="100" y2="0" />
+          <line x1="0" y1="0" x2="92.39" y2="38.27" />
+          <line x1="0" y1="0" x2="70.71" y2="70.71" />
+          <line x1="0" y1="0" x2="38.27" y2="92.39" />
+          <line x1="0" y1="0" x2="0" y2="100" />
+          <polyline points="25,0 23.10,9.57 17.68,17.68 9.57,23.10 0,25" />
+          <polyline points="50,0 46.19,19.13 35.36,35.36 19.13,46.19 0,50" />
+          <polyline points="75,0 69.29,28.70 53.03,53.03 28.70,69.29 0,75" />
+          <polyline points="100,0 92.39,38.27 70.71,70.71 38.27,92.39 0,100" />
+        </svg>
+        <svg class="spider-corner spider-corner--br" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+          <line x1="0" y1="0" x2="100" y2="0" />
+          <line x1="0" y1="0" x2="92.39" y2="38.27" />
+          <line x1="0" y1="0" x2="70.71" y2="70.71" />
+          <line x1="0" y1="0" x2="38.27" y2="92.39" />
+          <line x1="0" y1="0" x2="0" y2="100" />
+          <polyline points="25,0 23.10,9.57 17.68,17.68 9.57,23.10 0,25" />
+          <polyline points="50,0 46.19,19.13 35.36,35.36 19.13,46.19 0,50" />
+          <polyline points="75,0 69.29,28.70 53.03,53.03 28.70,69.29 0,75" />
+          <polyline points="100,0 92.39,38.27 70.71,70.71 38.27,92.39 0,100" />
+        </svg>
+        <img src="/logo-wordmark.png" alt="" />
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

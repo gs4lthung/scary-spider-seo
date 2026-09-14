@@ -34,20 +34,19 @@ import {
   type FilterKey,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
+  createDuplicateTracker,
   filterPages,
   filterResources,
   filterTab,
-  getCanonicalStatusMap,
-  getDuplicateContentSet,
-  getDuplicateMetaSet,
-  getDuplicateTitleSet,
   getPageIssueKeys,
   getResourceIssueKeys,
+  ingestDuplicateValue,
   searchPages,
   searchResources,
 } from "./lib/filters";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { cn } from "@/lib/utils";
+import { withScheme } from "./lib/url";
 
 type Tab = "overview" | "pages" | "resources";
 
@@ -90,6 +89,28 @@ interface PageColumnsContext {
 }
 
 function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[] {
+  // The Issues column's accessorFn runs for every row on every table rebuild (react-table
+  // builds the full row model regardless of virtualization), and its cell renderer runs
+  // again for visible rows — without this cache that's getPageIssueKeys' 26 sub-filters
+  // computed twice per row per update. Scoped to this ctx (rebuilt whenever ctx's deps
+  // change), keyed by page object identity so unrelated pages never invalidate each other.
+  const issueCache = new WeakMap<PageResult, FilterKey[]>();
+  function issuesFor(page: PageResult): FilterKey[] {
+    let keys = issueCache.get(page);
+    if (!keys) {
+      keys = getPageIssueKeys(
+        page,
+        ctx.duplicateTitles,
+        ctx.duplicateContent,
+        ctx.duplicateMeta,
+        ctx.canonicalStatusMap,
+        ctx.linkedUrls,
+      );
+      issueCache.set(page, keys);
+    }
+    return keys;
+  }
+
   return [
     {
       accessorKey: "url",
@@ -103,26 +124,11 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       header: "Issues",
       size: 80,
       meta: { description: "Number of SEO issues detected for this page. Hover the warning icon in a row for details." },
-      accessorFn: (page) =>
-        getPageIssueKeys(
-          page,
-          ctx.duplicateTitles,
-          ctx.duplicateContent,
-          ctx.duplicateMeta,
-          ctx.canonicalStatusMap,
-          ctx.linkedUrls,
-        ).length,
+      accessorFn: (page) => issuesFor(page).length,
       cell: (c) => {
         const count = c.getValue() as number;
         if (count === 0) return <span className="text-muted-foreground">—</span>;
-        const keys = getPageIssueKeys(
-          c.row.original,
-          ctx.duplicateTitles,
-          ctx.duplicateContent,
-          ctx.duplicateMeta,
-          ctx.canonicalStatusMap,
-          ctx.linkedUrls,
-        );
+        const keys = issuesFor(c.row.original);
         const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean);
         return (
           <Tooltip>
@@ -485,11 +491,40 @@ function App() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
   const [linkedUrls, setLinkedUrls] = useState<string[]>([]);
+  // Which scheme to assume for a start URL typed without one (e.g. "example.com") — a
+  // URL that already specifies http:// or https:// is never overridden by this.
+  const [preferHttps, setPreferHttps] = useState(true);
   const pagesBufRef = useRef<PageResult[]>([]);
   const resourcesBufRef = useRef<ResourceResult[]>([]);
+  // Backs the duplicate-title/meta/content and canonical-status derivations below with
+  // incremental accumulators instead of full-array rescans (see the useMemo that reads
+  // them for why). Reset via resetDerivedTrackers() whenever `pages` is replaced wholesale
+  // rather than appended to.
+  const titleTrackerRef = useRef(createDuplicateTracker());
+  const contentTrackerRef = useRef(createDuplicateTracker());
+  const metaTrackerRef = useRef(createDuplicateTracker());
+  const canonicalStatusRef = useRef(new Map<string, number | null>());
+  const ingestedPagesCountRef = useRef(0);
+
+  const resetDerivedTrackers = useCallback(() => {
+    titleTrackerRef.current = createDuplicateTracker();
+    contentTrackerRef.current = createDuplicateTracker();
+    metaTrackerRef.current = createDuplicateTracker();
+    canonicalStatusRef.current = new Map();
+    ingestedPagesCountRef.current = 0;
+  }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
   // (registered once on mount) always reads current values instead of a stale closure.
   const closeGuardRef = useRef({ running: false, pagesCount: 0, resourcesCount: 0 });
+  // The start URL a stopped-but-unfinished crawl can be continued for (the backend keeps
+  // the matching frontier around — see AppState.resume_state). Cleared whenever a crawl
+  // finishes normally or a snapshot is loaded, so Start only continues when it's the same
+  // crawl that was stopped, never a stale one.
+  const [resumableStartUrl, setResumableStartUrl] = useState<string | null>(null);
+  // Always the start URL of whichever crawl most recently started, read by the
+  // `crawl://done` listener below (registered once on mount) instead of `config.startUrl`,
+  // which would otherwise be a stale closure from that first render.
+  const activeStartUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     // `listen()`/unlisten are async, and React StrictMode's dev-only
@@ -551,6 +586,7 @@ function App() {
         setPaused(false);
         setLinkedUrls(payload.linkedUrls);
         setProgress((prev) => (prev ? { ...prev, running: false, paused: false } : prev));
+        setResumableStartUrl(payload.resumable ? activeStartUrlRef.current : null);
       });
       await registerListener<string>("crawl://error", (payload) => {
         toast.error(payload);
@@ -600,23 +636,38 @@ function App() {
   }, []);
 
   const handleStart = useCallback(async () => {
-    setPages([]);
-    setResources([]);
+    // A URL typed without a scheme (e.g. "example.com") gets the checkbox's preferred
+    // one; a URL that already specifies http:// or https:// is left untouched.
+    const startUrl = withScheme(config.startUrl, preferHttps);
+    const nextConfig = { ...config, startUrl };
+
+    // Continuing a crawl stopped with URLs still queued (the backend kept its frontier
+    // for this exact start URL — see AppState.resume_state): keep the results gathered
+    // so far instead of wiping them, since the backend will append to them, not replace
+    // them. A different start URL (or a crawl that ran to completion) always starts fresh.
+    const continuing = resumableStartUrl === startUrl;
+    activeStartUrlRef.current = startUrl;
+    if (!continuing) {
+      setPages([]);
+      setResources([]);
+      setSiteInfo(null);
+      setLinkedUrls([]);
+      resetDerivedTrackers();
+      pagesBufRef.current = [];
+      resourcesBufRef.current = [];
+    }
+    setConfig(nextConfig);
     setProgress(null);
     setFilter("all");
     setPaused(false);
-    setSiteInfo(null);
-    setLinkedUrls([]);
-    pagesBufRef.current = [];
-    resourcesBufRef.current = [];
     setRunning(true);
     try {
-      await invoke("start_crawl", { config });
+      await invoke("start_crawl", { config: nextConfig });
     } catch (err) {
       toast.error(String(err));
       setRunning(false);
     }
-  }, [config]);
+  }, [config, preferHttps, resumableStartUrl, resetDerivedTrackers]);
 
   const handleStop = useCallback(async () => {
     try {
@@ -680,6 +731,8 @@ function App() {
       });
       if (!path || typeof path !== "string") return;
       const snapshot = await invoke<CrawlSnapshot>("load_crawl", { path });
+      resetDerivedTrackers();
+      setResumableStartUrl(null);
       setPages(snapshot.pages);
       setResources(snapshot.resources);
       setProgress(null);
@@ -689,12 +742,36 @@ function App() {
     } catch (err) {
       toast.error(String(err));
     }
-  }, []);
+  }, [resetDerivedTrackers]);
 
-  const duplicateTitleSet = useMemo(() => getDuplicateTitleSet(pages), [pages]);
-  const duplicateContentSet = useMemo(() => getDuplicateContentSet(pages), [pages]);
-  const duplicateMetaSet = useMemo(() => getDuplicateMetaSet(pages), [pages]);
-  const canonicalStatusMap = useMemo(() => getCanonicalStatusMap(pages), [pages]);
+  // Ingests only the pages not yet seen by the trackers (normally just the latest batch —
+  // `pages` only grows by appending during a crawl) instead of rescanning/rehashing every
+  // page crawled so far on every ~150ms UI flush, which is what made this cost trend toward
+  // O(n²) over a long crawl. Still produces fresh Set/Map instances each time so downstream
+  // useMemo/props comparisons below see them exactly as before.
+  const { duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap } = useMemo(() => {
+    if (ingestedPagesCountRef.current > pages.length) {
+      // `pages` was replaced wholesale rather than appended to (defensive fallback —
+      // handleStart/handleOpenCrawl already call resetDerivedTrackers() explicitly).
+      resetDerivedTrackers();
+    }
+    for (let i = ingestedPagesCountRef.current; i < pages.length; i++) {
+      const p = pages[i];
+      ingestDuplicateValue(titleTrackerRef.current, p.title);
+      ingestDuplicateValue(contentTrackerRef.current, p.contentHash);
+      ingestDuplicateValue(metaTrackerRef.current, p.metaDescription);
+      canonicalStatusRef.current.set(p.url, p.status);
+    }
+    ingestedPagesCountRef.current = pages.length;
+
+    return {
+      duplicateTitleSet: new Set(titleTrackerRef.current.duplicates),
+      duplicateContentSet: new Set(contentTrackerRef.current.duplicates),
+      duplicateMetaSet: new Set(metaTrackerRef.current.duplicates),
+      canonicalStatusMap: new Map(canonicalStatusRef.current),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
+  }, [pages]);
   const linkedUrlSet = useMemo(() => new Set(linkedUrls), [linkedUrls]);
   const filteredPages = useMemo(
     () =>
@@ -758,11 +835,14 @@ function App() {
           disabled={running}
           onChange={(startUrl) => setConfig((c) => ({ ...c, startUrl }))}
           onSubmit={handleStart}
+          preferHttps={preferHttps}
+          onToggleScheme={() => setPreferHttps((v) => !v)}
         />
         <CrawlActions
           running={running}
           paused={paused}
           canStart={!!config.startUrl}
+          continuing={resumableStartUrl === config.startUrl}
           onStart={handleStart}
           onStop={handleStop}
           onPause={handlePause}

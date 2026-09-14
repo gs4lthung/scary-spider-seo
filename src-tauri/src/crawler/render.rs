@@ -53,14 +53,21 @@ pub async fn render_page(
 ) -> Result<(String, Vec<AccessibilityViolation>), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let tab = browser.new_tab().map_err(|e| e.to_string())?;
-        tab.navigate_to(url.as_str()).map_err(|e| e.to_string())?;
-        tab.wait_until_navigated().map_err(|e| e.to_string())?;
-        let html = tab.get_content().map_err(|e| e.to_string())?;
-        let violations = match axe_source.as_deref() {
-            Some(src) => run_axe(&tab, src).unwrap_or_default(),
-            None => Vec::new(),
-        };
-        Ok((html, violations))
+        let result = (|| {
+            tab.navigate_to(url.as_str()).map_err(|e| e.to_string())?;
+            tab.wait_until_navigated().map_err(|e| e.to_string())?;
+            let html = tab.get_content().map_err(|e| e.to_string())?;
+            let violations = match axe_source.as_deref() {
+                Some(src) => run_axe(&tab, src).unwrap_or_default(),
+                None => Vec::new(),
+            };
+            Ok((html, violations))
+        })();
+        // headless_chrome never closes a tab on its own, so a new tab per rendered
+        // page (opened above) leaks — and its renderer process memory — for the
+        // rest of the crawl unless we close it ourselves here.
+        let _ = tab.close_target();
+        result
     })
     .await
     .map_err(|e| e.to_string())?

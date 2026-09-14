@@ -82,6 +82,36 @@ export function getCanonicalStatusMap(pages: PageResult[]): Map<string, number |
   return map;
 }
 
+/**
+ * Counts occurrences of a value (title / meta description / content hash) one page at
+ * a time, so duplicate detection can stay incremental during a live crawl.
+ *
+ * During a crawl, `pages` only ever grows by appending — but `getDuplicateTitleSet` (etc.)
+ * re-scan and re-hash every page crawled so far on every call. Called from a `useMemo` keyed
+ * on the whole `pages` array (as the UI does, to batch updates during a crawl), that turns
+ * into a full re-scan on every ~150ms batch, so total work across a long crawl trends toward
+ * O(n²) in page count. A `DuplicateTracker` lets the caller ingest only the newly-arrived
+ * pages each time instead of reprocessing everything already counted.
+ */
+export interface DuplicateTracker {
+  counts: Map<string, number>;
+  duplicates: Set<string>;
+}
+
+export function createDuplicateTracker(): DuplicateTracker {
+  return { counts: new Map(), duplicates: new Set() };
+}
+
+/** Feeds one more observed value into the tracker, adding it to `duplicates` the moment
+ * a second occurrence is seen. No-op for a falsy value (mirrors the null-title/-hash/-meta
+ * handling in `getDuplicateTitleSet` etc — those pages simply don't count toward duplicates). */
+export function ingestDuplicateValue(tracker: DuplicateTracker, value: string | null | undefined): void {
+  if (!value) return;
+  const count = (tracker.counts.get(value) ?? 0) + 1;
+  tracker.counts.set(value, count);
+  if (count === 2) tracker.duplicates.add(value);
+}
+
 /** Which tab a filter's results live in — null means it doesn't imply a tab (e.g. "all"). */
 export function filterTab(filter: FilterKey): "pages" | "resources" | null {
   return filter === "broken" ? "resources" : filter === "all" ? null : "pages";

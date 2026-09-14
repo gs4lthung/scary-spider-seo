@@ -111,6 +111,9 @@ export interface CrawlSummary {
   pagesCrawled: number;
   resourcesChecked: number;
   cancelled: boolean;
+  /** True when the crawl was stopped with URLs still queued — the backend kept the
+   * frontier, so starting the same start URL again continues instead of starting over. */
+  resumable: boolean;
   linkedUrls: string[];
 }
 
