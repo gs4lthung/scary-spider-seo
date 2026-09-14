@@ -5,6 +5,7 @@ import { TechStack } from "@/components/TechStack";
 import { Download } from "@/components/Download";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 export default function Home() {
   return (
     <>
@@ -17,6 +18,7 @@ export default function Home() {
       </main>
       <Footer />
       <Analytics />
+      <SpeedInsights />
     </>
   );
 }
