@@ -213,9 +213,16 @@ export function PostForm({
         </select>
       </div>
 
-      <button type="submit" disabled={pending} className="comic-panel rounded bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">
-        {pending ? "Saving..." : "Save post"}
-      </button>
+      <div className="flex items-center gap-4">
+        <button type="submit" disabled={pending} className="comic-panel rounded bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">
+          {pending ? "Saving..." : "Save post"}
+        </button>
+        {post ? (
+          <Link href={`/admin/preview/${post.id}`} target="_blank" className="text-sm text-primary hover:underline">
+            Preview →
+          </Link>
+        ) : null}
+      </div>
     </form>
   );
 }

@@ -4,18 +4,18 @@
 
 # Scary Spider SEO
 
-A desktop site crawler and SEO auditor built with **Tauri**, **React**, and **Rust**. Point it at a URL, crawl the site, and get a searchable, sortable table of every page and resource — with SEO/accessibility issues flagged inline, not buried in a report.
+A desktop site crawler and SEO auditor built with **Tauri**, **React**, and **Rust**. Point it at a URL, crawl the site, and get a searchable, sortable table of every page and resource, with SEO/accessibility issues flagged inline instead of buried in a report.
 
 ## Download
 
-No build tools, no source code, no install wizard needed — grab a build for your OS from the **[Releases page](https://github.com/gs4lthung/gseo/releases)**:
+No build tools, no source code, no install wizard needed. Grab a build for your OS from the **[Releases page](https://github.com/gs4lthung/gseo/releases)**:
 
 | Platform | Just want to run it | Prefer a proper install |
 | --- | --- | --- |
-| Windows | `ScarySpiderSEO-portable-windows-x64.zip` — unzip, double-click `scary-spider-seo.exe` | `.msi` or `.exe` installer |
-| macOS (Apple Silicon) | — | `.dmg` (aarch64) |
-| macOS (Intel) | — | `.dmg` (x64) |
-| Linux | `.AppImage` — mark executable, double-click | `.deb` |
+| Windows | `ScarySpiderSEO-portable-windows-x64.zip`: unzip, double-click `scary-spider-seo.exe` | `.msi` or `.exe` installer |
+| macOS (Apple Silicon) | N/A | `.dmg` (aarch64) |
+| macOS (Intel) | N/A | `.dmg` (x64) |
+| Linux | `.AppImage`: mark executable, double-click | `.deb` |
 
 Builds aren't code-signed yet, so the OS will warn before the first run:
 - **Windows**: click "More info" → "Run anyway" on the SmartScreen prompt.
@@ -33,7 +33,7 @@ If there's no release yet for the version you need, see [Getting started](#getti
 - Site fingerprinting: server/CDN/CMS detection, `llms.txt` discovery, and optional hosting/ASN lookup
 
 **Auditing**
-- 25+ built-in issue checks — broken links, missing/duplicate titles & meta descriptions, title length, H1 issues, canonical problems, insecure links, missing alt text, HSTS, hreflang, structured data errors, and more
+- 25+ built-in issue checks: broken links, missing/duplicate titles & meta descriptions, title length, H1 issues, canonical problems, insecure links, missing alt text, HSTS, hreflang, structured data errors, and more
 - Problem cells and rows are flagged inline in the table (not just in a report), with a per-page issue count and hover detail
 - A detail modal per page/resource with plain-language explanations and fixes for every flagged issue
 

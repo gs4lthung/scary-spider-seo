@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     template: "%s | Scary Spider SEO Blog",
   },
   description: "SEO, crawling, and web performance notes from the Scary Spider SEO team.",
+  alternates: {
+    types: { "application/rss+xml": "/feed.xml" },
+  },
 };
 
 export default function RootLayout({

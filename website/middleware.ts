@@ -8,15 +8,25 @@ export function middleware(request: NextRequest) {
   const maintenanceMode = process.env.MAINTENANCE_MODE === "true";
   const { pathname } = request.nextUrl;
 
-  if (!maintenanceMode || pathname.startsWith("/maintenance")) {
-    return NextResponse.next();
+  if (maintenanceMode && !pathname.startsWith("/maintenance")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/maintenance";
+    const response = NextResponse.rewrite(url, { status: 503 });
+    response.headers.set("Retry-After", "1800");
+    return response;
   }
 
-  const url = request.nextUrl.clone();
-  url.pathname = "/maintenance";
-  const response = NextResponse.rewrite(url, { status: 503 });
-  response.headers.set("Retry-After", "1800");
-  return response;
+  // demo.scaryspiderseo.com is an alias for this same app: point the
+  // Vercel domain at this project, then requests to "/" and "/api/..." on
+  // that host transparently serve the /demo page and its API route.
+  const host = request.headers.get("host") ?? "";
+  if (host.startsWith("demo.") && !pathname.startsWith("/demo")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === "/" ? "/demo" : `/demo${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {

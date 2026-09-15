@@ -58,11 +58,11 @@ jobs:
           releaseBody: |
             See the assets below to download and install this version.
 
-            **Windows**: `ScarySpiderSEO-portable-windows-x64.zip` needs no install — unzip
+            **Windows**: `ScarySpiderSEO-portable-windows-x64.zip` needs no install. Unzip
             it and double-click `scary-spider-seo.exe` to run. The `.msi`/`.exe` files are
             regular installers if you'd rather have a Start Menu shortcut.
 
-            Builds are unsigned — Windows SmartScreen and macOS Gatekeeper will warn
+            Builds are unsigned, so Windows SmartScreen and macOS Gatekeeper will warn
             before the first run. See the README for how to proceed past that warning.
           releaseDraft: true
           prerelease: false
