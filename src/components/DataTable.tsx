@@ -100,17 +100,30 @@ export function DataTable<T>({
 
   const rows = table.getRowModel().rows;
 
+  // Below this row count, just render every row directly instead of windowing: most
+  // crawls land well under it (a few hundred pages), and skipping the virtualizer
+  // there avoids its startup/resize edge cases entirely — e.g. the container's height
+  // not yet being measured right after switching tabs, which showed up as rows (or
+  // parts of a row) rendering blank until a subsequent scroll/resize forced a
+  // recalculation. Only genuinely large crawls need windowing at all.
+  const ROW_VIRTUALIZATION_THRESHOLD = 300;
+  const virtualize = rows.length > ROW_VIRTUALIZATION_THRESHOLD;
+
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: virtualize ? rows.length : 0,
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
-    overscan: 12,
+    // Extra rows pre-mounted above/below the viewport so a fast scroll (fling on a
+    // trackpad, etc.) has a buffer of already-rendered rows instead of hitting the edge
+    // of the virtualized window and showing blank rows until React catches up.
+    overscan: 20,
   });
 
-  const virtualRows = virtualizer.getVirtualItems();
-  const totalSize = virtualizer.getTotalSize();
-  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
-  const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+  const virtualRows = virtualize ? virtualizer.getVirtualItems() : [];
+  const totalSize = virtualize ? virtualizer.getTotalSize() : 0;
+  const paddingTop = virtualize && virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = virtualize && virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+  const visibleRows = virtualize ? virtualRows.map((vRow) => rows[vRow.index]) : rows;
 
   const pinnedStyle = (column: { getIsPinned: () => false | "left" | "right"; getStart: (p?: "left" | "right") => number }) => {
     const pinned = column.getIsPinned();
@@ -215,32 +228,29 @@ export function DataTable<T>({
               <TableCell colSpan={columns.length} style={{ height: paddingTop, padding: 0 }} />
             </TableRow>
           )}
-          {virtualRows.map((vRow) => {
-            const row = rows[vRow.index];
-            return (
-              <TableRow
-                key={row.id}
-                className={cn(onRowClick && "cursor-pointer")}
-                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              >
-                {row.getVisibleCells().map((cell) => {
-                  const pinned = cell.column.getIsPinned();
-                  return (
-                    <TableCell
-                      key={cell.id}
-                      style={{ width: cell.column.getSize(), ...pinnedStyle(cell.column) }}
-                      className={cn(
-                        pinned && "sticky z-10 bg-background",
-                        isLastLeftPinned(cell.column) && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]",
-                      )}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-            );
-          })}
+          {visibleRows.map((row) => (
+            <TableRow
+              key={row.id}
+              className={cn(onRowClick && "cursor-pointer")}
+              onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+            >
+              {row.getVisibleCells().map((cell) => {
+                const pinned = cell.column.getIsPinned();
+                return (
+                  <TableCell
+                    key={cell.id}
+                    style={{ width: cell.column.getSize(), ...pinnedStyle(cell.column) }}
+                    className={cn(
+                      pinned && "sticky z-10 bg-background",
+                      isLastLeftPinned(cell.column) && "shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]",
+                    )}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          ))}
           {paddingBottom > 0 && (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={columns.length} style={{ height: paddingBottom, padding: 0 }} />

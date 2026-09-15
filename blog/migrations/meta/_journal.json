@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789469955822,
+      "tag": "0000_natural_unicorn",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789474157933,
+      "tag": "0001_tidy_terror",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789480000000,
+      "tag": "0002_add_categories_users",
+      "breakpoints": true
+    }
+  ]
+}

@@ -19,6 +19,11 @@ use url::Url;
 
 const MAX_REDIRECT_HOPS: usize = 10;
 const AXE_CORE_URL: &str = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.0/axe.min.js";
+/// Hard cap on concurrent rendered-page tabs when only JS rendering is on (no audit).
+const RENDER_MAX_CONCURRENCY: usize = 4;
+/// Tighter cap when the accessibility and/or mobile-usability audit is running, since
+/// each adds real CPU time inside the tab on top of the render itself.
+const RENDER_AUDIT_MAX_CONCURRENCY: usize = 2;
 
 struct PageFetchOutcome {
     result: PageResult,
@@ -154,6 +159,7 @@ async fn fetch_and_parse(
     render_semaphore: Option<Arc<Semaphore>>,
     url: Url,
     depth: usize,
+    run_mobile_usability_audit: bool,
 ) -> PageFetchOutcome {
     let started = Instant::now();
 
@@ -229,6 +235,7 @@ async fn fetch_and_parse(
 
     let mut rendered = false;
     let mut accessibility_violations = Vec::new();
+    let mut mobile_usability_violations = Vec::new();
     let body: String = if let Some(browser) = browser {
         // A rendered page opens a full Chrome tab — much heavier than a plain fetch —
         // so it's throttled by its own (CPU-core-scaled) semaphore independent of
@@ -238,10 +245,11 @@ async fn fetch_and_parse(
             Some(sem) => Some(sem.clone().acquire_owned().await.unwrap()),
             None => None,
         };
-        match render::render_page(browser, final_url.clone(), axe_source).await {
-            Ok((html, violations)) => {
+        match render::render_page(browser, final_url.clone(), axe_source, run_mobile_usability_audit).await {
+            Ok((html, violations, mobile_violations)) => {
                 rendered = true;
                 accessibility_violations = violations;
+                mobile_usability_violations = mobile_violations;
                 html
             }
             Err(_) => match resp.text().await {
@@ -323,6 +331,7 @@ async fn fetch_and_parse(
         structured_data_types: parsed.structured_data_types,
         structured_data_errors: parsed.structured_data_errors,
         accessibility_violations,
+        mobile_usability_violations,
         error: None,
     };
 
@@ -528,20 +537,20 @@ pub async fn run_crawl(
         );
     }
 
-    let browser: Option<Arc<Browser>> = if config.render_js || config.run_accessibility_audit {
+    let browser: Option<Arc<Browser>> = if config.render_js || config.run_accessibility_audit || config.run_mobile_usability_audit {
         match tauri::async_runtime::spawn_blocking(render::launch_browser).await {
             Ok(Ok(b)) => Some(Arc::new(b)),
             Ok(Err(e)) => {
                 let _ = app.emit(
                     "crawl://error",
-                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility audit."),
+                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility/mobile usability audit."),
                 );
                 None
             }
             Err(e) => {
                 let _ = app.emit(
                     "crawl://error",
-                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility audit."),
+                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility/mobile usability audit."),
                 );
                 None
             }
@@ -550,12 +559,25 @@ pub async fn run_crawl(
         None
     };
 
-    // Caps how many Chrome tabs can be open/rendering at once, scaled to the machine's
-    // CPU core count rather than the (potentially much higher) page-fetch `concurrency`
-    // setting — see the comment at its acquire site in `fetch_and_parse`.
+    // Caps how many Chrome tabs (each its own renderer process) can be open/rendering
+    // at once. Scaled to the machine's core count rather than the (potentially much
+    // higher) page-fetch `concurrency` setting — see the comment at its acquire site
+    // in `fetch_and_parse` — but also hard-capped well below core count: a handful of
+    // full Chrome renderers pegging every core is what actually made the whole app
+    // (not just the crawl) feel laggy, not just a raw CPU-scaling problem, so this
+    // deliberately leaves headroom for the OS/UI even on a beefy machine. The
+    // accessibility and mobile-usability audits each add nontrivial in-page JS work
+    // on top of the render itself (axe.run(), the mobile-usability DOM walk), so they
+    // get an even tighter cap.
     let render_semaphore: Option<Arc<Semaphore>> = browser.as_ref().map(|_| {
         let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
-        Arc::new(Semaphore::new(cores.min(config.concurrency).max(1)))
+        let cap = if config.run_accessibility_audit || config.run_mobile_usability_audit {
+            RENDER_AUDIT_MAX_CONCURRENCY
+        } else {
+            RENDER_MAX_CONCURRENCY
+        };
+        let budget = cores.saturating_sub(1).max(1);
+        Arc::new(Semaphore::new(budget.min(config.concurrency).min(cap).max(1)))
     });
 
     // Accessibility audits only run when we already have a browser tab open for JS
@@ -664,9 +686,18 @@ pub async fn run_crawl(
                 let browser = browser.clone();
                 let axe_source = axe_source.clone();
                 let render_semaphore = render_semaphore.clone();
+                let run_mobile_usability_audit = config.run_mobile_usability_audit;
                 page_tasks.spawn(async move {
-                    let mut outcome =
-                        fetch_and_parse(&page_client, browser, axe_source, render_semaphore, url, depth).await;
+                    let mut outcome = fetch_and_parse(
+                        &page_client,
+                        browser,
+                        axe_source,
+                        render_semaphore,
+                        url,
+                        depth,
+                        run_mobile_usability_audit,
+                    )
+                    .await;
                     outcome.result.discovered_via_sitemap = via_sitemap;
                     outcome
                 });

@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "scary-spider-seo-blog",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": ["nodejs_compat"],
+  // No "vars" block here: SESSION_SECRET is a secret, never plaintext
+  // config. Set it with `wrangler secret put SESSION_SECRET` for
+  // production, and in a local, gitignored `.dev.vars` file for `next dev`/
+  // `wrangler dev` — see `.dev.vars.example`. Its TypeScript type is
+  // declared by hand in `lib/cloudflare-env.d.ts` since it doesn't come
+  // from `wrangler types` (nothing here declares it). User passwords live
+  // hashed in the `users` D1 table, not in an env var.
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Custom domain: point blog.scaryspiderseo.com at this Worker in the
+  // Cloudflare dashboard (Workers & Pages > Domains & Routes), then it
+  // shows up here automatically, or add it manually as:
+  // "routes": [{ "pattern": "blog.scaryspiderseo.com", "custom_domain": true }]
+  "routes": [],
+  // Run `wrangler d1 create blog-db` once, then paste the returned
+  // database_id below (and mirror it in .dev.vars / wrangler for local dev).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "blog-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Run `wrangler r2 bucket create blog-media` once, then this binding
+  // is ready to use for post images/attachments.
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "blog-media"
+    }
+  ]
+}

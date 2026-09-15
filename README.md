@@ -87,9 +87,10 @@ website/              Marketing site (separate Next.js project, maintainer-only 
 
 ## Contributing
 
-Bug reports, fixes, and features are welcome via pull request — see
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, testing, and PR
-guidelines.
+This project does not accept pull requests — it's maintained solely by
+the owner. Found a bug or have a feature idea? Please
+[open an issue](https://github.com/gs4lthung/gseo/issues) instead; see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for what to include.
 
 **Releases are cut by the maintainer only** — see below.
 
@@ -104,6 +105,3 @@ git push origin v0.1.0
 ```
 
 It can also be run manually from the Actions tab (`workflow_dispatch`) without a tag push.
-
-Contributors: please don't create or push version tags in a PR — open the
-PR against `main` and the maintainer will handle versioning and release.

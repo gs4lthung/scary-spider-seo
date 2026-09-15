@@ -14,6 +14,7 @@ export interface CrawlConfig {
   renderJs: boolean;
   lookupHosting: boolean;
   runAccessibilityAudit: boolean;
+  runMobileUsabilityAudit: boolean;
 }
 
 export interface PageResult {
@@ -59,12 +60,20 @@ export interface PageResult {
   structuredDataTypes: string[];
   structuredDataErrors: string[];
   accessibilityViolations: AccessibilityViolation[];
+  mobileUsabilityViolations: MobileUsabilityViolation[];
   error: string | null;
 }
 
 export interface AccessibilityViolation {
   id: string;
   impact: string | null;
+  description: string;
+  helpUrl: string;
+  nodeCount: number;
+}
+
+export interface MobileUsabilityViolation {
+  id: string;
   description: string;
   helpUrl: string;
   nodeCount: number;
@@ -139,4 +148,5 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   renderJs: false,
   lookupHosting: false,
   runAccessibilityAudit: false,
+  runMobileUsabilityAudit: false,
 };

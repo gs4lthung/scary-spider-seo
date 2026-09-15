@@ -33,6 +33,8 @@ pub struct CrawlConfig {
     pub lookup_hosting: bool,
     #[serde(default)]
     pub run_accessibility_audit: bool,
+    #[serde(default)]
+    pub run_mobile_usability_audit: bool,
 }
 
 fn default_max_pages() -> usize {
@@ -150,6 +152,8 @@ pub struct PageResult {
     #[serde(default)]
     pub accessibility_violations: Vec<AccessibilityViolation>,
     #[serde(default)]
+    pub mobile_usability_violations: Vec<MobileUsabilityViolation>,
+    #[serde(default)]
     pub error: Option<String>,
 }
 
@@ -158,6 +162,15 @@ pub struct PageResult {
 pub struct AccessibilityViolation {
     pub id: String,
     pub impact: Option<String>,
+    pub description: String,
+    pub help_url: String,
+    pub node_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MobileUsabilityViolation {
+    pub id: String,
     pub description: String,
     pub help_url: String,
     pub node_count: usize,

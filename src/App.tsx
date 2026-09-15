@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UrlCombobox } from "@/components/url-combobox";
 import { CrawlActions } from "@/components/crawl-actions";
 import { CrawlOptionsSheet } from "@/components/crawl-options-sheet";
@@ -19,6 +18,7 @@ import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
 import { DetailModal } from "./components/DetailModal";
 import { LinkCell } from "./components/link-cell";
+import { SiteTree } from "./components/SiteTree";
 import { SiteInfoPanel } from "./components/SiteInfoPanel";
 import {
   DEFAULT_CONFIG,
@@ -48,7 +48,7 @@ import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { cn } from "@/lib/utils";
 import { withScheme } from "./lib/url";
 
-type Tab = "overview" | "pages" | "resources";
+type Tab = "overview" | "pages" | "resources" | "sitemap";
 
 /** Wraps a cell's rendered value in destructive styling when `bad` is true — the inline, at-a-glance counterpart to DetailModal's `isError` fields. */
 function flagCell(value: React.ReactNode, bad: boolean) {
@@ -125,28 +125,21 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       size: 80,
       meta: { description: "Number of SEO issues detected for this page. Hover the warning icon in a row for details." },
       accessorFn: (page) => issuesFor(page).length,
+      // A native `title` tooltip rather than the Radix Tooltip used elsewhere in the app:
+      // this cell renders for every visible row of a virtualized table (most rows have
+      // >=1 issue), and mounting a JS-positioned tooltip per row measurably added up
+      // during fast scrolling — rows would render blank until React caught up. `title`
+      // supports the same newline-joined multi-issue list at effectively zero cost.
       cell: (c) => {
         const count = c.getValue() as number;
         if (count === 0) return <span className="text-muted-foreground">—</span>;
         const keys = issuesFor(c.row.original);
         const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean);
         return (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex items-center gap-1 font-medium text-destructive">
-                <TriangleAlert className="size-3.5" />
-                {count}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs items-start gap-2 text-left break-words">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-              <span className="flex flex-col gap-0.5">
-                {titles.map((t) => (
-                  <span key={t}>{t}</span>
-                ))}
-              </span>
-            </TooltipContent>
-          </Tooltip>
+          <span title={titles.join("\n")} className="inline-flex items-center gap-1 font-medium text-destructive">
+            <TriangleAlert className="size-3.5" />
+            {count}
+          </span>
         );
       },
     },
@@ -405,6 +398,13 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       header: "A11y Issues",
       size: 120,
       meta: { description: "Number of accessibility violations detected on the page." },
+      cell: (c) => flagCell((c.getValue() as unknown[]).length, (c.getValue() as unknown[]).length > 0),
+    },
+    {
+      accessorKey: "mobileUsabilityViolations",
+      header: "Mobile Usability Issues",
+      size: 170,
+      meta: { description: "Number of mobile usability violations (content width, font size, tap targets) detected on the page." },
       cell: (c) => flagCell((c.getValue() as unknown[]).length, (c.getValue() as unknown[]).length > 0),
     },
   ];
@@ -821,6 +821,12 @@ function App() {
     });
   }, []);
 
+  const handleViewInPages = useCallback((query: string) => {
+    setTab("pages");
+    setFilter("all");
+    setSearch(query);
+  }, []);
+
   const exportTab: "pages" | "resources" = tab === "resources" ? "resources" : "pages";
   const exportCount = exportTab === "resources" ? resources.length : pages.length;
 
@@ -867,6 +873,7 @@ function App() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="pages">Pages ({pages.length})</TabsTrigger>
             <TabsTrigger value="resources">Links & Images ({resources.length})</TabsTrigger>
+            <TabsTrigger value="sitemap">Site Map</TabsTrigger>
           </TabsList>
           {filter !== "all" && (
             <Badge variant="secondary" className="h-auto gap-1.5 py-1">
@@ -881,7 +888,7 @@ function App() {
               </button>
             </Badge>
           )}
-          {tab !== "overview" && (
+          {(tab === "pages" || tab === "resources") && (
             <InputGroup className="w-64">
               <InputGroupAddon>
                 <SearchIcon className="size-4" />
@@ -956,6 +963,19 @@ function App() {
             emptyLabel="No external links or images checked yet."
             onRowClick={setSelectedResource}
             storageKey="resources"
+          />
+        </TabsContent>
+
+        <TabsContent value="sitemap" className="min-h-0 flex-1">
+          <SiteTree
+            pages={pages}
+            duplicateTitles={duplicateTitleSet}
+            duplicateContent={duplicateContentSet}
+            duplicateMeta={duplicateMetaSet}
+            canonicalStatusMap={canonicalStatusMap}
+            linkedUrls={linkedUrlSet}
+            onSelectPage={setSelectedPage}
+            onViewInPages={handleViewInPages}
           />
         </TabsContent>
       </Tabs>
@@ -1034,6 +1054,14 @@ function App() {
               value:
                 selectedPage.accessibilityViolations.length > 0
                   ? selectedPage.accessibilityViolations.map((v) => `${v.id} (${v.nodeCount} nodes)`).join("; ")
+                  : null,
+              isError: true,
+            },
+            {
+              label: "Mobile Usability Violations",
+              value:
+                selectedPage.mobileUsabilityViolations.length > 0
+                  ? selectedPage.mobileUsabilityViolations.map((v) => `${v.id} (${v.nodeCount} nodes)`).join("; ")
                   : null,
               isError: true,
             },

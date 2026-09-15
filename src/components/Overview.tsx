@@ -111,6 +111,7 @@ export function Overview({
     let structuredDataErrors = 0;
     let missingStructuredData = 0;
     let accessibilityIssues = 0;
+    let mobileUsabilityIssues = 0;
 
     for (const p of pages) {
       const bucket = p.status ? `${Math.floor(p.status / 100)}xx` : "error";
@@ -138,6 +139,7 @@ export function Overview({
       if (p.structuredDataErrors.length > 0) structuredDataErrors++;
       if (p.htmlSizeBytes > 0 && p.structuredDataTypes.length === 0) missingStructuredData++;
       if (p.accessibilityViolations.length > 0) accessibilityIssues++;
+      if (p.mobileUsabilityViolations.length > 0) mobileUsabilityIssues++;
     }
 
     let brokenCanonicalTarget = 0;
@@ -183,6 +185,7 @@ export function Overview({
       structuredDataErrors,
       missingStructuredData,
       accessibilityIssues,
+      mobileUsabilityIssues,
     };
   }, [pages, resources, linkedUrls, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap]);
 
@@ -229,9 +232,18 @@ export function Overview({
     },
     {
       title: "Meta & Social",
+      items: [{ key: "missingSocialTags", value: summary.missingSocialTags, label: "Missing OG/Twitter tags" }],
+    },
+    {
+      title: "Mobile Usability",
       items: [
         { key: "missingViewport", value: summary.missingViewport, label: "Missing viewport tag", tone: "warn" },
-        { key: "missingSocialTags", value: summary.missingSocialTags, label: "Missing OG/Twitter tags" },
+        {
+          key: "mobileUsabilityIssues",
+          value: summary.mobileUsabilityIssues,
+          label: "Mobile usability issues",
+          tone: "bad",
+        },
       ],
     },
     {

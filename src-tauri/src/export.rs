@@ -48,6 +48,7 @@ pub fn export_pages_csv(pages: &[PageResult], path: &str) -> Result<(), Box<dyn 
         "Structured Data Types",
         "Structured Data Errors",
         "Accessibility Violations",
+        "Mobile Usability Violations",
         "Error",
     ])?;
 
@@ -95,6 +96,7 @@ pub fn export_pages_csv(pages: &[PageResult], path: &str) -> Result<(), Box<dyn 
             p.structured_data_types.join(", "),
             p.structured_data_errors.join("; "),
             p.accessibility_violations.len().to_string(),
+            p.mobile_usability_violations.len().to_string(),
             p.error.clone().unwrap_or_default(),
         ])?;
     }

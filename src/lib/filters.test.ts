@@ -64,6 +64,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     structuredDataTypes: ["Article"],
     structuredDataErrors: [],
     accessibilityViolations: [],
+    mobileUsabilityViolations: [],
     error: null,
     ...overrides,
   };
@@ -417,6 +418,15 @@ describe("filterPages", () => {
     const violation = { id: "v1", impact: "serious", description: "d", helpUrl: "u", nodeCount: 1 };
     const pages = [makePage({ accessibilityViolations: [violation] }), makePage({ accessibilityViolations: [] })];
     expect(run(pages, "accessibilityIssues")).toEqual([pages[0]]);
+  });
+
+  it("flags mobile usability violations", () => {
+    const violation = { id: "content-width", description: "d", helpUrl: "u", nodeCount: 1 };
+    const pages = [
+      makePage({ mobileUsabilityViolations: [violation] }),
+      makePage({ mobileUsabilityViolations: [] }),
+    ];
+    expect(run(pages, "mobileUsabilityIssues")).toEqual([pages[0]]);
   });
 });
 

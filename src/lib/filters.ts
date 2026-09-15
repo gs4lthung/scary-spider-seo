@@ -31,7 +31,8 @@ export type FilterKey =
   | "orphanPage"
   | "structuredDataErrors"
   | "missingStructuredData"
-  | "accessibilityIssues";
+  | "accessibilityIssues"
+  | "mobileUsabilityIssues";
 
 export const TITLE_MIN_LENGTH = 30;
 export const TITLE_MAX_LENGTH = 60;
@@ -190,6 +191,8 @@ export function filterPages(
       return pages.filter((p) => p.htmlSizeBytes > 0 && p.structuredDataTypes.length === 0);
     case "accessibilityIssues":
       return pages.filter((p) => p.accessibilityViolations.length > 0);
+    case "mobileUsabilityIssues":
+      return pages.filter((p) => p.mobileUsabilityViolations.length > 0);
     default:
       return pages;
   }
@@ -255,6 +258,7 @@ const ALL_PAGE_ISSUE_KEYS: FilterKey[] = [
   "structuredDataErrors",
   "missingStructuredData",
   "accessibilityIssues",
+  "mobileUsabilityIssues",
 ];
 
 /** Which issue keys apply to a single page — reuses `filterPages` against a

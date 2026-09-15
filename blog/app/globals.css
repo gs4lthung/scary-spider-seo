@@ -1,0 +1,149 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ink: var(--comic-ink);
+}
+
+:root {
+  --background: oklch(0.99 0.005 293);
+  --foreground: oklch(0.16 0.02 293);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.02 293);
+  --primary: oklch(0.541 0.281 293.009);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.015 293);
+  --secondary-foreground: oklch(0.32 0.05 293);
+  --muted: oklch(0.965 0.012 293);
+  --muted-foreground: oklch(0.5 0.03 293);
+  --accent: oklch(0.93 0.035 293);
+  --accent-foreground: oklch(0.541 0.281 293.009);
+  --border: oklch(0.9 0.02 293);
+  --comic-ink: oklch(0.09 0.02 293);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0.025 293);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0.035 293);
+    --card-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.606 0.25 292.717);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.269 0.035 293);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0.035 293);
+    --muted-foreground: oklch(0.708 0.025 293);
+    --accent: oklch(0.32 0.06 293);
+    --accent-foreground: oklch(0.985 0 0);
+    --border: oklch(0.7 0.04 293 / 15%);
+    --comic-ink: oklch(0.9 0.03 293);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+/* Thick ink outline + offset sticker shadow, same "comic chrome" language
+   used across the app (buttons/cards/nav), matching src/index.css. */
+@utility comic-panel {
+  box-shadow: 4px 4px 0 0 var(--color-ink);
+  transition: box-shadow 150ms ease;
+  &:hover {
+    box-shadow: 6px 7px 0 0 var(--color-ink);
+  }
+  &:active {
+    box-shadow: 2px 2px 0 0 var(--color-ink);
+  }
+}
+
+@utility comic-panel-sm {
+  box-shadow: 2px 2px 0 0 var(--color-ink);
+  transition: box-shadow 150ms ease;
+  &:hover {
+    box-shadow: 3px 3px 0 0 var(--color-ink);
+  }
+}
+
+@utility comic-wobble {
+  transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  &:hover {
+    transform: translate(-2px, -3px) rotate(-1deg);
+  }
+  &:active {
+    transform: translate(1px, 1px) rotate(0deg);
+  }
+}
+
+/* Routes the @tailwindcss/typography plugin's color vars through our own
+   tokens instead of its gray defaults, so article body copy tracks the
+   brand palette (and light/dark) automatically. */
+.prose-brand {
+  --tw-prose-body: var(--color-foreground);
+  --tw-prose-headings: var(--color-foreground);
+  --tw-prose-lead: var(--color-muted-foreground);
+  --tw-prose-links: var(--color-primary);
+  --tw-prose-bold: var(--color-foreground);
+  --tw-prose-counters: var(--color-muted-foreground);
+  --tw-prose-bullets: var(--color-border);
+  --tw-prose-hr: var(--color-border);
+  --tw-prose-quotes: var(--color-foreground);
+  --tw-prose-quote-borders: var(--color-primary);
+  --tw-prose-captions: var(--color-muted-foreground);
+  --tw-prose-code: var(--color-foreground);
+  --tw-prose-pre-code: var(--color-foreground);
+  --tw-prose-pre-bg: var(--color-secondary);
+  --tw-prose-th-borders: var(--color-border);
+  --tw-prose-td-borders: var(--color-border);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
+}
+
+/* Subtle dot-grid texture for the primary-colored masthead banner, so it
+   reads as a designed surface rather than a flat color fill. */
+@utility bg-dot-grid {
+  background-image: radial-gradient(circle, var(--primary-foreground) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -11px -11px;
+  opacity: 0.12;
+}
