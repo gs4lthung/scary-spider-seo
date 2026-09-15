@@ -1,5 +1,4 @@
 export const SITE_URL = "https://www.scaryspiderseo.com";
-export const DEMO_URL = "https://demo.scaryspiderseo.com";
 
 export const REPO_URL = "https://github.com/gs4lthung/scary-spider-seo";
 export const RELEASES_URL = `${REPO_URL}/releases`;
