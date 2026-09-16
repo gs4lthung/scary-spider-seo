@@ -21,3 +21,17 @@ export async function uploadImage(formData: FormData): Promise<{ url: string } |
 
   return { url: `/media/${key}` };
 }
+
+// Best-effort R2 cleanup for images no longer referenced by any post
+// (called from posts-actions.ts on update/delete). Never throws: a failed
+// delete just leaves an orphaned object in R2, which is harmless, rather
+// than blocking the post save/delete itself.
+export async function deleteMediaKeys(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    await env.MEDIA.delete(keys);
+  } catch (err) {
+    console.error("Failed to delete media keys from R2", keys, err);
+  }
+}

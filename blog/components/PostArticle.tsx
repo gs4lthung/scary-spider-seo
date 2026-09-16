@@ -1,10 +1,13 @@
 import Link from "next/link";
 import type { posts } from "@/lib/db/schema";
 import { readingTimeMinutes } from "@/lib/reading-time";
+import { parseHeadings } from "@/lib/toc";
 
 type Post = typeof posts.$inferSelect;
 
 export function PostArticle({ post }: { post: Post }) {
+  const { html: contentHtml } = parseHeadings(post.content);
+
   return (
     <div className="min-w-0">
       <nav className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -50,7 +53,7 @@ export function PostArticle({ post }: { post: Post }) {
           </div>
         ) : null}
 
-        <div className="prose prose-brand mt-10 max-w-none" dangerouslySetInnerHTML={{ __html: post.content }} />
+        <div className="prose prose-brand mt-10 max-w-none" dangerouslySetInnerHTML={{ __html: contentHtml }} />
       </article>
     </div>
   );

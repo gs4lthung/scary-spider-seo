@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import type { posts } from "@/lib/db/schema";
 import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_CONTENT_WORD_COUNT } from "@/lib/seo-limits";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { uploadImage } from "@/app/admin/media-actions";
 
 type Post = typeof posts.$inferSelect;
 
@@ -52,8 +53,29 @@ export function PostForm({
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
   const [wordCount, setWordCount] = useState(() => wordCountFromHtml(post?.content ?? ""));
   const [coverImageKey, setCoverImageKey] = useState(post?.coverImageKey ?? "");
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
 
   const effectiveTitleLength = (metaTitle || title).length;
+
+  async function onCoverFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setCoverUploadError(null);
+    setCoverUploading(true);
+    const formData = new FormData();
+    formData.set("file", file);
+    const result = await uploadImage(formData);
+    setCoverUploading(false);
+
+    if ("error" in result) {
+      setCoverUploadError(result.error);
+      return;
+    }
+    setCoverImageKey(result.url);
+  }
 
   return (
     <form action={formAction} className="space-y-6">
@@ -168,15 +190,38 @@ export function PostForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="coverImageKey" className="block text-sm font-medium">
-            Cover image URL / R2 key <span className="text-muted-foreground">(optional)</span>
+            Cover image <span className="text-muted-foreground">(optional)</span>
           </label>
-          <input
-            id="coverImageKey"
-            name="coverImageKey"
-            value={coverImageKey}
-            onChange={(e) => setCoverImageKey(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2 font-mono text-sm"
-          />
+          <div className="mt-1 flex items-center gap-2">
+            {coverImageKey ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverImageKey} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+            ) : null}
+            <input
+              id="coverImageKey"
+              name="coverImageKey"
+              placeholder="Uploaded URL, or paste an external image URL"
+              value={coverImageKey}
+              onChange={(e) => setCoverImageKey(e.target.value)}
+              className="w-full rounded border px-3 py-2 font-mono text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => coverFileInputRef.current?.click()}
+              disabled={coverUploading}
+              className="shrink-0 rounded border border-border px-3 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-50"
+            >
+              {coverUploading ? "Uploading..." : "Upload"}
+            </button>
+            <input
+              ref={coverFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onCoverFileSelected}
+            />
+          </div>
+          {coverUploadError ? <p className="mt-1 text-xs text-red-600">{coverUploadError}</p> : null}
         </div>
         <div>
           <label htmlFor="coverImageAlt" className="block text-sm font-medium">

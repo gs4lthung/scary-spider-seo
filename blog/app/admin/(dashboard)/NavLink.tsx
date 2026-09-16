@@ -2,24 +2,28 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SquaresFour, Plus, Tag, Users } from "@phosphor-icons/react";
+import { SquaresFour, Plus, Tag, Users, Gear, ChatCircleText } from "@phosphor-icons/react";
 
 const ICONS = {
   dashboard: SquaresFour,
   new: Plus,
   categories: Tag,
   users: Users,
+  settings: Gear,
+  comments: ChatCircleText,
 } as const;
 
 export function NavLink({
   href,
   exact,
   icon,
+  badge,
   children,
 }: {
   href: string;
   exact?: boolean;
   icon: keyof typeof ICONS;
+  badge?: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -34,7 +38,10 @@ export function NavLink({
       }`}
     >
       <Icon className="h-4 w-4" weight={active ? "bold" : "regular"} />
-      {children}
+      <span className="flex-1">{children}</span>
+      {badge ? (
+        <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground">{badge}</span>
+      ) : null}
     </Link>
   );
 }

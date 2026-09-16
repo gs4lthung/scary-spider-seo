@@ -118,6 +118,47 @@
   --tw-prose-td-borders: var(--color-border);
 }
 
+/* Tiptap's table extension needs explicit affordances while editing
+   (resize handle, selected-cell highlight, borders on empty cells) that
+   the typography plugin's read-only table styles don't cover. */
+.ProseMirror table {
+  overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  position: relative;
+  min-width: 1em;
+  border: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.ProseMirror .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  content: "";
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  pointer-events: none;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: -2px;
+  right: -2px;
+  width: 4px;
+  z-index: 20;
+  background-color: var(--color-primary);
+  pointer-events: none;
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;

@@ -6,6 +6,10 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCell } from "@tiptap/extension-table-cell";
 import {
   TextB,
   TextItalic,
@@ -15,6 +19,15 @@ import {
   ListNumbers,
   Quotes,
   LinkSimple,
+  LinkSimpleBreak,
+  Code,
+  CodeBlock,
+  Table as TableIcon,
+  Rows,
+  RowsPlusBottom,
+  Columns,
+  ColumnsPlusRight,
+  Trash,
   Image as ImageIcon,
   ArrowCounterClockwise,
   ArrowClockwise,
@@ -75,6 +88,10 @@ export function RichTextEditor({
       Link.configure({ openOnClick: false, autolink: true }),
       Image,
       Placeholder.configure({ placeholder: "Write the post..." }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: initialContent || "<p></p>",
     editorProps: {
@@ -129,8 +146,15 @@ export function RichTextEditor({
   }
 
   function insertLink() {
+    if (!editor) return;
+    if (editor.isActive("link")) {
+      // Clicking the already-active Link button removes the link, so it
+      // doubles as an "undo" without needing browser undo/redo.
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
     const url = window.prompt("Link URL");
-    if (!url || !editor) return;
+    if (!url) return;
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }
 
@@ -178,13 +202,41 @@ export function RichTextEditor({
         >
           <Quotes className="h-4 w-4" weight="bold" />
         </ToolbarButton>
-        <ToolbarButton label="Link" active={editor.isActive("link")} onClick={insertLink}>
-          <LinkSimple className="h-4 w-4" weight="bold" />
+        <ToolbarButton
+          label={editor.isActive("link") ? "Remove link" : "Link"}
+          active={editor.isActive("link")}
+          onClick={insertLink}
+        >
+          {editor.isActive("link") ? (
+            <LinkSimpleBreak className="h-4 w-4" weight="bold" />
+          ) : (
+            <LinkSimple className="h-4 w-4" weight="bold" />
+          )}
         </ToolbarButton>
         <ToolbarButton label="Insert image" onClick={() => fileInputRef.current?.click()}>
           <ImageIcon className="h-4 w-4" weight="bold" />
         </ToolbarButton>
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileSelected} />
+
+        <span className="mx-1 h-5 w-px bg-border" />
+
+        <ToolbarButton label="Inline code" active={editor.isActive("code")} onClick={() => editor.chain().focus().toggleCode().run()}>
+          <Code className="h-4 w-4" weight="bold" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="Code block"
+          active={editor.isActive("codeBlock")}
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        >
+          <CodeBlock className="h-4 w-4" weight="bold" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="Insert table"
+          active={editor.isActive("table")}
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        >
+          <TableIcon className="h-4 w-4" weight="bold" />
+        </ToolbarButton>
 
         <span className="mx-1 h-5 w-px bg-border" />
 
@@ -195,6 +247,27 @@ export function RichTextEditor({
           <ArrowClockwise className="h-4 w-4" weight="bold" />
         </ToolbarButton>
       </div>
+
+      {editor.isActive("table") ? (
+        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-secondary p-1.5">
+          <span className="px-1 text-xs text-muted-foreground">Table:</span>
+          <ToolbarButton label="Add column after" onClick={() => editor.chain().focus().addColumnAfter().run()}>
+            <ColumnsPlusRight className="h-4 w-4" weight="bold" />
+          </ToolbarButton>
+          <ToolbarButton label="Add row after" onClick={() => editor.chain().focus().addRowAfter().run()}>
+            <RowsPlusBottom className="h-4 w-4" weight="bold" />
+          </ToolbarButton>
+          <ToolbarButton label="Delete column" onClick={() => editor.chain().focus().deleteColumn().run()}>
+            <Columns className="h-4 w-4" weight="bold" />
+          </ToolbarButton>
+          <ToolbarButton label="Delete row" onClick={() => editor.chain().focus().deleteRow().run()}>
+            <Rows className="h-4 w-4" weight="bold" />
+          </ToolbarButton>
+          <ToolbarButton label="Delete table" onClick={() => editor.chain().focus().deleteTable().run()}>
+            <Trash className="h-4 w-4" weight="bold" />
+          </ToolbarButton>
+        </div>
+      ) : null}
 
       {pendingImage ? (
         <div className="flex items-center gap-3 border-b border-border bg-secondary p-3">

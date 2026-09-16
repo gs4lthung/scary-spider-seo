@@ -3,7 +3,11 @@ import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { SITE_URL } from "@/lib/site";
 
-export const revalidate = 3600;
+// Queries the DB, so it can't be prerendered at build time (a fresh clone,
+// CI runner, or wiped local D1 simulator has no tables yet). Runs per
+// request on the Worker instead; the Cache-Control header below still
+// lets edges/browsers cache it.
+export const dynamic = "force-dynamic";
 
 function escapeXml(value: string) {
   return value

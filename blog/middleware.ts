@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin/users") && session.role !== "admin") {
+  if ((pathname.startsWith("/admin/users") || pathname.startsWith("/admin/settings")) && session.role !== "admin") {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
     return NextResponse.redirect(url);

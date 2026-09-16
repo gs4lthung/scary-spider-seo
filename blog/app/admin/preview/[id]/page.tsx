@@ -7,12 +7,16 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { BlogSidebar } from "@/components/BlogSidebar";
 import { PostArticle } from "@/components/PostArticle";
+import { TableOfContents } from "@/components/TableOfContents";
+import { parseHeadings } from "@/lib/toc";
 
 export default async function PreviewPostPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = await getDb();
   const [post] = await db.select().from(posts).where(eq(posts.id, Number(id)));
   if (!post) notFound();
+
+  const { items: toc } = parseHeadings(post.content);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -29,7 +33,10 @@ export default async function PreviewPostPage({ params }: { params: Promise<{ id
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-12 px-6 py-16 lg:grid-cols-[1fr_280px]">
         <PostArticle post={post} />
-        <BlogSidebar excludeSlug={post.slug} />
+        <div className="space-y-10">
+          <TableOfContents items={toc} />
+          <BlogSidebar excludeSlug={post.slug} />
+        </div>
       </main>
 
       <SiteFooter />

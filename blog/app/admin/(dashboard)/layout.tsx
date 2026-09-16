@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowSquareOut, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { logout } from "@/app/admin/login/actions";
 import { getSession } from "@/lib/session";
+import { getPendingCommentCount } from "@/lib/db/comment-queries";
 import { SITE_URL } from "@/lib/site";
 import { NavLink } from "./NavLink";
 
@@ -18,6 +19,8 @@ function NavGroup({ label, children }: { label: string; children: React.ReactNod
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/admin/login");
+
+  const pendingComments = await getPendingCommentCount();
 
   return (
     <div className="flex min-h-dvh">
@@ -38,12 +41,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <NavLink href="/admin/categories" icon="categories">
               Categories
             </NavLink>
+            <NavLink href="/admin/comments" icon="comments" badge={pendingComments}>
+              Comments
+            </NavLink>
           </NavGroup>
 
           {session.role === "admin" ? (
             <NavGroup label="Admin">
               <NavLink href="/admin/users" icon="users">
                 Users
+              </NavLink>
+              <NavLink href="/admin/settings" icon="settings">
+                Settings
               </NavLink>
             </NavGroup>
           ) : null}

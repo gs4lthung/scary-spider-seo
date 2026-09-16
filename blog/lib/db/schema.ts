@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const posts = sqliteTable("posts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -34,6 +34,14 @@ export const categories = sqliteTable("categories", {
   name: text("name").notNull().unique(),
 });
 
+// Site-wide key/value config editable from /admin/settings (currently just
+// how many posts show per page on the public listing). A single freeform
+// table rather than dedicated columns since it's likely to grow.
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
@@ -45,3 +53,43 @@ export const users = sqliteTable("users", {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+export const comments = sqliteTable("comments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  postId: integer("post_id")
+    .notNull()
+    .references(() => posts.id, { onDelete: "cascade" }),
+  // Null for anonymous commenters (the only kind today). Once accounts are
+  // required, new comments carry a userId and authorName just mirrors it;
+  // until then authorName is whatever the anonymous commenter typed.
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  authorName: text("author_name").notNull(),
+  content: text("content").notNull(),
+  // HMAC'd, not a raw IP (see lib/anti-spam.ts) — used only to rate-limit
+  // rapid-fire anonymous submissions from the same submitter.
+  ipHash: text("ip_hash"),
+  status: text("status", { enum: ["pending", "approved", "rejected"] })
+    .notNull()
+    .default("pending"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const commentVotes = sqliteTable(
+  "comment_votes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    commentId: integer("comment_id")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+    // An anonymous per-browser id (cookie) for now, since there's no login
+    // yet to key votes on; becomes a userId-based key once accounts land.
+    voterKey: text("voter_key").notNull(),
+    value: integer("value").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [uniqueIndex("comment_votes_comment_voter_unique").on(table.commentId, table.voterKey)],
+);

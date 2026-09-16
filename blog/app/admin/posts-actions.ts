@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
+import { extractMediaKeys, diffRemovedMediaKeys } from "@/lib/media";
+import { deleteMediaKeys } from "@/app/admin/media-actions";
 
 function fromForm(formData: FormData) {
   const status = formData.get("status") === "published" ? "published" : "draft";
@@ -69,6 +71,8 @@ export async function updatePost(id: number, _prevState: string | null, formData
     })
     .where(eq(posts.id, id));
 
+  await deleteMediaKeys(diffRemovedMediaKeys(existing, data));
+
   revalidatePublicPages(existing.slug);
   if (existing.slug !== data.slug) revalidatePublicPages(data.slug);
   redirect("/admin");
@@ -80,6 +84,7 @@ export async function deletePost(id: number) {
   if (!existing) return;
 
   await db.delete(posts).where(eq(posts.id, id));
+  await deleteMediaKeys(extractMediaKeys(existing.content, existing.coverImageKey));
   revalidatePublicPages(existing.slug);
   redirect("/admin");
 }

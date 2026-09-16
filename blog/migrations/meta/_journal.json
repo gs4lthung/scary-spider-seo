@@ -22,6 +22,27 @@
       "when": 1789480000000,
       "tag": "0002_add_categories_users",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789545377457,
+      "tag": "0003_breezy_quasar",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789546231563,
+      "tag": "0004_black_felicia_hardy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789546988664,
+      "tag": "0005_chilly_orphan",
+      "breakpoints": true
     }
   ]
 }

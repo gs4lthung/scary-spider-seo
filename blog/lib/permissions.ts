@@ -1,9 +1,9 @@
 import type { Role } from "./auth";
 
-export type Permission = "posts:write" | "categories:write" | "users:write";
+export type Permission = "posts:write" | "categories:write" | "users:write" | "settings:write";
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  admin: ["posts:write", "categories:write", "users:write"],
+  admin: ["posts:write", "categories:write", "users:write", "settings:write"],
   editor: ["posts:write", "categories:write"],
 };
 
