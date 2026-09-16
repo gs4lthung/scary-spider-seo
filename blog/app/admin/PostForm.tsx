@@ -28,11 +28,14 @@ function toSafeImageSrc(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
 
+  // Allow only site-relative paths.
   if (trimmed.startsWith("/")) return trimmed;
 
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+    const isHttp = parsed.protocol === "http:" || parsed.protocol === "https:";
+    const trustedHosts = new Set(["localhost", "your-domain.com", "www.your-domain.com"]);
+    if (isHttp && trustedHosts.has(parsed.hostname)) {
       return parsed.toString();
     }
   } catch {
