@@ -24,6 +24,24 @@ function wordCountFromHtml(html: string) {
   return text ? text.split(/\s+/).length : 0;
 }
 
+function toSafeImageSrc(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (trimmed.startsWith("/")) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    // Invalid URL; fall through to empty string.
+  }
+
+  return "";
+}
+
 function CharCounter({ length, min, max }: { length: number; min?: number; max: number }) {
   const tooShort = min !== undefined && length > 0 && length < min;
   const tooLong = length > max;
@@ -58,6 +76,7 @@ export function PostForm({
   const coverFileInputRef = useRef<HTMLInputElement>(null);
 
   const effectiveTitleLength = (metaTitle || title).length;
+  const safeCoverImageSrc = toSafeImageSrc(coverImageKey);
 
   async function onCoverFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -193,9 +212,9 @@ export function PostForm({
             Cover image <span className="text-muted-foreground">(optional)</span>
           </label>
           <div className="mt-1 flex items-center gap-2">
-            {coverImageKey ? (
+            {safeCoverImageSrc ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverImageKey} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+              <img src={safeCoverImageSrc} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
             ) : null}
             <input
               id="coverImageKey"
