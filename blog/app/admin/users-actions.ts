@@ -19,6 +19,9 @@ export async function createUser(_prevState: string | null, formData: FormData):
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const role = formData.get("role") === "admin" ? "admin" : "editor";
+  const displayName = String(formData.get("displayName") ?? "").trim() || null;
+  const jobTitle = String(formData.get("jobTitle") ?? "").trim() || null;
+  const bio = String(formData.get("bio") ?? "").trim() || null;
 
   if (!username || !password) return "Username and password are required.";
   if (password.length < 8) return "Password must be at least 8 characters.";
@@ -27,7 +30,9 @@ export async function createUser(_prevState: string | null, formData: FormData):
   const [existing] = await db.select().from(users).where(eq(users.username, username));
   if (existing) return "That username is already taken.";
 
-  await db.insert(users).values({ username, passwordHash: await hashPassword(password), role });
+  await db
+    .insert(users)
+    .values({ username, passwordHash: await hashPassword(password), role, displayName, jobTitle, bio });
   revalidatePath("/admin/users");
   return null;
 }
@@ -67,4 +72,31 @@ export async function deleteUser(id: number) {
 
   await db.delete(users).where(eq(users.id, id));
   revalidatePath("/admin/users");
+}
+
+// Updates the caller's own public profile (name, avatar, job title, bio, and
+// social links). Revalidates the public author page so changes go live
+// immediately.
+export async function updateProfile(_prevState: string | null, formData: FormData): Promise<string | null> {
+  const session = await getSession();
+  if (!session) return "Not authenticated.";
+
+  const displayName = String(formData.get("displayName") ?? "").trim() || null;
+  const jobTitle = String(formData.get("jobTitle") ?? "").trim() || null;
+  const bio = String(formData.get("bio") ?? "").trim() || null;
+  const avatarKey = String(formData.get("avatarKey") ?? "").trim() || null;
+  const website = String(formData.get("website") ?? "").trim() || null;
+  const email = String(formData.get("email") ?? "").trim() || null;
+  const github = String(formData.get("github") ?? "").trim() || null;
+  const twitter = String(formData.get("twitter") ?? "").trim() || null;
+  const linkedin = String(formData.get("linkedin") ?? "").trim() || null;
+  const facebook = String(formData.get("facebook") ?? "").trim() || null;
+
+  const db = await getDb();
+  await db
+    .update(users)
+    .set({ displayName, jobTitle, bio, avatarKey, website, email, github, twitter, linkedin, facebook })
+    .where(eq(users.id, session.userId));
+  revalidatePath(`/author/${session.username}`);
+  return null;
 }

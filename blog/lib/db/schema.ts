@@ -6,8 +6,18 @@ export const posts = sqliteTable("posts", {
   title: text("title").notNull(),
   excerpt: text("excerpt"),
   content: text("content").notNull(),
+  // "Key takeaways" rendered as a highlighted bulleted box near the top of
+  // the post. Stored as a JSON string array.
+  keyTakeaways: text("key_takeaways"),
+  // FAQ section rendered after the content and exposed as FAQPage schema.
+  // Stored as a JSON array of { question, answer }.
+  faqs: text("faqs"),
   coverImageKey: text("cover_image_key"),
   coverImageAlt: text("cover_image_alt"),
+  // The user credited as the post's author (shown as an author card on the
+  // post and on /author/<username>). Nullable so pre-existing posts have no
+  // author until one is assigned.
+  authorId: integer("author_id").references(() => users.id, { onDelete: "set null" }),
   // A single, freeform label shown as a pill on the post's card/hero image
   // (e.g. "Technical SEO", "Crawling"). Intentionally not a full taxonomy.
   category: text("category"),
@@ -49,6 +59,20 @@ export const users = sqliteTable("users", {
   role: text("role", { enum: ["admin", "editor"] })
     .notNull()
     .default("editor"),
+  // Public author profile, surfaced on /author/<username> and author cards.
+  displayName: text("display_name"),
+  // R2 media path (e.g. "/media/<key>") for the avatar, like coverImageKey.
+  avatarKey: text("avatar_key"),
+  jobTitle: text("job_title"),
+  bio: text("bio"),
+  // Optional public links shown on the author profile. Handles/handles are
+  // normalized to full URLs when rendered (see components/SocialLinks.tsx).
+  website: text("website"),
+  email: text("email"),
+  github: text("github"),
+  twitter: text("twitter"),
+  linkedin: text("linkedin"),
+  facebook: text("facebook"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

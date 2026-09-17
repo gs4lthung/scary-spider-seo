@@ -43,6 +43,27 @@
       "when": 1789546988664,
       "tag": "0005_chilly_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789641258861,
+      "tag": "0006_little_drax",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789642044444,
+      "tag": "0007_bizarre_energizer",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789642278591,
+      "tag": "0008_short_shadowcat",
+      "breakpoints": true
     }
   ]
 }

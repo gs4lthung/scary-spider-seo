@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getCategoryCounts, getRecentPosts } from "@/lib/db/queries";
+import { postPath } from "@/lib/post-url";
 
 export async function BlogSidebar({ excludeSlug }: { excludeSlug?: string }) {
   const [categories, recent] = await Promise.all([getCategoryCounts(), getRecentPosts(excludeSlug ?? "")]);
@@ -43,7 +44,7 @@ export async function BlogSidebar({ excludeSlug }: { excludeSlug?: string }) {
           <ul className="mt-4 space-y-4">
             {recent.map((p) => (
               <li key={p.id}>
-                <Link href={`/${p.slug}`} className="text-sm font-medium hover:text-primary">
+                <Link href={postPath(p)} className="text-sm font-medium hover:text-primary">
                   {p.title}
                 </Link>
               </li>

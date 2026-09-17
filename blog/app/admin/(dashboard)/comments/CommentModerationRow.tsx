@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { approveComment, rejectComment, deleteComment } from "@/app/admin/comments-actions";
+import { postPath } from "@/lib/post-url";
 
 type Status = "pending" | "approved" | "rejected";
 
@@ -25,6 +26,7 @@ export function CommentModerationRow({
     status: Status;
     createdAt: Date;
     postSlug: string | null;
+    postCategory: string | null;
     postTitle: string | null;
   };
 }) {
@@ -58,7 +60,11 @@ export function CommentModerationRow({
       </td>
       <td className="px-4 py-3 align-top">
         {comment.postSlug ? (
-          <Link href={`/${comment.postSlug}`} target="_blank" className="text-primary hover:underline">
+          <Link
+            href={postPath({ slug: comment.postSlug, category: comment.postCategory })}
+            target="_blank"
+            className="text-primary hover:underline"
+          >
             {comment.postTitle}
           </Link>
         ) : (

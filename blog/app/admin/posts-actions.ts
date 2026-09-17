@@ -6,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { extractMediaKeys, diffRemovedMediaKeys } from "@/lib/media";
+import { postPath } from "@/lib/post-url";
+import { serializeTakeaways, serializeFaqs } from "@/lib/post-sections";
 import { deleteMediaKeys } from "@/app/admin/media-actions";
 
 function fromForm(formData: FormData) {
@@ -15,8 +17,26 @@ function fromForm(formData: FormData) {
     title: String(formData.get("title") ?? "").trim(),
     excerpt: (String(formData.get("excerpt") ?? "").trim() || null) as string | null,
     content: String(formData.get("content") ?? ""),
+    keyTakeaways: serializeTakeaways(String(formData.get("keyTakeaways") ?? "")),
+    faqs: serializeFaqs(
+      (() => {
+        try {
+          const raw = String(formData.get("faqs") ?? "");
+          const parsed = raw ? JSON.parse(raw) : [];
+          return Array.isArray(parsed)
+            ? parsed.filter(
+                (item) =>
+                  item && typeof item.question === "string" && typeof item.answer === "string",
+              )
+            : [];
+        } catch {
+          return [];
+        }
+      })(),
+    ),
     coverImageKey: (String(formData.get("coverImageKey") ?? "").trim() || null) as string | null,
     coverImageAlt: (String(formData.get("coverImageAlt") ?? "").trim() || null) as string | null,
+    authorId: (Number(formData.get("authorId")) || null) as number | null,
     category: (String(formData.get("category") ?? "").trim() || null) as string | null,
     metaTitle: (String(formData.get("metaTitle") ?? "").trim() || null) as string | null,
     metaDescription: (String(formData.get("metaDescription") ?? "").trim() || null) as string | null,
@@ -24,9 +44,10 @@ function fromForm(formData: FormData) {
   };
 }
 
-function revalidatePublicPages(slug: string) {
+function revalidatePublicPages(post: { slug: string; category: string | null }) {
   revalidatePath("/");
-  revalidatePath(`/${slug}`);
+  revalidatePath(`/${post.slug}`);
+  revalidatePath(postPath(post));
   revalidatePath("/sitemap.xml");
 }
 
@@ -45,7 +66,7 @@ export async function createPost(_prevState: string | null, formData: FormData):
     publishedAt: data.status === "published" ? new Date() : null,
   });
 
-  revalidatePublicPages(data.slug);
+revalidatePublicPages(data);
   redirect("/admin");
 }
 
@@ -73,8 +94,8 @@ export async function updatePost(id: number, _prevState: string | null, formData
 
   await deleteMediaKeys(diffRemovedMediaKeys(existing, data));
 
-  revalidatePublicPages(existing.slug);
-  if (existing.slug !== data.slug) revalidatePublicPages(data.slug);
+  revalidatePublicPages(existing);
+  if (existing.slug !== data.slug) revalidatePublicPages(data);
   redirect("/admin");
 }
 
@@ -85,6 +106,6 @@ export async function deletePost(id: number) {
 
   await db.delete(posts).where(eq(posts.id, id));
   await deleteMediaKeys(extractMediaKeys(existing.content, existing.coverImageKey));
-  revalidatePublicPages(existing.slug);
+  revalidatePublicPages(existing);
   redirect("/admin");
 }

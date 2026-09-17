@@ -2,11 +2,14 @@ import Link from "next/link";
 import type { posts } from "@/lib/db/schema";
 import { readingTimeMinutes } from "@/lib/reading-time";
 import { parseHeadings } from "@/lib/toc";
+import { parseTakeaways, parseFaqs } from "@/lib/post-sections";
 
 type Post = typeof posts.$inferSelect;
 
 export function PostArticle({ post }: { post: Post }) {
   const { html: contentHtml } = parseHeadings(post.content);
+  const takeaways = parseTakeaways(post.keyTakeaways);
+  const faqs = parseFaqs(post.faqs);
 
   return (
     <div className="min-w-0">
@@ -53,7 +56,40 @@ export function PostArticle({ post }: { post: Post }) {
           </div>
         ) : null}
 
+        {takeaways.length > 0 ? (
+          <div className="mt-10 rounded-lg border-2 border-primary/30 bg-primary/5 p-5">
+            <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-primary uppercase">
+              <span aria-hidden="true">◆</span>
+              Key takeaways
+            </h2>
+            <ul className="mt-3 space-y-2">
+              {takeaways.map((takeaway, index) => (
+                <li key={index} className="flex gap-2 text-sm">
+                  <span className="text-primary" aria-hidden="true">
+                    •
+                  </span>
+                  <span>{takeaway}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div className="prose prose-brand mt-10 max-w-none" dangerouslySetInnerHTML={{ __html: contentHtml }} />
+
+        {faqs.length > 0 ? (
+          <section className="mt-12">
+            <h2 className="text-2xl font-bold tracking-tight">Frequently asked questions</h2>
+            <div className="mt-6 space-y-4">
+              {faqs.map((faq, index) => (
+                <div key={index} className="rounded-lg border border-border bg-card p-5">
+                  <h3 className="font-semibold">{faq.question}</h3>
+                  <p className="mt-2 text-muted-foreground">{faq.answer}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </article>
     </div>
   );

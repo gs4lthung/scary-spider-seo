@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import type { posts } from "@/lib/db/schema";
 import { readingTimeMinutes } from "@/lib/reading-time";
+import { postPath } from "@/lib/post-url";
 
 type Post = typeof posts.$inferSelect;
 
@@ -11,9 +12,10 @@ function formatDate(date: Date | null) {
 }
 
 export function PostCard({ post }: { post: Post }) {
+  const href = postPath(post);
   return (
     <article>
-      <Link href={`/${post.slug}`} className="group block">
+      <Link href={href} className="group block">
         <div className="comic-panel-sm relative aspect-[4/3] overflow-hidden rounded-lg border border-border">
           {post.coverImageKey ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -42,12 +44,12 @@ export function PostCard({ post }: { post: Post }) {
         <span>{readingTimeMinutes(post.content)} min read</span>
       </div>
 
-      <Link href={`/${post.slug}`} className="group mt-2 block">
+      <Link href={href} className="group mt-2 block">
         <h3 className="text-lg font-bold tracking-tight transition-colors group-hover:text-primary">{post.title}</h3>
       </Link>
 
       <Link
-        href={`/${post.slug}`}
+        href={href}
         className="comic-wobble mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full border border-primary">

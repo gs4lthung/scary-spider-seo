@@ -44,6 +44,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <NavLink href="/admin/comments" icon="comments" badge={pendingComments}>
               Comments
             </NavLink>
+            <NavLink href="/admin/media" icon="media">
+              Media
+            </NavLink>
+          </NavGroup>
+
+          <NavGroup label="Account">
+            <NavLink href="/admin/profile" icon="profile">
+              My profile
+            </NavLink>
           </NavGroup>
 
           {session.role === "admin" ? (

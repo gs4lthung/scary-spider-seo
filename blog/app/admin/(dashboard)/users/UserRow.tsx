@@ -9,7 +9,7 @@ export function UserRow({
   user,
   isSelf,
 }: {
-  user: { id: number; username: string; role: Role; createdAt: Date };
+  user: { id: number; username: string; displayName: string | null; jobTitle: string | null; role: Role; createdAt: Date };
   isSelf: boolean;
 }) {
   const [role, setRole] = useState<Role>(user.role);
@@ -45,7 +45,11 @@ export function UserRow({
   return (
     <tr>
       <td className="px-4 py-3">
-        <p className="font-medium">{user.username}</p>
+        <p className="font-medium">{user.displayName || user.username}</p>
+        <p className="text-xs text-muted-foreground">
+          @{user.username}
+          {user.jobTitle ? ` · ${user.jobTitle}` : ""}
+        </p>
         {isSelf ? <p className="text-xs text-muted-foreground">This is you</p> : null}
         {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
       </td>

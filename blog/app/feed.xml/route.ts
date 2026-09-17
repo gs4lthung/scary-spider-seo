@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { SITE_URL } from "@/lib/site";
+import { postPath } from "@/lib/post-url";
 
 // Queries the DB, so it can't be prerendered at build time (a fresh clone,
 // CI runner, or wiped local D1 simulator has no tables yet). Runs per
@@ -29,7 +30,7 @@ export async function GET() {
 
   const items = published
     .map((post) => {
-      const url = `${SITE_URL}/${post.slug}`;
+      const url = `${SITE_URL}${postPath(post)}`;
       const description = post.metaDescription || post.excerpt || "";
       return `
     <item>

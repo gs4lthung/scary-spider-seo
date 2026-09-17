@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SquaresFour, Plus, Tag, Users, Gear, ChatCircleText } from "@phosphor-icons/react";
+import { SquaresFour, Plus, Tag, Users, Gear, ChatCircleText, ImageSquare, UserCircle } from "@phosphor-icons/react";
 
 const ICONS = {
   dashboard: SquaresFour,
@@ -11,6 +11,8 @@ const ICONS = {
   users: Users,
   settings: Gear,
   comments: ChatCircleText,
+  media: ImageSquare,
+  profile: UserCircle,
 } as const;
 
 export function NavLink({

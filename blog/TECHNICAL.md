@@ -80,10 +80,15 @@ references where possible.
 Tables:
 
 - **`posts`** — `slug` (unique), `title`, `excerpt`, `content` (HTML),
+  `keyTakeaways` (JSON string[]; rendered as a highlighted bulleted box),
+  `faqs` (JSON `{question, answer}[]`; rendered as Q&A plus FAQPage schema),
   `coverImageKey` (either `/media/<key>` or a hand-pasted external URL),
-  `coverImageAlt`, `category` (freeform text, not a FK), `metaTitle`,
+  `coverImageAlt`, `authorId` (FK to `users`, set null on user delete; shown
+  as an author card and linked from `/author/<username>`), `category`
+  (freeform text, not a FK), `metaTitle`,
   `metaDescription`, `status` (`draft`|`published`), `publishedAt`,
-  `createdAt`, `updatedAt`.
+  `createdAt`, `updatedAt`. Both JSON sections are parsed defensively by
+  `lib/post-sections.ts` (garbage/legacy values yield `[]`).
 - **`categories`** — `slug` + `name` (both unique). This is a light list of
   suggestions, **not** a taxonomy: posts store their category as a freeform
   string, and renaming a category bulk-updates matching posts'
@@ -93,7 +98,10 @@ Tables:
   `lib/db/settings.ts`, not ad hoc.
 - **`users`** — `username` (unique), `passwordHash` (PBKDF2, format
   `<base64 salt>:<base64 hash>`, 100k iterations SHA-256), `role`
-  (`admin`|`editor`).
+  (`admin`|`editor`), plus a public author profile: `displayName` (falls back
+  to username in display), `avatarKey` (a `/media/<key>` path, like cover
+  images), `jobTitle`, `bio`. Edited via `/admin/profile` (self) or the
+  create-user form (admins).
 - **`comments`** — `postId` (cascade delete), `userId` (nullable, set null;
   always null today, all commenters are anonymous), `authorName`, `content`,
   `ipHash` (HMAC'd IP, see section 9), `status`
@@ -168,9 +176,11 @@ Next.js server actions default to a **1 MB request body limit**. Image uploads
 travel as multipart `FormData` inside a server action, so anything over 1 MB
 was rejected with a 413 before `uploadImage` even ran, leaving the UI stuck
 on "Uploading...". `next.config.ts` now sets
-`serverActions: { bodySizeLimit: "10mb" }`, comfortably above the 8 MB
-`MAX_BYTES` ceiling in `media-actions.ts`. If you ever raise `MAX_BYTES`,
-raise `bodySizeLimit` to match.
+`experimental.serverActions.bodySizeLimit: "10mb"` (nested under
+`experimental` for this Next version; top-level `serverActions` is rejected as
+an unrecognized key), comfortably above the 8 MB `MAX_BYTES` ceiling in
+`media-actions.ts`. If you ever raise `MAX_BYTES`, raise `bodySizeLimit` to
+match.
 
 Client callers wrap `uploadImage` in `try/catch/finally` so a network or
 server failure surfaces as a visible error instead of an infinite spinner.
@@ -185,8 +195,12 @@ action, `uploadImage` in `app/admin/media-actions.ts`:
    (`png/jpeg/webp/gif/avif`), and `<= 8 MB`.
 3. Key is `crypto.randomUUID() + "." + file.type.split("/")[1]` (always
    `webp` after conversion, or the original ext for GIF/AVIF passthrough).
-4. `env.MEDIA.put(key, bytes, { httpMetadata: { contentType } })`.
+4. `env.MEDIA.put(key, bytes, { httpMetadata: { contentType }, customMetadata: { name: file.name } })`.
 5. Returns `{ url: "/media/<key>" }`.
+
+The UUID key is the id; the human-readable `name` (the uploaded file name,
+e.g. `<base>.webp`) is stored as R2 `customMetadata` and surfaced by the media
+library.
 
 Serving: `app/media/[key]/route.ts` streams the R2 object with
 `Cache-Control: public, max-age=31536000, immutable` and the object's ETag.
@@ -214,6 +228,37 @@ Rules encoded in `lib/webp.ts`:
   `RichTextEditor.tsx` converts at file-selection time so the preview blob is
   the same WebP that will be inserted.
 
+### Deferred uploads for in-post images
+
+Images added to the post body are **not** uploaded when inserted. The editor
+inserts a local `blob:` URL (with the file kept in `lib/pending-images.ts`
+`PendingImage` entries) and only uploads them all to R2 when the post is saved
+(`PostForm` intercepts `onSubmit`, runs `resolvePendingImageUploads`, rewrites
+every `blob:` src to `/media/<key>`, then lets the form's server action
+proceed via `requestSubmit`). The cover image is the exception: it still
+uploads immediately on click (its URL is just a text field).
+
+Un-uploaded images are listed under the editor ("Not uploaded yet") with
+click-to-preview (a modal), Change (re-select file, rewrites the `<img>` node
+src via a doc transaction), and Remove (deletes the matching `<img>` node).
+Blob URLs are tracked and revoked on unmount. The submit interception is a
+two-pass dance: the first `onSubmit` prevents default, uploads, writes the
+final HTML into the (uncontrolled) hidden `content` field, then calls
+`requestSubmit()` while a ref flag lets the second submit pass through to the
+native form action. Do not "simplify" this into calling the `useActionState`
+dispatch with a hand-built FormData: React warns that `isPending` will not
+update correctly outside a transition.
+
+### Media library and reuse
+
+`/admin/media` (server page + `MediaGallery.tsx`) lists every uploaded image
+via `listMediaImages` (R2 `list`, filtered to image extensions, sorted
+newest-first), with click-to-preview, Copy URL, Delete, and Load more.
+Deletes go through `deleteMediaImage`, which refuses to remove any key still
+referenced by a post (checked against `posts.content` and `coverImageKey`).
+The editor's "from library" button (`MediaPicker.tsx`) reuses the same list
+to insert an existing `/media/<key>` directly into the post body.
+
 ### Referenced-key tracking and orphan cleanup
 
 `lib/media.ts` extracts media keys from stored HTML: any `/media/<key>` inside
@@ -228,10 +273,21 @@ dash, dot). If a future upload format changes the key shape, update
 
 ## 7. Public rendering and SEO
 
-Public pages query D1 on the Worker. `app/page.tsx` and `app/[slug]/page.tsx`
-set `export const revalidate = 3600` (ISR-style caching with OpenNext), while
+Public pages query D1 on the Worker. `app/page.tsx`, `app/[category]/[slug]/page.tsx`,
+`app/[slug]/page.tsx`, and `app/author/[username]/page.tsx` set
+`export const revalidate = 3600` (ISR-style caching with OpenNext), while
 `sitemap.ts` and `feed.xml/route.ts` are `force-dynamic` because a fresh
 clone/CI/local D1 has no tables yet and prerendering at build time would fail.
+
+- **Post URL scheme.** Posts live at `/<category-slug>/<slug>` when they have
+  a category (slug derived from the freeform name by `lib/post-url.ts`, not a
+  DB column), and stay at `/<slug>` when uncategorized. The legacy flat route
+  `app/[slug]/page.tsx` `permanentRedirect`s categorized posts to their
+  canonical `/<category>/<slug>` path, and the `[category]` segment is
+  validated on the canonical route too, so one URL per post stays in the index.
+  Every URL producer (`sitemap.ts`, `feed.xml`, JSON-LD, `PostCard`,
+  `BlogSidebar`, comment moderation) goes through `postPath`/`postUrl`; never
+  hard-code `/${post.slug}`.
 
 - **Canonical trap on the home page.** Next's metadata resolver drops the
   query string when the canonical *path* is `/` (it collapses to the bare
@@ -247,8 +303,19 @@ clone/CI/local D1 has no tables yet and prerendering at build time would fail.
   `generateMetadata` in `[slug]/page.tsx` re-specifies everything, including a
   fallback `og-image.png` when a post has no cover.
 - **JSON-LD.** `Blog` on the home page, `BlogPosting` on post pages
-  (`app/page.tsx`, `app/[slug]/page.tsx`).
-- **sitemap.xml / robots.ts / feed.xml.** Sitemap lists `SITE_URL` + all
+  (`app/page.tsx`, `app/[category]/[slug]/page.tsx` via `PostPageView`). When a
+  post has an author, the `BlogPosting` author is the `Person` (linking to the
+  author page); otherwise it falls back to the site `Organization`.
+- **Authors.** Each user has a public profile at `/author/<username>`
+  (`app/author/[username]/page.tsx`) listing their published posts. Post pages
+  render an `AuthorCard` under the article when `posts.authorId` is set.
+- **Key takeaways / FAQs.** `PostArticle` renders `posts.keyTakeaways` as a
+  highlighted bulleted box above the body and `posts.faqs` as a Q&A section
+  below it. When FAQs exist, `PostPageView` also emits a separate `FAQPage`
+  JSON-LD script alongside the `BlogPosting` one. Both sections are edited in
+  `PostForm.tsx` (takeaways as one-per-line text, FAQs as a dynamic list).
+- **sitemap.xml / robots.ts / feed.xml.** Sitemap lists `SITE_URL`, all
+  published posts (canonical URLs), and author pages for users who have
   published posts; robots allows `/` and disallows `/admin`; feed.xml is
   RSS 2.0 with escaped XML, capped at 50 items, cached 1 hour. All use
   `lib/site.ts` URLs (`blog.scaryspiderseo.com`, main site
@@ -267,13 +334,35 @@ clone/CI/local D1 has no tables yet and prerendering at build time would fail.
 
 ## 8. Content editing
 
-`components/RichTextEditor.tsx` is a Tiptap editor (client component). It
-writes the final HTML into a hidden input named `content` so the surrounding
-`PostForm` server action receives it. Extensions: StarterKit (headings
-restricted to 2-6), link (autolink, openOnClick off), image, placeholder,
-table (resizable). The toolbar includes undo/redo and an image insert flow
-that converts to WebP via `fileToWebP` at selection time, asks for alt text,
-then calls `uploadImage` and inserts `<img src="/media/<key>" alt="...">`.
+`components/RichTextEditor.tsx` is a Tiptap editor (client component). It does
+**not** render a form field itself: it reports the current HTML upward via
+`onChangeHTML`, and `PostForm.tsx` mirrors that into an uncontrolled
+`<input type="hidden" name="content">` (via a ref) so the submit handler can
+rewrite it after uploading pending images. Do not move the hidden field back
+into the editor: an uncontrolled input whose DOM value is mutated directly gets
+remounted (and reset to its initial value) whenever a conditional sibling above
+it toggles, which silently drops the submitted content and surfaces as "Slug,
+title, and content are required." on save.
+
+`PostForm.tsx` also tracks a `dirty` flag (any field change, editor edit, or
+cover upload) and arms `lib/use-unsaved-changes.ts`, which warns on tab
+close/reload (`beforeunload`), in-app link clicks (capture-phase anchor
+interception + `window.confirm`), and browser back/forward (`popstate`). It is
+deliberately disabled while a save/pre-upload is in flight so the redirect
+never prompts, and it does not monkey-patch `history.pushState` (Next's
+app-router owns that).
+
+Extensions: StarterKit (headings restricted to 2-6, underline included),
+link (autolink, openOnClick off), image, placeholder, table (resizable), plus
+`TextStyle` and `FontSize` from `@tiptap/extension-text-style` (font size
+select in the toolbar; commands `setFontSize`/`unsetFontSize`).
+
+The toolbar is reactive: it subscribes through `useEditorState`, because in
+`@tiptap/react` v3 `useEditor` has `shouldRerenderOnTransaction: false` by
+default and would otherwise never light up the active formatting (bold/italic/
+underline/lists/font size/undo) of the current selection. The image button
+converts the picked file to WebP via `fileToWebP`, previews it, and inserts it
+as a deferred blob image (see the media section for how those upload on save).
 
 ## 9. Comments, anti-spam, and voting
 
@@ -345,6 +434,14 @@ See the root `CLAUDE.md`.
   escalation; use `requireAdmin()`.
 - Changing media key shape without updating `lib/media.ts` regexes → orphaned
   R2 objects.
+- Rendering the post content hidden field inside `RichTextEditor` instead of
+  `PostForm` → content silently dropped on save (uncontrolled-input remount).
+- Moving in-post images back to immediate upload → the editor's pending-image
+  list ("Not uploaded yet"), change/preview controls, and save-time batch
+  upload in `lib/pending-images.ts` all depend on the deferred flow.
+- Expecting the toolbar to update without `useEditorState` → active formatting
+  never lights up (`useEditor` v3 does not re-render on transactions by
+  default).
 - Importing Cloudflare bindings at module scope → undefined at runtime.
 - Sending GIFs through WebP conversion → lost animation (`lib/webp.ts`
   already skips them; keep it that way).

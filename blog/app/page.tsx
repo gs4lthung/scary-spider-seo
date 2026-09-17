@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { getPostsPerPage } from "@/lib/db/settings";
 import { SITE_URL } from "@/lib/site";
+import { postPath } from "@/lib/post-url";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PostCard } from "@/components/PostCard";
@@ -99,7 +100,7 @@ export default async function BlogHome({
     blogPost: published.map((post) => ({
       "@type": "BlogPosting",
       headline: post.title,
-      url: `${SITE_URL}/${post.slug}`,
+      url: `${SITE_URL}${postPath(post)}`,
       datePublished: post.publishedAt?.toISOString(),
     })),
   };

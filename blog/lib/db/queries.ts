@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { getDb } from "./client";
-import { categories, posts } from "./schema";
+import { categories, posts, users } from "./schema";
 
 export async function getCategoryCounts(): Promise<{ category: string; count: number }[]> {
   const db = await getDb();
@@ -21,6 +21,27 @@ export async function getRecentPosts(excludeSlug: string, limit = 4) {
     .where(and(eq(posts.status, "published"), ne(posts.slug, excludeSlug)))
     .orderBy(desc(posts.publishedAt))
     .limit(limit);
+}
+
+export async function getPublishedPostBySlug(slug: string) {
+  const db = await getDb();
+  const [post] = await db.select().from(posts).where(and(eq(posts.slug, slug), eq(posts.status, "published")));
+  return post ?? null;
+}
+
+export async function getAuthorByUsername(username: string) {
+  const db = await getDb();
+  const [author] = await db.select().from(users).where(eq(users.username, username));
+  return author ?? null;
+}
+
+export async function getPublishedPostsByAuthor(authorId: number) {
+  const db = await getDb();
+  return db
+    .select()
+    .from(posts)
+    .where(and(eq(posts.authorId, authorId), eq(posts.status, "published")))
+    .orderBy(desc(posts.publishedAt));
 }
 
 export async function getPostStats() {

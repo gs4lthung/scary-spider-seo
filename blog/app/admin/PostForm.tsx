@@ -7,6 +7,9 @@ import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_C
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { uploadImage } from "@/app/admin/media-actions";
 import { fileToWebP } from "@/lib/webp";
+import { resolvePendingImageUploads, type PendingImage } from "@/lib/pending-images";
+import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
+import { parseFaqs, parseTakeaways, type PostFaq } from "@/lib/post-sections";
 
 type Post = typeof posts.$inferSelect;
 
@@ -62,10 +65,14 @@ export function PostForm({
   action,
   post,
   categories,
+  authors,
+  defaultAuthorId,
 }: {
   action: Action;
   post?: Post;
   categories: { id: number; name: string }[];
+  authors: { id: number; username: string; displayName: string | null }[];
+  defaultAuthorId?: number | null;
 }) {
   const [error, formAction, pending] = useActionState(action, null);
   const [title, setTitle] = useState(post?.title ?? "");
@@ -74,13 +81,57 @@ export function PostForm({
   const [metaTitle, setMetaTitle] = useState(post?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
   const [wordCount, setWordCount] = useState(() => wordCountFromHtml(post?.content ?? ""));
+  const [authorId, setAuthorId] = useState(
+    post?.authorId ? String(post.authorId) : defaultAuthorId ? String(defaultAuthorId) : "",
+  );
+  const [faqs, setFaqs] = useState<PostFaq[]>(() => parseFaqs(post?.faqs ?? null));
   const [coverImageKey, setCoverImageKey] = useState(post?.coverImageKey ?? "");
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
   const coverFileInputRef = useRef<HTMLInputElement>(null);
+  // The content HTML lives in a ref (mirrored into the hidden input below)
+  // so the submit handler can upload pending images and rewrite the HTML
+  // before the form's server action ever reads it.
+  const contentRef = useRef(post?.content ?? "");
+  const contentHiddenRef = useRef<HTMLInputElement>(null);
+  const pendingImagesRef = useRef<PendingImage[]>([]);
+  const allowNativeSubmitRef = useRef(false);
+
+  // Warn before leaving with unsaved changes; disabled while a save or the
+  // pre-save image upload is in flight so the redirect never prompts.
+  useUnsavedChangesWarning(dirty && !pending && !submitting);
 
   const effectiveTitleLength = (metaTitle || title).length;
   const safeCoverImageSrc = toSafeImageSrc(coverImageKey);
+
+  async function onFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Second pass (from requestSubmit below): let the browser run the
+    // form's server action untouched.
+    if (allowNativeSubmitRef.current) {
+      allowNativeSubmitRef.current = false;
+      return;
+    }
+    e.preventDefault();
+    const form = e.currentTarget;
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const finalHtml = await resolvePendingImageUploads(contentRef.current, pendingImagesRef.current);
+      if (contentHiddenRef.current) contentHiddenRef.current.value = finalHtml;
+      setSubmitting(false);
+      allowNativeSubmitRef.current = true;
+      form.requestSubmit();
+      setTimeout(() => {
+        allowNativeSubmitRef.current = false;
+      }, 0);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to upload images.");
+      setSubmitting(false);
+    }
+  }
 
   async function onCoverFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -97,6 +148,7 @@ export function PostForm({
         return;
       }
       setCoverImageKey(result.url);
+      setDirty(true);
     } catch {
       setCoverUploadError("Upload failed. Please try again.");
     } finally {
@@ -105,8 +157,10 @@ export function PostForm({
   }
 
   return (
-    <form action={formAction} className="space-y-6">
-      {error ? <p className="rounded border border-red-400 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+    <form action={formAction} onSubmit={onFormSubmit} onChange={() => setDirty(true)} className="space-y-6">
+      {error || submitError ? (
+        <p className="rounded border border-red-400 bg-red-50 p-3 text-sm text-red-700">{submitError ?? error}</p>
+      ) : null}
 
       <div>
         <label htmlFor="title" className="block text-sm font-medium">
@@ -184,6 +238,35 @@ export function PostForm({
           defaultValue={post?.excerpt ?? ""}
           className="mt-1 w-full rounded border px-3 py-2"
         />
+      </div>
+
+      <div>
+        <label htmlFor="author" className="block text-sm font-medium">
+          Author <span className="text-muted-foreground">(shown as the author card on the post)</span>
+        </label>
+        <select
+          id="author"
+          name="authorId"
+          value={authorId}
+          onChange={(e) => setAuthorId(e.target.value)}
+          className="mt-1 w-full max-w-xs rounded border bg-background px-3 py-2"
+        >
+          <option value="">Unassigned</option>
+          {authors.map((a) => (
+            <option key={a.id} value={String(a.id)}>
+              {a.displayName || a.username}
+            </option>
+          ))}
+        </select>
+        {authors.length === 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            No users yet — add one on the{" "}
+            <Link href="/admin/users" className="text-primary hover:underline">
+              Users
+            </Link>{" "}
+            page.
+          </p>
+        ) : null}
       </div>
 
       <div>
@@ -267,12 +350,83 @@ export function PostForm({
       <div>
         <label className="block text-sm font-medium">Content</label>
         <div className="mt-1">
-          <RichTextEditor name="content" initialContent={post?.content ?? ""} onChangeHTML={(html) => setWordCount(wordCountFromHtml(html))} />
+          <RichTextEditor
+            initialContent={post?.content ?? ""}
+            onChangeHTML={(html) => {
+              contentRef.current = html;
+              if (contentHiddenRef.current) contentHiddenRef.current.value = html;
+              setWordCount(wordCountFromHtml(html));
+              setDirty(true);
+            }}
+            onPendingImagesChange={(images) => {
+              pendingImagesRef.current = images;
+            }}
+          />
         </div>
+        {/* Content HTML is mirrored into this hidden field so the server
+            action receives the latest editor state. Owned here (not inside
+            the editor) so it is never remounted or reset. */}
+        <input ref={contentHiddenRef} type="hidden" name="content" defaultValue={post?.content ?? ""} />
         <span className={`text-xs ${wordCount > 0 && wordCount < THIN_CONTENT_WORD_COUNT ? "text-amber-600" : "text-muted-foreground"}`}>
           {wordCount} words
           {wordCount > 0 && wordCount < THIN_CONTENT_WORD_COUNT ? ` — under ${THIN_CONTENT_WORD_COUNT} may read as thin content` : ""}
         </span>
+      </div>
+
+      <div>
+        <label htmlFor="keyTakeaways" className="block text-sm font-medium">
+          Key takeaways <span className="text-muted-foreground">(optional — one per line, shown as a bulleted box)</span>
+        </label>
+        <textarea
+          id="keyTakeaways"
+          name="keyTakeaways"
+          rows={4}
+          defaultValue={parseTakeaways(post?.keyTakeaways ?? null).join("\n")}
+          className="mt-1 w-full rounded border px-3 py-2"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium">
+          FAQs <span className="text-muted-foreground">(optional — rendered as Q&amp;A with FAQ schema)</span>
+        </label>
+        <div className="mt-2 space-y-3">
+          {faqs.map((faq, index) => (
+            <div key={index} className="rounded border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Question {index + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => setFaqs((list) => list.filter((_, i) => i !== index))}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+              <input
+                value={faq.question}
+                onChange={(e) => setFaqs((list) => list.map((f, i) => (i === index ? { ...f, question: e.target.value } : f)))}
+                placeholder="Question"
+                className="mt-2 w-full rounded border px-3 py-2"
+              />
+              <textarea
+                value={faq.answer}
+                onChange={(e) => setFaqs((list) => list.map((f, i) => (i === index ? { ...f, answer: e.target.value } : f)))}
+                placeholder="Answer"
+                rows={3}
+                className="mt-2 w-full rounded border px-3 py-2"
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setFaqs((list) => [...list, { question: "", answer: "" }])}
+            className="rounded border border-border px-3 py-1.5 text-sm font-medium hover:bg-secondary"
+          >
+            Add FAQ
+          </button>
+        </div>
+        <input type="hidden" name="faqs" value={JSON.stringify(faqs)} />
       </div>
 
       <div>
@@ -286,8 +440,8 @@ export function PostForm({
       </div>
 
       <div className="flex items-center gap-4">
-        <button type="submit" disabled={pending} className="comic-panel rounded bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">
-          {pending ? "Saving..." : "Save post"}
+        <button type="submit" disabled={pending || submitting} className="comic-panel rounded bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">
+          {pending || submitting ? "Saving..." : "Save post"}
         </button>
         {post ? (
           <Link href={`/admin/preview/${post.id}`} target="_blank" className="text-sm text-primary hover:underline">

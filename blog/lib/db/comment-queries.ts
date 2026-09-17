@@ -40,6 +40,7 @@ export async function getCommentsForModeration() {
       id: comments.id,
       postId: comments.postId,
       postSlug: posts.slug,
+      postCategory: posts.category,
       postTitle: posts.title,
       authorName: comments.authorName,
       content: comments.content,

@@ -36,6 +36,34 @@ export function CreateUserForm() {
           <option value="admin">Admin</option>
         </select>
       </div>
+      <div>
+        <label htmlFor="new-display-name" className="block text-xs font-medium text-muted-foreground">
+          Display name
+        </label>
+        <input
+          id="new-display-name"
+          name="displayName"
+          placeholder="Shown publicly as the author"
+          className="mt-1 rounded border border-border bg-background px-2.5 py-1.5 text-sm"
+        />
+      </div>
+      <div>
+        <label htmlFor="new-job-title" className="block text-xs font-medium text-muted-foreground">
+          Job title
+        </label>
+        <input id="new-job-title" name="jobTitle" className="mt-1 rounded border border-border bg-background px-2.5 py-1.5 text-sm" />
+      </div>
+      <div className="w-full">
+        <label htmlFor="new-bio" className="block text-xs font-medium text-muted-foreground">
+          Bio (profile description)
+        </label>
+        <textarea
+          id="new-bio"
+          name="bio"
+          rows={2}
+          className="mt-1 w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm"
+        />
+      </div>
       <button
         type="submit"
         disabled={pending}

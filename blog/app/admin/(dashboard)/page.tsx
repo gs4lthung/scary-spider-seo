@@ -4,6 +4,7 @@ import { FileText, CheckCircle, PencilSimple, Tag, Plus } from "@phosphor-icons/
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { getPostStats } from "@/lib/db/queries";
+import { postPath } from "@/lib/post-url";
 import { deletePost } from "@/app/admin/posts-actions";
 import { DeleteButton } from "@/app/admin/DeleteButton";
 
@@ -96,7 +97,7 @@ export default async function AdminDashboardPage() {
                   <tr key={post.id}>
                     <td className="px-4 py-3">
                       <p className="font-medium">{post.title}</p>
-                      <p className="text-xs text-muted-foreground">/{post.slug}</p>
+                      <p className="text-xs text-muted-foreground">{postPath(post)}</p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{post.category ?? "—"}</td>
                     <td className="px-4 py-3">

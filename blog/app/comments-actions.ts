@@ -8,6 +8,7 @@ import { comments, commentVotes, posts } from "@/lib/db/schema";
 import { getCommentsRequireApproval } from "@/lib/db/settings";
 import { getOrCreateVoterKey } from "@/lib/voter";
 import { getRequestIpHash } from "@/lib/anti-spam";
+import { postPath } from "@/lib/post-url";
 
 const MAX_NAME_LENGTH = 60;
 const MAX_COMMENT_LENGTH = 3000;
@@ -42,7 +43,10 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   if (content.length > MAX_COMMENT_LENGTH) return { error: `Comment must be under ${MAX_COMMENT_LENGTH} characters.` };
 
   const db = await getDb();
-  const [post] = await db.select({ id: posts.id, slug: posts.slug }).from(posts).where(eq(posts.id, postId));
+  const [post] = await db
+    .select({ id: posts.id, slug: posts.slug, category: posts.category })
+    .from(posts)
+    .where(eq(posts.id, postId));
   if (!post) return { error: "Post not found." };
 
   const { env } = await getCloudflareContext({ async: true });
@@ -68,6 +72,7 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   });
 
   revalidatePath(`/${post.slug}`);
+  revalidatePath(postPath({ slug: post.slug, category: post.category }));
   return { success: true, pending: requireApproval };
 }
 
@@ -91,6 +96,12 @@ export async function voteComment(commentId: number, value: 1 | -1): Promise<voi
     await db.insert(commentVotes).values({ commentId, voterKey, value });
   }
 
-  const [post] = await db.select({ slug: posts.slug }).from(posts).where(eq(posts.id, comment.postId));
-  if (post) revalidatePath(`/${post.slug}`);
+  const [post] = await db
+    .select({ slug: posts.slug, category: posts.category })
+    .from(posts)
+    .where(eq(posts.id, comment.postId));
+  if (post) {
+    revalidatePath(`/${post.slug}`);
+    revalidatePath(postPath({ slug: post.slug, category: post.category }));
+  }
 }
