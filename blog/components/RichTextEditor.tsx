@@ -33,6 +33,7 @@ import {
   ArrowClockwise,
 } from "@phosphor-icons/react";
 import { uploadImage } from "@/app/admin/media-actions";
+import { fileToWebP } from "@/lib/webp";
 
 function ToolbarButton({
   onClick,
@@ -112,12 +113,13 @@ export function RichTextEditor({
 
   if (!editor) return null;
 
-  function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     setUploadError(null);
-    setPendingImage({ file, previewUrl: URL.createObjectURL(file), alt: "" });
+    const webpFile = await fileToWebP(file);
+    setPendingImage({ file: webpFile, previewUrl: URL.createObjectURL(webpFile), alt: "" });
   }
 
   async function confirmInsertImage() {
@@ -126,17 +128,20 @@ export function RichTextEditor({
     setUploadError(null);
     const formData = new FormData();
     formData.set("file", pendingImage.file);
-    const result = await uploadImage(formData);
-    setUploading(false);
-
-    if ("error" in result) {
-      setUploadError(result.error);
-      return;
+    try {
+      const result = await uploadImage(formData);
+      if ("error" in result) {
+        setUploadError(result.error);
+        return;
+      }
+      editor?.chain().focus().setImage({ src: result.url, alt: pendingImage.alt || undefined }).run();
+      URL.revokeObjectURL(pendingImage.previewUrl);
+      setPendingImage(null);
+    } catch {
+      setUploadError("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
     }
-
-    editor?.chain().focus().setImage({ src: result.url, alt: pendingImage.alt || undefined }).run();
-    URL.revokeObjectURL(pendingImage.previewUrl);
-    setPendingImage(null);
   }
 
   function cancelInsertImage() {

@@ -6,6 +6,7 @@ import type { posts } from "@/lib/db/schema";
 import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_CONTENT_WORD_COUNT } from "@/lib/seo-limits";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { uploadImage } from "@/app/admin/media-actions";
+import { fileToWebP } from "@/lib/webp";
 
 type Post = typeof posts.$inferSelect;
 
@@ -66,15 +67,19 @@ export function PostForm({
     setCoverUploadError(null);
     setCoverUploading(true);
     const formData = new FormData();
-    formData.set("file", file);
-    const result = await uploadImage(formData);
-    setCoverUploading(false);
-
-    if ("error" in result) {
-      setCoverUploadError(result.error);
-      return;
+    formData.set("file", await fileToWebP(file));
+    try {
+      const result = await uploadImage(formData);
+      if ("error" in result) {
+        setCoverUploadError(result.error);
+        return;
+      }
+      setCoverImageKey(result.url);
+    } catch {
+      setCoverUploadError("Upload failed. Please try again.");
+    } finally {
+      setCoverUploading(false);
     }
-    setCoverImageKey(result.url);
   }
 
   return (

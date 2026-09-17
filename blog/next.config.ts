@@ -4,6 +4,9 @@ import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname),
+  serverActions: {
+    bodySizeLimit: "10mb",
+  },
   images: {
     formats: ["image/avif", "image/webp"],
   },
