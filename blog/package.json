@@ -16,7 +16,8 @@
     "db:migrate:local": "wrangler d1 migrations apply blog-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply blog-db --remote",
     "db:studio": "drizzle-kit studio",
-    "admin:hash-password": "node scripts/hash-password.mjs"
+    "admin:hash-password": "node scripts/hash-password.mjs",
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

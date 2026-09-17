@@ -3,16 +3,22 @@ export type TocItem = { id: string; text: string; level: 2 | 3 };
 const HEADING_PATTERN = /<h([23])((?: [^>]*)?)>([\s\S]*?)<\/h[23]>/g;
 
 function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, "");
+  let previous: string;
+  let current = html;
+  do {
+    previous = current;
+    current = current.replace(/<[^>]+>/g, "");
+  } while (current !== previous);
+  return current;
 }
 
 function decodeEntities(text: string): string {
   return text
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 function slugify(text: string): string {
