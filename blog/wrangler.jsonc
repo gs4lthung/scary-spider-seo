@@ -27,13 +27,11 @@
   // ISR cache for OpenNext: pages use `export const revalidate` and server
   // actions call `revalidatePath()`, which only work with a real incremental
   // cache (open-next.config.ts wires the KV-backed cache + memory queue).
-  // Run `npx wrangler kv namespace create blog-isr-cache` once, then paste the
-  // returned id in BOTH entries below (one namespace, two binding names) and
-  // uncomment. Until then the app still works, it just renders every request.
-  // "kv_namespaces": [
-  //   { "binding": "NEXT_INC_CACHE_KV", "id": "PASTE_KV_NAMESPACE_ID" },
-  //   { "binding": "NEXT_TAG_CACHE_KV", "id": "PASTE_KV_NAMESPACE_ID" }
-  // ],
+  // One namespace, two binding names (NEXT_INC_CACHE_KV + NEXT_TAG_CACHE_KV).
+  "kv_namespaces": [
+    { "binding": "NEXT_INC_CACHE_KV", "id": "67b80fb5c4634f4fb6323bcdb17bbfd4" },
+    { "binding": "NEXT_TAG_CACHE_KV", "id": "67b80fb5c4634f4fb6323bcdb17bbfd4" }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

@@ -8,8 +8,7 @@ import memoryQueue from "@opennextjs/cloudflare/overrides/queue/memory-queue";
 // cache is configured; the default "dummy" cache silently no-ops both.
 // These overrides back ISR caching and path revalidation with the KV
 // namespace bound as NEXT_INC_CACHE_KV / NEXT_TAG_CACHE_KV in wrangler.jsonc.
-// Until those bindings exist, the caches degrade gracefully (no-op) rather
-// than throwing, so the Worker still deploys and serves dynamic content.
+// Both bindings point at the same KV namespace (blog-isr-cache).
 export default defineCloudflareConfig({
   incrementalCache: kvIncrementalCache,
   tagCache: kvNextTagCache,
