@@ -6,8 +6,25 @@ import type { CommentData, PostComment } from "@/lib/db/comment-queries";
 import { CommentForm } from "@/components/CommentForm";
 import { CommentVoteButtons } from "@/components/CommentVoteButtons";
 
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 60 * 60 * 24 * 365],
+  ["month", 60 * 60 * 24 * 30],
+  ["week", 60 * 60 * 24 * 7],
+  ["day", 60 * 60 * 24],
+  ["hour", 60 * 60],
+  ["minute", 60],
+];
+
+const relativeTimeFormatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
 function formatCommentDate(date: Date) {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const secondsAgo = Math.round((date.getTime() - Date.now()) / 1000);
+  for (const [unit, secondsPerUnit] of RELATIVE_UNITS) {
+    if (Math.abs(secondsAgo) >= secondsPerUnit) {
+      return relativeTimeFormatter.format(Math.round(secondsAgo / secondsPerUnit), unit);
+    }
+  }
+  return "just now";
 }
 
 export function CommentItem({ comment, postId }: { comment: PostComment | CommentData; postId: number }) {
@@ -22,15 +39,13 @@ export function CommentItem({ comment, postId }: { comment: PostComment | Commen
           {comment.authorName.slice(0, 1).toUpperCase()}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="font-bold">{comment.authorName}</span>
+          <span className="font-bold">{comment.authorName}</span>
+          <p className="mt-1.5 text-sm leading-6 break-words whitespace-pre-wrap text-foreground">{comment.content}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <CommentVoteButtons commentId={comment.id} score={comment.score} myVote={comment.myVote} />
             <time dateTime={comment.createdAt.toISOString()} className="text-xs text-muted-foreground">
               {formatCommentDate(comment.createdAt)}
             </time>
-          </div>
-          <p className="mt-2 text-sm leading-6 break-words whitespace-pre-wrap text-foreground">{comment.content}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <CommentVoteButtons commentId={comment.id} score={comment.score} myVote={comment.myVote} />
             <button
               type="button"
               onClick={() => setReplying((value) => !value)}

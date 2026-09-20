@@ -33,7 +33,7 @@ export function CommentVoteButtons({
     `flex h-7 w-7 items-center justify-center rounded-lg border-2 transition-colors disabled:opacity-50 ${
       active
         ? "border-ink bg-primary text-primary-foreground"
-        : "border-transparent text-muted-foreground hover:border-ink hover:bg-secondary hover:text-foreground"
+        : "border-border text-muted-foreground hover:border-ink hover:bg-secondary hover:text-foreground"
     }`;
 
   return (

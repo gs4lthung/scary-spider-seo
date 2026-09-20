@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import Script from "next/script";
-import { PencilSimpleLine, ShieldCheck } from "@phosphor-icons/react";
+import { ShieldCheck, User } from "@phosphor-icons/react";
 import { submitComment } from "@/app/comments-actions";
 
 const TURNSTILE_SITE_KEY = "0x4AAAAAAE9tZeVsVwqnGp2Z";
@@ -54,30 +54,9 @@ export function CommentForm({
     <form
       ref={formRef}
       action={formAction}
-      className="comic-panel relative overflow-hidden rounded-2xl border-2 border-ink bg-card p-4 sm:p-5"
+      className="rounded-2xl border-2 border-ink bg-card p-4 transition-shadow duration-200 focus-within:ring-4 focus-within:ring-primary/15 sm:p-5"
     >
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="lazyOnload" />
-      {/* Folded-corner dog-ear, drawn with the comic ink color so it reads as
-          a note that has been dog-eared, not a flat rectangle. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute top-0 right-0 h-0 w-0 border-t-[28px] border-l-[28px] border-t-ink border-l-transparent"
-      />
-
-      <div className="flex flex-wrap items-center gap-2.5 pr-6">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-primary text-primary-foreground">
-          <PencilSimpleLine className="h-4 w-4" weight="bold" aria-hidden="true" />
-        </span>
-        <h3 className="font-mono text-xs font-bold tracking-widest text-foreground uppercase">
-          Leave a comment
-        </h3>
-        <span className="ml-auto hidden rounded-full border-2 border-ink bg-accent px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-widest text-accent-foreground uppercase sm:inline-block">
-          Speak up
-        </span>
-      </div>
-      <p className="mt-2 max-w-md text-sm text-muted-foreground">
-        Add your perspective to the conversation. Keep it useful and kind.
-      </p>
 
       <input type="hidden" name="postId" value={postId} />
       <input type="hidden" name="parentId" value={parentId ?? ""} />
@@ -90,59 +69,68 @@ export function CommentForm({
         <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-[190px_1fr]">
-        <div>
-          <label htmlFor="authorName" className="block text-sm font-semibold">
-            Name
-          </label>
-          <input
-            id="authorName"
-            name="authorName"
-            required
-            maxLength={60}
-            defaultValue={rememberedName ?? undefined}
-            key={rememberedName}
-            placeholder="Your name"
-             className="mt-1.5 w-full rounded-lg border-2 border-ink bg-background px-3 py-2 text-sm placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label htmlFor="content" className="block text-sm font-semibold">
-            Comment
-          </label>
-          {/* Ruled notepad field: a repeating hairline every line-height so
-              typed text sits on the lines. */}
-          <textarea
-            id="content"
-            name="content"
-            required
-            rows={4}
-            maxLength={3000}
-            placeholder="Share your thoughts..."
-             className="mt-1.5 w-full rounded-lg border-2 border-ink bg-background px-3 py-2 text-sm leading-7 placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none bg-[repeating-linear-gradient(to_bottom,color-mix(in_oklch,var(--color-ink)_18%,transparent)_0,color-mix(in_oklch,var(--color-ink)_18%,transparent)_1px,transparent_1px,transparent_28px)]"
-          />
-        </div>
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-accent text-accent-foreground">
+          <User className="h-4 w-4" weight="bold" aria-hidden="true" />
+        </span>
+        <label htmlFor="authorName" className="sr-only">
+          Your name
+        </label>
+        <input
+          id="authorName"
+          name="authorName"
+          required
+          maxLength={60}
+          defaultValue={rememberedName ?? undefined}
+          key={rememberedName}
+          placeholder="Your name"
+          className="w-full min-w-0 border-0 bg-transparent text-sm font-bold text-foreground placeholder:font-normal placeholder:text-muted-foreground focus:outline-none"
+        />
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="comic-wobble rounded-lg border-2 border-ink bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
-        >
-          {pending ? "Posting..." : parentId ? "Post reply" : "Post comment"}
-        </button>
-        {onCancel ? (
-          <button type="button" onClick={onCancel} className="rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-            Cancel
-          </button>
-        ) : null}
-        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
-          <div className="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-action={TURNSTILE_ACTION} />
+      <label htmlFor="content" className="sr-only">
+        Comment
+      </label>
+      <textarea
+        id="content"
+        name="content"
+        required
+        rows={3}
+        maxLength={3000}
+        placeholder="Share your thoughts..."
+        className="mt-3 w-full resize-none border-0 bg-transparent text-sm leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none"
+      />
+
+      <div className="mt-2 flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Turnstile stays invisible until it actually needs the visitor to do
+            something, so the common case is just our own trust line below,
+            not a foreign widget box stapled onto the UI. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div
+            className="cf-turnstile"
+            data-sitekey={TURNSTILE_SITE_KEY}
+            data-action={TURNSTILE_ACTION}
+            data-appearance="interaction-only"
+            data-size="flexible"
+          />
           <p className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
             <ShieldCheck className="h-4 w-4" weight="bold" aria-hidden="true" />
             Checked before it goes live
           </p>
+        </div>
+        <div className="flex items-center gap-3 sm:justify-end">
+          {onCancel ? (
+            <button type="button" onClick={onCancel} className="rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+              Cancel
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg border-2 border-ink bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:brightness-110 disabled:opacity-60"
+          >
+            {pending ? "Posting..." : parentId ? "Post reply" : "Comment"}
+          </button>
         </div>
       </div>
 

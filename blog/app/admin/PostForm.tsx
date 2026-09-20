@@ -6,6 +6,7 @@ import { CaretDown } from "@phosphor-icons/react/dist/ssr";
 import type { posts } from "@/lib/db/schema";
 import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_CONTENT_WORD_COUNT } from "@/lib/seo-limits";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { MediaPicker } from "@/components/MediaPicker";
 import { uploadImage } from "@/app/admin/media-actions";
 import { fileToWebP } from "@/lib/webp";
 import { resolvePendingImageUploads, type PendingImage } from "@/lib/pending-images";
@@ -97,6 +98,7 @@ export function PostForm({
   const [coverImageKey, setCoverImageKey] = useState(post?.coverImageKey ?? "");
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null);
+  const [coverMediaPickerOpen, setCoverMediaPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -322,6 +324,13 @@ export function PostForm({
             />
             <button
               type="button"
+              onClick={() => setCoverMediaPickerOpen(true)}
+              className="shrink-0 rounded border border-border px-3 py-2 text-sm font-medium hover:bg-secondary"
+            >
+              Library
+            </button>
+            <button
+              type="button"
               onClick={() => coverFileInputRef.current?.click()}
               disabled={coverUploading}
               className="shrink-0 rounded border border-border px-3 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-50"
@@ -337,6 +346,34 @@ export function PostForm({
             />
           </div>
           {coverUploadError ? <p className="mt-1 text-xs text-red-600">{coverUploadError}</p> : null}
+          {coverMediaPickerOpen ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+              onClick={() => setCoverMediaPickerOpen(false)}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-lg bg-background shadow-xl">
+                <div className="flex items-center justify-between border-b border-border p-4">
+                  <h2 className="text-sm font-semibold">Choose cover image from library</h2>
+                  <button
+                    type="button"
+                    onClick={() => setCoverMediaPickerOpen(false)}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Close
+                  </button>
+                </div>
+                <MediaPicker
+                  onSelect={(src) => {
+                    setCoverImageKey(src);
+                    setDirty(true);
+                    setCoverMediaPickerOpen(false);
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
         <div>
           <label htmlFor="coverImageAlt" className="block text-sm font-medium">

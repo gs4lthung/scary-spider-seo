@@ -11,18 +11,13 @@ function SearchField({ defaultQuery, id }: { defaultQuery?: string; id: string }
         Search posts
       </label>
       <div className="relative min-w-0 flex-1">
-        <MagnifyingGlass
-          className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-          weight="bold"
-          aria-hidden="true"
-        />
         <input
           id={id}
           type="search"
           name="q"
           defaultValue={defaultQuery}
           placeholder="Search posts..."
-          className="h-10 w-full rounded-full border-2 border-ink bg-card pr-11 pl-9 text-sm text-foreground placeholder:text-muted-foreground"
+          className="h-10 w-full rounded-full border-2 border-ink bg-card pr-11 pl-4 text-sm text-foreground placeholder:text-muted-foreground"
         />
         <button
           type="submit"
