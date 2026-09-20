@@ -33,6 +33,8 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   }
 
   const postId = Number(formData.get("postId"));
+  const parentIdValue = Number(formData.get("parentId"));
+  const parentId = Number.isFinite(parentIdValue) && parentIdValue > 0 ? parentIdValue : null;
   const authorName = String(formData.get("authorName") ?? "").trim();
   const content = String(formData.get("content") ?? "").trim();
 
@@ -48,6 +50,16 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
     .from(posts)
     .where(eq(posts.id, postId));
   if (!post) return { error: "Post not found." };
+
+  if (parentId) {
+    const [parent] = await db
+      .select({ id: comments.id, postId: comments.postId, status: comments.status })
+      .from(comments)
+      .where(eq(comments.id, parentId));
+    if (!parent || parent.postId !== postId || parent.status !== "approved") {
+      return { error: "That comment cannot receive replies." };
+    }
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const ipHash = await getRequestIpHash(env.SESSION_SECRET);
@@ -65,6 +77,7 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   const requireApproval = await getCommentsRequireApproval();
   await db.insert(comments).values({
     postId,
+    parentId,
     authorName,
     content,
     ipHash,

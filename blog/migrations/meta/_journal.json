@@ -71,6 +71,13 @@
       "when": 1789649634850,
       "tag": "0009_cheerful_killraven",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1789879613407,
+      "tag": "0010_colossal_sunfire",
+      "breakpoints": true
     }
   ]
 }

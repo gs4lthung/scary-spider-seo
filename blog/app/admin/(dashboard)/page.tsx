@@ -96,7 +96,11 @@ export default async function AdminDashboardPage() {
                 {allPosts.map((post) => (
                   <tr key={post.id}>
                     <td className="px-4 py-3">
-                      <p className="font-medium">{post.title}</p>
+                      <p className="font-medium">
+                        <Link href={`/admin/${post.id}/edit`} className="hover:text-primary hover:underline">
+                          {post.title}
+                        </Link>
+                      </p>
                       <p className="text-xs text-muted-foreground">{postPath(post)}</p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{post.category ?? "—"}</td>

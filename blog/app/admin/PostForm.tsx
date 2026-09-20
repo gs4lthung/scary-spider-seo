@@ -110,12 +110,8 @@ export function PostForm({
   const safeCoverImageSrc = toSafeImageSrc(coverImageKey);
 
   async function onFormSubmit(e: React.FormEvent<HTMLFormElement>) {
-    // With no pending (not-yet-uploaded) images there is nothing to rewrite,
-    // so let the form submit natively through React's server action. This is
-    // the reliable path: preventDefault + requestSubmit() does NOT re-trigger
-    // a React server action.
-    if (pendingImagesRef.current.length === 0) return;
-
+    // Always pass an explicit FormData object so the latest editor HTML reaches
+    // the server action. Native re-submission can lose the hidden content field.
     e.preventDefault();
     const form = e.currentTarget;
     setSubmitError(null);

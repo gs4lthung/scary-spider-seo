@@ -13,13 +13,13 @@ export function FeaturedPost({ post }: { post: Post }) {
 
   return (
     <article className="comic-panel group relative grid overflow-hidden rounded-2xl border-2 border-ink bg-card lg:grid-cols-[1.15fr_1fr]">
-      <div className="relative min-h-56 overflow-hidden border-b-2 border-ink bg-secondary lg:border-r-2 lg:border-b-0">
+      <div className="relative flex min-h-56 items-center justify-center overflow-hidden border-b-2 border-ink bg-secondary p-2 lg:border-r-2 lg:border-b-0">
         {post.coverImageKey ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={post.coverImageKey}
             alt={post.coverImageAlt ?? ""}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="bg-grid-lines flex h-full w-full items-center justify-center text-primary/50">

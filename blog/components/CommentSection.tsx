@@ -2,12 +2,13 @@ import { ChatCircleText } from "@phosphor-icons/react/dist/ssr";
 import { getPostComments } from "@/lib/db/comment-queries";
 import { getVoterKey } from "@/lib/voter";
 import { CommentForm } from "@/components/CommentForm";
-import { CommentVoteButtons } from "@/components/CommentVoteButtons";
+import { CommentItem } from "@/components/CommentItem";
 import { SpiderWebCorner } from "@/components/SpiderWebCorner";
 
 export async function CommentSection({ postId }: { postId: number }) {
   const voterKey = await getVoterKey();
   const commentList = await getPostComments(postId, voterKey);
+  const commentCount = countComments(commentList);
 
   return (
     <section className="mt-16 max-w-2xl border-t-2 border-ink pt-10">
@@ -18,7 +19,7 @@ export async function CommentSection({ postId }: { postId: number }) {
         </span>
         <h2 className="text-xl font-bold tracking-tight">Reader comments</h2>
         <span className="rounded-full border-2 border-ink bg-card px-2.5 py-0.5 font-mono text-xs font-bold">
-          {commentList.length}
+           {commentCount}
         </span>
       </div>
 
@@ -27,39 +28,9 @@ export async function CommentSection({ postId }: { postId: number }) {
           No comments yet. Be the first to pin one below.
         </div>
       ) : (
-        <ol className="mt-6 space-y-4">
-          {commentList.map((comment, index) => (
-            <li key={comment.id} className="comic-panel-sm rounded-2xl border-2 border-ink bg-card p-4">
-              <div className="flex items-start gap-3">
-                <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-accent font-bold text-accent-foreground sm:flex">
-                  {comment.authorName.slice(0, 1).toUpperCase()}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="font-bold">{comment.authorName}</span>
-                    <span className="font-mono text-[11px] text-muted-foreground">
-                      #{String(index + 1).padStart(2, "0")}
-                    </span>
-                    <time
-                      dateTime={comment.createdAt.toISOString()}
-                      className="font-mono text-[11px] text-muted-foreground"
-                    >
-                      {comment.createdAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </time>
-                  </div>
-                  <p className="mt-2 text-sm break-words whitespace-pre-wrap text-foreground">
-                    {comment.content}
-                  </p>
-                </div>
-
-                <CommentVoteButtons commentId={comment.id} score={comment.score} myVote={comment.myVote} />
-              </div>
-            </li>
+        <ol className="mt-6 rounded-2xl border-2 border-ink bg-card px-4 sm:px-6">
+          {commentList.map((comment) => (
+            <CommentItem key={comment.id} comment={comment} postId={postId} />
           ))}
         </ol>
       )}
@@ -69,4 +40,8 @@ export async function CommentSection({ postId }: { postId: number }) {
       </div>
     </section>
   );
+}
+
+function countComments(comments: Awaited<ReturnType<typeof getPostComments>>): number {
+  return comments.length + comments.reduce((total, comment) => total + comment.replies.length, 0);
 }

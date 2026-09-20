@@ -26,6 +26,9 @@ export const metadata: Metadata = {
   alternates: {
     types: { "application/rss+xml": "/feed.xml" },
   },
+  verification: {
+    google: "hxLezdTHHzh_1mLRs2HE7bAzZ-s5-7vUZga9x7vzkPk",
+  },
   robots: {
     index: true,
     follow: true,

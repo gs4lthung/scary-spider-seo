@@ -6,7 +6,15 @@ import { submitComment } from "@/app/comments-actions";
 
 const REMEMBERED_NAME_KEY = "blog_comment_author";
 
-export function CommentForm({ postId }: { postId: number }) {
+export function CommentForm({
+  postId,
+  parentId,
+  onCancel,
+}: {
+  postId: number;
+  parentId?: number;
+  onCancel?: () => void;
+}) {
   const [state, formAction, pending] = useActionState(submitComment, null);
   const formRef = useRef<HTMLFormElement>(null);
   const [rememberedName, setRememberedName] = useState<string | null>(null);
@@ -61,6 +69,7 @@ export function CommentForm({ postId }: { postId: number }) {
       </div>
 
       <input type="hidden" name="postId" value={postId} />
+      <input type="hidden" name="parentId" value={parentId ?? ""} />
       <input type="hidden" name="formStartedAt" value={formStartedAt} />
       {/* Honeypot: hidden from real visitors via CSS, not attributes a
           screen reader would also skip, so bots that fill every field trip
@@ -110,8 +119,13 @@ export function CommentForm({ postId }: { postId: number }) {
           disabled={pending}
           className="comic-wobble rounded-lg border-2 border-ink bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {pending ? "Posting..." : "Post comment"}
+          {pending ? "Posting..." : parentId ? "Post reply" : "Post comment"}
         </button>
+        {onCancel ? (
+          <button type="button" onClick={onCancel} className="text-sm text-muted-foreground hover:text-foreground">
+            Cancel
+          </button>
+        ) : null}
         <p className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
           <ShieldCheck className="h-4 w-4" weight="bold" aria-hidden="true" />
           Checked before it goes live

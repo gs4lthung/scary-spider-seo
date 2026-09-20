@@ -22,6 +22,6 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Skip static assets, images, and Next's internals — only gate actual pages.
-    "/((?!_next/static|_next/image|favicon|apple-touch-icon|og-image|mascot|logo-wordmark|robots.txt|sitemap.xml).*)",
+    "/((?!_next/static|_next/image|favicon|apple-touch-icon|og-image|og-banner|mascot|logo-wordmark|robots.txt|sitemap.xml).*)",
   ],
 };
