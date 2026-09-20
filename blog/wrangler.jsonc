@@ -53,7 +53,7 @@
     "staging": {
       "name": "scary-spider-seo-blog-staging",
       "vars": {
-        "TURNSTILE_SITE_KEY": "replace-with-staging-site-key"
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAE9zc2Pmiy09kWBM"
       },
       "kv_namespaces": [
         { "binding": "NEXT_INC_CACHE_KV", "id": "d57b4db4e2e744b5b97078bac5e2b4a4" },
