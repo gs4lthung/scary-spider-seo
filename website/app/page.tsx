@@ -6,7 +6,6 @@ import { TechStack } from "@/components/TechStack";
 import { Download } from "@/components/Download";
 import { FAQ } from "@/components/FAQ";
 import { Sponsor } from "@/components/Sponsor";
-import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -19,10 +18,9 @@ export default function Home() {
         <HowItWorks />
         <Features />
         <TechStack />
-        <Download />
-        <FAQ />
-        <Sponsor />
-        <Contact />
+      <Download />
+      <FAQ />
+      <Sponsor />
       </main>
       <Footer />
       <Analytics />
