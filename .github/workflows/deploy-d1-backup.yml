@@ -1,0 +1,46 @@
+name: Deploy D1 Backup Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/d1-backup/**"
+      - ".github/workflows/deploy-d1-backup.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: d1-backup-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+    defaults:
+      run:
+        working-directory: blog
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: blog/package-lock.json
+      - run: npm ci
+      - name: Generate Worker types
+        run: >-
+          npx wrangler types ../ops/d1-backup/worker-configuration.d.ts
+          --config ../ops/d1-backup/wrangler.jsonc
+          --include-runtime
+      - name: Typecheck backup Worker
+        run: npx tsc --noEmit --project ../ops/d1-backup/tsconfig.json
+      - name: Deploy backup Worker
+        run: >-
+          npx wrangler deploy ../ops/d1-backup/src/index.ts
+          --config ../ops/d1-backup/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

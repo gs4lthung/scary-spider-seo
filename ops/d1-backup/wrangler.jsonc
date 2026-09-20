@@ -1,0 +1,44 @@
+{
+  "$schema": "../../blog/node_modules/wrangler/config-schema.json",
+  "name": "scary-spider-seo-d1-backup",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 2 * * *"]
+  },
+  "vars": {
+    "BACKUP_RETENTION_DAYS": "30",
+    "BACKUP_PREFIX": "daily/",
+    "ALERT_FROM_EMAIL": "alerts@blog.scaryspiderseo.com"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "blog-db",
+      "database_id": "dfc47a69-fd5c-4781-bd41-dab6fe1df1e9"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "blog-db-backups"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true
+    }
+  }
+}

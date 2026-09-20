@@ -1,0 +1,66 @@
+name: Test D1 Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_key:
+        description: "Backup key under blog-db-backups, for example daily/blog-db-2026-09-20T02-00-00-000Z.json.gz"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    environment: Staging
+    defaults:
+      run:
+        working-directory: blog
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: blog/package-lock.json
+      - run: npm ci
+      - name: Prepare restore workspace
+        run: mkdir -p ../ops/d1-backup/.tmp
+      - name: Download backup from R2
+        run: >-
+          npx wrangler r2 object get
+          "blog-db-backups/${{ inputs.backup_key }}"
+          --remote
+          --file ../ops/d1-backup/.tmp/backup.json.gz
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Generate staging restore SQL
+        run: >-
+          node ../ops/d1-backup/scripts/restore.mjs
+          --input ../ops/d1-backup/.tmp/backup.json.gz
+          --output ../ops/d1-backup/.tmp/restore.sql
+          --counts ../ops/d1-backup/.tmp/counts.json
+      - name: Apply restore to staging D1
+        run: >-
+          npx wrangler d1 execute blog-db-staging
+          --remote
+          --file ../ops/d1-backup/.tmp/restore.sql
+          --yes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verify restored row counts
+        run: >-
+          npx wrangler d1 execute blog-db-staging
+          --remote
+          --json
+          --command "SELECT 'posts' AS table_name, COUNT(*) AS row_count FROM posts; SELECT 'categories' AS table_name, COUNT(*) AS row_count FROM categories; SELECT 'settings' AS table_name, COUNT(*) AS row_count FROM settings; SELECT 'users' AS table_name, COUNT(*) AS row_count FROM users; SELECT 'comments' AS table_name, COUNT(*) AS row_count FROM comments; SELECT 'comment_votes' AS table_name, COUNT(*) AS row_count FROM comment_votes; SELECT 'login_attempts' AS table_name, COUNT(*) AS row_count FROM login_attempts;"
+          > ../ops/d1-backup/.tmp/actual-counts.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Compare restored row counts
+        run: node ../ops/d1-backup/scripts/verify-restore.mjs --expected ../ops/d1-backup/.tmp/counts.json --actual ../ops/d1-backup/.tmp/actual-counts.json
