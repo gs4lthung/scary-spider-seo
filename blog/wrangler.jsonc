@@ -7,7 +7,8 @@
     "nodejs_compat"
   ],
   "vars": {
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAE9y8n5uCUoWWVvK"
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAE9y8n5uCUoWWVvK",
+    "TURNSTILE_HOSTNAME": "blog.scaryspiderseo.com"
   },
   // TURNSTILE_SITE_KEY is public configuration and is declared in vars.
   // SESSION_SECRET and TURNSTILE_SECRET_KEY are secrets, so set them with
@@ -31,7 +32,8 @@
   // One namespace, two binding names (NEXT_INC_CACHE_KV + NEXT_TAG_CACHE_KV).
   "kv_namespaces": [
     { "binding": "NEXT_INC_CACHE_KV", "id": "67b80fb5c4634f4fb6323bcdb17bbfd4" },
-    { "binding": "NEXT_TAG_CACHE_KV", "id": "67b80fb5c4634f4fb6323bcdb17bbfd4" }
+    { "binding": "NEXT_TAG_CACHE_KV", "id": "67b80fb5c4634f4fb6323bcdb17bbfd4" },
+    { "binding": "RATE_LIMITS", "id": "66c2ed03b5724ac98f44190116204951" }
   ],
   "d1_databases": [
     {
@@ -53,11 +55,13 @@
     "staging": {
       "name": "scary-spider-seo-blog-staging",
       "vars": {
-        "TURNSTILE_SITE_KEY": "0x4AAAAAAE9zc2Pmiy09kWBM"
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAE9zc2Pmiy09kWBM",
+        "TURNSTILE_HOSTNAME": "scary-spider-seo-blog-staging.lthung-work-79.workers.dev"
       },
       "kv_namespaces": [
         { "binding": "NEXT_INC_CACHE_KV", "id": "d57b4db4e2e744b5b97078bac5e2b4a4" },
-        { "binding": "NEXT_TAG_CACHE_KV", "id": "d57b4db4e2e744b5b97078bac5e2b4a4" }
+        { "binding": "NEXT_TAG_CACHE_KV", "id": "d57b4db4e2e744b5b97078bac5e2b4a4" },
+        { "binding": "RATE_LIMITS", "id": "e7077526ff91482ab31ef1a3fd785b46" }
       ],
       "d1_databases": [
         {

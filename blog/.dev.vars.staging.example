@@ -2,3 +2,4 @@
 SESSION_SECRET=replace-with-a-new-staging-secret
 TURNSTILE_SECRET_KEY=replace-with-the-staging-widget-secret
 TURNSTILE_SITE_KEY=replace-with-the-staging-widget-site-key
+TURNSTILE_HOSTNAME=scary-spider-seo-blog-staging.lthung-work-79.workers.dev

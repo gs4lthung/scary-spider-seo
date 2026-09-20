@@ -10,6 +10,7 @@ import { getCommentsRequireApproval } from "@/lib/db/settings";
 import { getOrCreateVoterKey } from "@/lib/voter";
 import { getRequestIpHash } from "@/lib/anti-spam";
 import { postPath } from "@/lib/post-url";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 const MAX_NAME_LENGTH = 60;
 const MAX_COMMENT_LENGTH = 3000;
@@ -27,6 +28,7 @@ async function verifyTurnstileToken(
   token: string,
   secretKey: string,
   remoteIp: string | null,
+  expectedHostname: string,
 ): Promise<boolean> {
   const body = new URLSearchParams({
     secret: secretKey,
@@ -48,7 +50,7 @@ async function verifyTurnstileToken(
     return false;
   }
 
-  if (!result.success || result.action !== TURNSTILE_ACTION) return false;
+  if (!result.success || result.action !== TURNSTILE_ACTION || result.hostname !== expectedHostname) return false;
   return true;
 }
 
@@ -72,7 +74,12 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   const { env } = await getCloudflareContext({ async: true });
   const hdrs = await headers();
   const remoteIp = hdrs.get("cf-connecting-ip") ?? hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-  const turnstileValid = await verifyTurnstileToken(turnstileToken, env.TURNSTILE_SECRET_KEY, remoteIp);
+  const turnstileValid = await verifyTurnstileToken(
+    turnstileToken,
+    env.TURNSTILE_SECRET_KEY,
+    remoteIp,
+    env.TURNSTILE_HOSTNAME,
+  );
   if (!turnstileValid) {
     return { error: "Verification failed. Please try again." };
   }
@@ -133,12 +140,19 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   return { success: true, pending: requireApproval };
 }
 
-export async function voteComment(commentId: number, value: 1 | -1): Promise<void> {
+export async function voteComment(commentId: number, value: 1 | -1): Promise<{ ok: boolean; error?: string }> {
+  const { env } = await getCloudflareContext({ async: true });
+  const ipHash = await getRequestIpHash(env.SESSION_SECRET);
+  const voterKey = await getOrCreateVoterKey();
+  const rateKey = ipHash ?? `voter:${voterKey}`;
+  if (!(await consumeRateLimit(env, `comment-vote:${rateKey}`, 60, 60))) {
+    return { ok: false, error: "You're voting too quickly. Please try again later." };
+  }
+
   const db = await getDb();
   const [comment] = await db.select({ id: comments.id, postId: comments.postId }).from(comments).where(eq(comments.id, commentId));
-  if (!comment) return;
+  if (!comment) return { ok: false, error: "Comment not found." };
 
-  const voterKey = await getOrCreateVoterKey();
   const [existing] = await db
     .select()
     .from(commentVotes)
@@ -161,4 +175,5 @@ export async function voteComment(commentId: number, value: 1 | -1): Promise<voi
     revalidatePath(`/${post.slug}`);
     revalidatePath(postPath({ slug: post.slug, category: post.category }));
   }
+  return { ok: true };
 }

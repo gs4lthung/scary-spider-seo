@@ -41,7 +41,7 @@ const response = await fetch(
       to: process.env.ALERT_TO_EMAIL,
       from: {
         address: "alerts@blog.scaryspiderseo.com",
-        name: "Scary Spider SEO Operations",
+        name: "Scary Spider SEO",
       },
       subject,
       text,
@@ -68,7 +68,7 @@ function buildHtml({ subject, workflow, branch, commit, runUrl }) {
 <html><body style="margin:0;background:#f4f1fb;color:#171326;font-family:Arial,Helvetica,sans-serif;">
   <div style="padding:32px 16px;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #ded8ec;border-radius:18px;overflow:hidden;">
-      <tr><td style="padding:24px 28px 18px;text-align:center;"><img src="https://www.scaryspiderseo.com/logo-wordmark.png" width="220" alt="Scary Spider SEO" style="display:block;width:220px;height:auto;margin:0 auto;border:0;"></td></tr>
+      <tr><td style="padding:24px 28px 18px;text-align:center;"><img src="https://blog.scaryspiderseo.com/mascot.png" width="88" height="88" alt="Scary Spider SEO mascot" style="display:block;width:88px;height:88px;margin:0 auto;border:0;"></td></tr>
       <tr><td style="height:8px;background:#7028d9;font-size:0;line-height:0;">&nbsp;</td></tr>
       <tr><td style="padding:32px 32px 12px;"><p style="margin:0 0 12px;color:#b42318;font-size:12px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;">Operations alert</p><h1 style="margin:0;color:#171326;font-size:28px;line-height:1.2;">Workflow failed</h1><p style="margin:14px 0 0;color:#5d566d;font-size:16px;line-height:1.6;">${escapeHtml(subject)}</p></td></tr>
       <tr><td style="padding:12px 32px 24px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#faf8ff;border:1px solid #e6def5;border-radius:12px;"><tr><td style="padding:18px 20px 4px;color:#7a718b;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Workflow</td></tr><tr><td style="padding:0 20px 14px;color:#241d35;font-family:monospace;font-size:14px;">${escapeHtml(workflow)}</td></tr><tr><td style="padding:0 20px 4px;color:#7a718b;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Branch and commit</td></tr><tr><td style="padding:0 20px 20px;color:#241d35;font-family:monospace;font-size:14px;">${escapeHtml(branch)} / ${escapeHtml(commit)}</td></tr></table></td></tr>

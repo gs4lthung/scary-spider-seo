@@ -1,3 +1,4 @@
 SESSION_SECRET=replace-with-a-long-random-string
 TURNSTILE_SECRET_KEY=replace-with-your-turnstile-secret-key
 TURNSTILE_SITE_KEY=replace-with-your-turnstile-site-key
+TURNSTILE_HOSTNAME=localhost:3000

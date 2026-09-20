@@ -1,7 +1,10 @@
 import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getRequestIpHash } from "@/lib/anti-spam";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 const VIEW_COOKIE_PREFIX = "post-viewed-";
 const VIEW_COOKIE_MAX_AGE = 60 * 60 * 24;
@@ -30,6 +33,12 @@ export async function POST(request: Request) {
   const cookieName = `${VIEW_COOKIE_PREFIX}${postId}`;
   if (request.headers.get("cookie")?.split(";").some((cookie) => cookie.trim().startsWith(`${cookieName}=`))) {
     return NextResponse.json({ counted: false });
+  }
+
+  const { env } = await getCloudflareContext({ async: true });
+  const ipHash = await getRequestIpHash(env.SESSION_SECRET);
+  if (ipHash && !(await consumeRateLimit(env, `track-view:${ipHash}`, 30, 60))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   const db = await getDb();

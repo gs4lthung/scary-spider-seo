@@ -3,10 +3,23 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
-import { requireUser } from "@/lib/authz";
+import { requirePermission, requireUser } from "@/lib/authz";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
 const MAX_BYTES = 8 * 1024 * 1024;
+
+function hasImageSignature(bytes: Uint8Array, type: string): boolean {
+  if (type === "image/png") return bytes.length >= 8 && bytes.slice(0, 8).toString() === "137,80,78,71,13,10,26,10";
+  if (type === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (type === "image/gif") return new TextDecoder().decode(bytes.slice(0, 6)) === "GIF87a" || new TextDecoder().decode(bytes.slice(0, 6)) === "GIF89a";
+  if (type === "image/webp") return new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" && new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP";
+  if (type === "image/avif") return new TextDecoder().decode(bytes.slice(4, 8)) === "ftyp";
+  return false;
+}
+
+function isMediaKey(key: string): boolean {
+  return /^[0-9a-f-]{36}\.(png|jpe?g|webp|gif|avif)$/i.test(key);
+}
 
 export async function uploadImage(formData: FormData): Promise<{ url: string } | { error: string }> {
   await requireUser();
@@ -14,12 +27,14 @@ export async function uploadImage(formData: FormData): Promise<{ url: string } |
   if (!(file instanceof File)) return { error: "No file provided." };
   if (!ALLOWED_TYPES.has(file.type)) return { error: "Unsupported image type." };
   if (file.size > MAX_BYTES) return { error: "Image is larger than 8MB." };
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!hasImageSignature(bytes, file.type)) return { error: "The uploaded file does not match its image type." };
 
   const { env } = await getCloudflareContext({ async: true });
   const ext = file.type.split("/")[1];
   const key = `${crypto.randomUUID()}.${ext}`;
 
-  await env.MEDIA.put(key, await file.arrayBuffer(), {
+  await env.MEDIA.put(key, bytes, {
     httpMetadata: { contentType: file.type },
     // Human-readable name for the media library (the key is the id).
     customMetadata: { name: file.name },
@@ -34,10 +49,12 @@ export async function uploadImage(formData: FormData): Promise<{ url: string } |
 // than blocking the post save/delete itself.
 export async function deleteMediaKeys(keys: string[]): Promise<void> {
   if (keys.length === 0) return;
-  await requireUser();
+  await requirePermission("posts:write");
+  const safeKeys = keys.filter(isMediaKey);
+  if (safeKeys.length === 0) return;
   try {
     const { env } = await getCloudflareContext({ async: true });
-    await env.MEDIA.delete(keys);
+    await env.MEDIA.delete(safeKeys);
   } catch (err) {
     console.error("Failed to delete media keys from R2", keys, err);
   }
@@ -83,7 +100,8 @@ export async function listMediaImages(options?: {
 // (in its body content or as the cover image). Best-effort error reporting;
 // never throws.
 export async function deleteMediaImage(key: string): Promise<{ ok: boolean; error?: string }> {
-  await requireUser();
+  await requirePermission("posts:write");
+  if (!isMediaKey(key)) return { ok: false, error: "Invalid media key." };
   const db = await getDb();
   const rows = await db.select({ content: posts.content, coverImageKey: posts.coverImageKey }).from(posts);
   const referenced = rows.some(

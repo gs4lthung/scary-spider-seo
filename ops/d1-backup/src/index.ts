@@ -173,7 +173,7 @@ async function notifyFailure(env: Env, message: string): Promise<void> {
     const safeMessage = escapeHtml(message);
     await env.EMAIL.send({
       to: env.ALERT_TO_EMAIL,
-      from: env.ALERT_FROM_EMAIL,
+      from: { email: env.ALERT_FROM_EMAIL, name: "Scary Spider SEO" },
       subject: "Scary Spider SEO D1 backup failed",
       text: [
         "Scary Spider SEO",
@@ -192,7 +192,7 @@ async function notifyFailure(env: Env, message: string): Promise<void> {
         '<div style="padding:32px 16px;">',
         '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #ded8ec;border-radius:18px;overflow:hidden;">',
         '<tr><td style="padding:24px 28px 18px;text-align:center;background:#ffffff;">',
-        '<img src="https://www.scaryspiderseo.com/logo-wordmark.png" width="220" alt="Scary Spider SEO" style="display:block;width:220px;height:auto;margin:0 auto;border:0;">',
+        '<img src="https://blog.scaryspiderseo.com/mascot.png" width="88" height="88" alt="Scary Spider SEO mascot" style="display:block;width:88px;height:88px;margin:0 auto;border:0;">',
         '</td></tr>',
         '<tr><td style="height:8px;background:#7028d9;font-size:0;line-height:0;">&nbsp;</td></tr>',
         '<tr><td style="padding:32px 32px 12px;">',
