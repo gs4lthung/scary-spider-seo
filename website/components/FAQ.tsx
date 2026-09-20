@@ -48,29 +48,43 @@ export function FAQ() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
-      <div className="mx-auto max-w-3xl px-6 py-24">
-        <h2 className="mb-10 text-center text-4xl font-black tracking-tight">
-          Frequently asked questions
-        </h2>
+      <div className="mx-auto grid max-w-7xl gap-12 px-6 py-24 lg:grid-cols-[0.75fr_1.25fr] lg:gap-20 lg:py-32">
+        <div className="self-start lg:sticky lg:top-28">
+          <p className="font-mono text-xs font-bold tracking-[0.2em] text-primary uppercase">
+            Quick answers
+          </p>
+          <h2 className="mt-4 max-w-md text-4xl leading-[1.05] font-black tracking-tight sm:text-5xl">
+            Frequently asked questions
+          </h2>
+          <p className="mt-5 max-w-sm text-muted-foreground">
+            Everything you need to know before you point the spider at your first site.
+          </p>
+          <div className="mt-8 h-1 w-16 bg-primary" aria-hidden="true" />
+        </div>
 
-        <div className="space-y-4">
-          {FAQS.map((f) => (
+        <div className="grid gap-4 md:grid-cols-2">
+          {FAQS.map((f, index) => (
             <details
               key={f.q}
-              className="comic-panel-sm group rounded-2xl border-2 border-(--color-ink) bg-card p-5 open:pb-5"
+              className="comic-panel-sm group rounded-2xl border-2 border-(--color-ink) bg-card p-5 transition-colors open:bg-primary open:text-primary-foreground"
             >
-              <summary className="cursor-pointer list-none font-bold marker:content-none">
-                <span className="flex items-center justify-between gap-4">
-                  {f.q}
+              <summary className="cursor-pointer list-none font-bold marker:content-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">
+                <span className="flex items-start gap-3">
+                  <span className="font-mono text-xs text-primary group-open:text-primary-foreground/70">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="flex-1">{f.q}</span>
                   <span
                     aria-hidden="true"
-                    className="shrink-0 text-primary transition-transform group-open:rotate-45"
+                    className="shrink-0 text-lg leading-none text-primary transition-transform group-open:rotate-45 group-open:text-primary-foreground"
                   >
                     +
                   </span>
                 </span>
               </summary>
-              <p className="mt-3 text-sm text-card-foreground/90">{f.a}</p>
+              <p className="mt-4 border-t border-current/20 pt-4 pl-7 text-sm leading-6 text-card-foreground/80 group-open:text-primary-foreground/85">
+                {f.a}
+              </p>
             </details>
           ))}
         </div>
