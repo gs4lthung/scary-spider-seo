@@ -76,6 +76,11 @@ jobs:
       - run: npm run cf:typegen
       - run: npx tsc --noEmit
       - run: npm run cf:build
+      - name: Verify Cloudflare credentials
+        run: npx wrangler whoami
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Apply D1 migrations
         run: npm run db:migrate:remote
         env:
