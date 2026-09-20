@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import type { posts } from "@/lib/db/schema";
-import { readingTimeMinutes } from "@/lib/reading-time";
+import { postReadingTime } from "@/lib/reading-time";
+import { DEFAULT_CATEGORY } from "@/lib/post-url";
 import { parseHeadings } from "@/lib/toc";
 import { parseTakeaways, parseFaqs } from "@/lib/post-sections";
 
@@ -11,6 +12,7 @@ export function PostArticle({ post }: { post: Post }) {
   const { html: contentHtml } = parseHeadings(post.content);
   const takeaways = parseTakeaways(post.keyTakeaways);
   const faqs = parseFaqs(post.faqs);
+  const category = post.category?.trim() || DEFAULT_CATEGORY;
 
   return (
     <div className="min-w-0">
@@ -21,14 +23,12 @@ export function PostArticle({ post }: { post: Post }) {
         <Link href="/" className="hover:text-primary">
           Home
         </Link>
-        {post.category ? (
-          <>
-            <span aria-hidden="true">/</span>
-            <Link href={`/?category=${encodeURIComponent(post.category)}`} className="hover:text-primary">
-              {post.category}
-            </Link>
-          </>
-        ) : null}
+        <>
+          <span aria-hidden="true">/</span>
+          <Link href={`/?category=${encodeURIComponent(category)}`} className="hover:text-primary">
+            {category}
+          </Link>
+        </>
         <span aria-hidden="true">/</span>
         <span className="min-w-0 truncate text-foreground">{post.title}</span>
       </nav>
@@ -45,7 +45,7 @@ export function PostArticle({ post }: { post: Post }) {
             <span>Not published yet</span>
           )}
           <span aria-hidden="true">/</span>
-          <span>{readingTimeMinutes(post.content)} min read</span>
+          <span>{postReadingTime(post.content, post.readingTime)} min read</span>
         </div>
 
         {post.coverImageKey ? (
@@ -57,11 +57,9 @@ export function PostArticle({ post }: { post: Post }) {
               decoding="async"
               className="w-full"
             />
-            {post.category ? (
-              <span className="absolute top-3 left-3 rounded-full border-2 border-ink bg-card px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-foreground uppercase">
-                {post.category}
-              </span>
-            ) : null}
+            <span className="absolute top-3 left-3 rounded-full border-2 border-ink bg-card px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-foreground uppercase">
+              {category}
+            </span>
           </div>
         ) : null}
 

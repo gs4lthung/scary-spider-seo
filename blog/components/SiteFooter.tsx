@@ -76,7 +76,7 @@ export function SiteFooter() {
               rel="noreferrer"
               className="comic-wobble mt-4 inline-flex items-center gap-2 rounded-lg border-2 border-ink bg-card px-4 py-2 font-semibold text-foreground hover:bg-primary hover:text-primary-foreground"
             >
-              <Heart className="h-4 w-4" weight="fill" aria-hidden="true" />
+              <Heart className="h-4 w-4 text-red-500" weight="fill" aria-hidden="true" />
               Sponsor on GitHub
             </a>
           </div>

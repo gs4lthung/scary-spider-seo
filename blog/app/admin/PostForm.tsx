@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState, useRef, useState } from "react";
 import Link from "next/link";
+import { CaretDown } from "@phosphor-icons/react/dist/ssr";
 import type { posts } from "@/lib/db/schema";
 import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_CONTENT_WORD_COUNT } from "@/lib/seo-limits";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -10,6 +11,7 @@ import { fileToWebP } from "@/lib/webp";
 import { resolvePendingImageUploads, type PendingImage } from "@/lib/pending-images";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 import { parseFaqs, parseTakeaways, type PostFaq } from "@/lib/post-sections";
+import { readingTimeMinutes } from "@/lib/reading-time";
 
 type Post = typeof posts.$inferSelect;
 
@@ -83,6 +85,9 @@ export function PostForm({
   const [slugTouched, setSlugTouched] = useState(false);
   const [metaTitle, setMetaTitle] = useState(post?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
+  const [readingTime, setReadingTime] = useState(String(post?.readingTime ?? readingTimeMinutes(post?.content ?? "")));
+  const [status, setStatus] = useState<"draft" | "published">(post?.status ?? "draft");
+  const [statusOpen, setStatusOpen] = useState(false);
   const [wordCount, setWordCount] = useState(() => wordCountFromHtml(post?.content ?? ""));
   const [authorId, setAuthorId] = useState(
     post?.authorId ? String(post.authorId) : defaultAuthorId ? String(defaultAuthorId) : "",
@@ -432,10 +437,54 @@ export function PostForm({
         <label htmlFor="status" className="block text-sm font-medium">
           Status
         </label>
-        <select id="status" name="status" defaultValue={post?.status ?? "draft"} className="mt-1 rounded border px-3 py-2">
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-        </select>
+        <input type="hidden" name="status" value={status} />
+        <button
+          type="button"
+          onClick={() => setStatusOpen((open) => !open)}
+          className="mt-1 flex w-full max-w-xs items-center justify-between rounded border border-primary bg-background px-3 py-2 text-left"
+          aria-haspopup="listbox"
+          aria-expanded={statusOpen}
+        >
+          {status === "published" ? "Published" : "Draft"}
+          <CaretDown className="h-4 w-4" weight="bold" aria-hidden="true" />
+        </button>
+        {statusOpen ? (
+          <div className="relative z-10 w-full max-w-xs">
+            <div className="absolute mt-1 w-full overflow-hidden rounded border border-border bg-card shadow-lg" role="listbox">
+              {(["draft", "published"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="option"
+                  aria-selected={status === option}
+                  onClick={() => {
+                    setStatus(option);
+                    setStatusOpen(false);
+                  }}
+                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-secondary ${status === option ? "bg-primary text-primary-foreground" : ""}`}
+                >
+                  {option === "published" ? "Published" : "Draft"}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div>
+        <label htmlFor="readingTime" className="block text-sm font-medium">
+          Reading time (minutes)
+        </label>
+        <input
+          id="readingTime"
+          name="readingTime"
+          type="number"
+          min="1"
+          value={readingTime}
+          onChange={(e) => setReadingTime(e.target.value)}
+          className="mt-1 w-full max-w-xs rounded border px-3 py-2"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">Estimated from content length. Update it if the estimate is not accurate.</p>
       </div>
 
       <div className="flex items-center gap-4">

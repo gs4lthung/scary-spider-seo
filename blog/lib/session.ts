@@ -15,14 +15,14 @@ export async function getSession(): Promise<SessionPayload | null> {
 // other account state change takes effect immediately instead of trusting the
 // role/user baked into the session cookie for up to its 7-day TTL. Returns
 // null when the cookie is invalid or the user no longer exists.
-export async function getCurrentUser(): Promise<SessionPayload | null> {
+export async function getCurrentUser(): Promise<(SessionPayload & { avatarKey: string | null }) | null> {
   const session = await getSession();
   if (!session) return null;
   const db = await getDb();
   const [user] = await db
-    .select({ id: users.id, username: users.username, role: users.role })
+    .select({ id: users.id, username: users.username, role: users.role, avatarKey: users.avatarKey })
     .from(users)
     .where(eq(users.id, session.userId));
   if (!user) return null;
-  return { userId: user.id, username: user.username, role: user.role, exp: session.exp };
+  return { userId: user.id, username: user.username, role: user.role, avatarKey: user.avatarKey, exp: session.exp };
 }

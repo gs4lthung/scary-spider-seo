@@ -44,6 +44,7 @@ function fromForm(formData: FormData) {
     category: (String(formData.get("category") ?? "").trim() || null) as string | null,
     metaTitle: (String(formData.get("metaTitle") ?? "").trim() || null) as string | null,
     metaDescription: (String(formData.get("metaDescription") ?? "").trim() || null) as string | null,
+    readingTime: Math.max(1, Number(formData.get("readingTime")) || 1),
     status: status as "draft" | "published",
   };
 }

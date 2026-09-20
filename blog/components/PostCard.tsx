@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowUpRight, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import type { posts } from "@/lib/db/schema";
-import { readingTimeMinutes } from "@/lib/reading-time";
-import { postPath } from "@/lib/post-url";
+import { postReadingTime } from "@/lib/reading-time";
+import { DEFAULT_CATEGORY, postPath } from "@/lib/post-url";
 
 type Post = typeof posts.$inferSelect;
 
@@ -14,6 +14,7 @@ export function formatPostDate(date: Date | null) {
 export function PostCard({ post }: { post: Post }) {
   const href = postPath(post);
   const date = formatPostDate(post.publishedAt);
+  const category = post.category?.trim() || DEFAULT_CATEGORY;
 
   return (
     <article className="group relative flex h-full flex-col">
@@ -32,17 +33,15 @@ export function PostCard({ post }: { post: Post }) {
             <MagnifyingGlass className="h-9 w-9" weight="bold" aria-hidden="true" />
           </div>
         )}
-        {post.category ? (
-          <span className="absolute top-3 left-3 rounded-full border-2 border-ink bg-card px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-foreground uppercase">
-            {post.category}
-          </span>
-        ) : null}
+        <span className="absolute top-3 left-3 rounded-full border-2 border-ink bg-card px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-foreground uppercase">
+          {category}
+        </span>
       </div>
 
       <div className="mt-4 flex items-center gap-2 font-mono text-xs text-muted-foreground">
         {date ? <time dateTime={post.publishedAt?.toISOString()}>{date}</time> : <span>Draft</span>}
         <span aria-hidden="true">/</span>
-        <span>{readingTimeMinutes(post.content)} min read</span>
+        <span>{postReadingTime(post.content, post.readingTime)} min read</span>
       </div>
 
       <h3 className="mt-2 text-lg leading-snug font-bold tracking-tight text-balance">

@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, like, or, sql } from "drizzle-orm";
 import { ArrowLeft, ArrowRight, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { getPostsPerPage } from "@/lib/db/settings";
 import { SITE_URL } from "@/lib/site";
-import { postPath } from "@/lib/post-url";
+import { DEFAULT_CATEGORY, postPath } from "@/lib/post-url";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PostCard } from "@/components/PostCard";
@@ -63,7 +63,11 @@ export default async function BlogHome({
 
   const db = await getDb();
   const conditions = [eq(posts.status, "published")];
-  if (category) conditions.push(eq(posts.category, category));
+  if (category) {
+    conditions.push(
+      category === DEFAULT_CATEGORY ? or(eq(posts.category, category), isNull(posts.category))! : eq(posts.category, category),
+    );
+  }
   if (query) {
     const pattern = `%${query}%`;
     conditions.push(or(like(posts.title, pattern), like(posts.excerpt, pattern), like(posts.content, pattern))!);

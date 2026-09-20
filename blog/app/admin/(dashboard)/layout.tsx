@@ -69,9 +69,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
         <div className="space-y-3 border-t border-border pt-4">
           <div className="flex items-center gap-2.5 px-1">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-              {session.username.slice(0, 1).toUpperCase()}
-            </div>
+            {session.avatarKey ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={session.avatarKey} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                {session.username.trim().slice(0, 1).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{session.username}</p>
               <p className="text-xs text-muted-foreground capitalize">{session.role}</p>

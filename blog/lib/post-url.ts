@@ -1,5 +1,7 @@
 import { SITE_URL } from "@/lib/site";
 
+export const DEFAULT_CATEGORY = "SEO";
+
 type PostLike = { slug: string; category?: string | null };
 
 // Category slugs are derived from the post's freeform category name (posts

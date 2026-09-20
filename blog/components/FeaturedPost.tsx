@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowUpRight, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import type { posts } from "@/lib/db/schema";
-import { readingTimeMinutes } from "@/lib/reading-time";
-import { postPath } from "@/lib/post-url";
+import { postReadingTime } from "@/lib/reading-time";
+import { DEFAULT_CATEGORY, postPath } from "@/lib/post-url";
 import { formatPostDate } from "@/components/PostCard";
 
 type Post = typeof posts.$inferSelect;
@@ -10,6 +10,7 @@ type Post = typeof posts.$inferSelect;
 export function FeaturedPost({ post }: { post: Post }) {
   const href = postPath(post);
   const date = formatPostDate(post.publishedAt);
+  const category = post.category?.trim() || DEFAULT_CATEGORY;
 
   return (
     <article className="comic-panel group relative grid overflow-hidden rounded-2xl border-2 border-ink bg-card lg:grid-cols-[1.15fr_1fr]">
@@ -33,11 +34,7 @@ export function FeaturedPost({ post }: { post: Post }) {
           <span className="rounded-full border-2 border-ink bg-primary px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-primary-foreground uppercase">
             Latest
           </span>
-          {post.category ? (
-            <span className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              {post.category}
-            </span>
-          ) : null}
+          <span className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">{category}</span>
         </div>
 
         <h2 className="text-2xl leading-tight font-bold tracking-tight text-balance sm:text-3xl">
@@ -54,7 +51,7 @@ export function FeaturedPost({ post }: { post: Post }) {
         <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
           {date ? <time dateTime={post.publishedAt?.toISOString()}>{date}</time> : <span>Draft</span>}
           <span aria-hidden="true">/</span>
-          <span>{readingTimeMinutes(post.content)} min read</span>
+          <span>{postReadingTime(post.content, post.readingTime)} min read</span>
         </div>
 
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary">

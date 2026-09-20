@@ -26,6 +26,8 @@ export const posts = sqliteTable("posts", {
   // the ~60/155 char sweet spot without changing the on-page heading.
   metaTitle: text("meta_title"),
   metaDescription: text("meta_description"),
+  // Optional editorial override; null uses the content-based estimate.
+  readingTime: integer("reading_time"),
   status: text("status", { enum: ["draft", "published"] })
     .notNull()
     .default("draft"),
