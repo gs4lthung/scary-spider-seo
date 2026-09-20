@@ -6,7 +6,7 @@ import { CommentItem } from "@/components/CommentItem";
 
 const PAGE_SIZE = 5;
 
-export function CommentList({ comments, postId }: { comments: PostComment[]; postId: number }) {
+export function CommentList({ comments, postId, turnstileSiteKey }: { comments: PostComment[]; postId: number; turnstileSiteKey: string }) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const visibleComments = comments.slice(0, visibleCount);
   const remaining = comments.length - visibleComments.length;
@@ -15,7 +15,7 @@ export function CommentList({ comments, postId }: { comments: PostComment[]; pos
     <>
       <ol className="rounded-2xl border-2 border-ink bg-card px-4 sm:px-6">
         {visibleComments.map((comment) => (
-          <CommentItem key={comment.id} comment={comment} postId={postId} />
+          <CommentItem key={comment.id} comment={comment} postId={postId} turnstileSiteKey={turnstileSiteKey} />
         ))}
       </ol>
       {remaining > 0 ? (

@@ -27,7 +27,7 @@ function formatCommentDate(date: Date) {
   return "just now";
 }
 
-export function CommentItem({ comment, postId }: { comment: PostComment | CommentData; postId: number }) {
+export function CommentItem({ comment, postId, turnstileSiteKey }: { comment: PostComment | CommentData; postId: number; turnstileSiteKey: string }) {
   const [replying, setReplying] = useState(false);
   const [showReplies, setShowReplies] = useState(true);
   const replies: CommentData[] = "replies" in comment ? comment.replies : [];
@@ -66,7 +66,7 @@ export function CommentItem({ comment, postId }: { comment: PostComment | Commen
           </div>
           {replying ? (
             <div className="mt-4 border-l-2 border-primary/40 pl-4">
-              <CommentForm postId={postId} parentId={comment.id} onCancel={() => setReplying(false)} />
+              <CommentForm postId={postId} parentId={comment.id} onCancel={() => setReplying(false)} turnstileSiteKey={turnstileSiteKey} />
             </div>
           ) : null}
         </div>
@@ -74,7 +74,7 @@ export function CommentItem({ comment, postId }: { comment: PostComment | Commen
       {showReplies && replies.length > 0 ? (
         <ol className="mt-4 ml-4 border-l-2 border-border pl-4 sm:ml-12">
           {replies.map((reply) => (
-            <CommentItem key={reply.id} comment={reply} postId={postId} />
+            <CommentItem key={reply.id} comment={reply} postId={postId} turnstileSiteKey={turnstileSiteKey} />
           ))}
         </ol>
       ) : null}

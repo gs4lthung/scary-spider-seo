@@ -5,7 +5,6 @@ import Script from "next/script";
 import { ShieldCheck, User } from "@phosphor-icons/react";
 import { submitComment } from "@/app/comments-actions";
 
-const TURNSTILE_SITE_KEY = "0x4AAAAAAE9tZeVsVwqnGp2Z";
 const TURNSTILE_ACTION = "submit_comment";
 
 const REMEMBERED_NAME_KEY = "blog_comment_author";
@@ -14,10 +13,12 @@ export function CommentForm({
   postId,
   parentId,
   onCancel,
+  turnstileSiteKey,
 }: {
   postId: number;
   parentId?: number;
   onCancel?: () => void;
+  turnstileSiteKey: string;
 }) {
   const [state, formAction, pending] = useActionState(submitComment, null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -108,7 +109,7 @@ export function CommentForm({
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div
             className="cf-turnstile"
-            data-sitekey={TURNSTILE_SITE_KEY}
+            data-sitekey={turnstileSiteKey}
             data-action={TURNSTILE_ACTION}
             data-appearance="interaction-only"
             data-size="flexible"

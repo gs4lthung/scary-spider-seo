@@ -1,8 +1,8 @@
-name: Deploy Cloudflare Apps
+name: Deploy Cloudflare Staging
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
     paths:
       - "website/**"
       - "blog/**"
@@ -13,31 +13,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-production
-  cancel-in-progress: false
+  group: cloudflare-staging
+  cancel-in-progress: true
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      website: ${{ steps.filter.outputs.website }}
-      blog: ${{ steps.filter.outputs.blog }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            website:
-              - 'website/**'
-            blog:
-              - 'blog/**'
-
   website:
-    needs: changes
-    if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-latest
-    environment: production
+    environment: staging
     defaults:
       run:
         working-directory: website
@@ -49,18 +31,14 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
       - run: npm ci
-      - run: npm run lint
-      - run: npm run cf:build
-      - run: npx opennextjs-cloudflare deploy
+      - run: npm run cf:deploy:staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   blog:
-    needs: changes
-    if: needs.changes.outputs.blog == 'true'
     runs-on: ubuntu-latest
-    environment: production
+    environment: staging
     defaults:
       run:
         working-directory: blog
@@ -72,17 +50,13 @@ jobs:
           cache: npm
           cache-dependency-path: blog/package-lock.json
       - run: npm ci
-      - run: npm run lint
-      - run: npm run cf:typegen
-      - run: npx tsc --noEmit
-      - run: npm run cf:build
-      - name: Apply D1 migrations
-        run: npm run db:migrate:remote
+      - name: Apply staging D1 migrations
+        run: npm run db:migrate:staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Deploy blog Worker
-        run: npx opennextjs-cloudflare deploy
+      - name: Deploy staging blog Worker
+        run: npm run cf:deploy:staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -6,14 +6,14 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  // No "vars" block here: SESSION_SECRET and TURNSTILE_SECRET_KEY are
-  // secrets, never plaintext config. Set them with
-  // `wrangler secret put SESSION_SECRET` and `wrangler secret put TURNSTILE_SECRET_KEY`
-  // for production, and in a local, gitignored `.dev.vars` file for
-  // `next dev`/`wrangler dev` — see `.dev.vars.example`. Their TypeScript
-  // types are declared by hand in `lib/cloudflare-env.d.ts` since they
-  // don't come from `wrangler types` (nothing here declares them). User
-  // passwords live hashed in the `users` D1 table, not in an env var.
+  "vars": {
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAE9y8n5uCUoWWVvK"
+  },
+  // TURNSTILE_SITE_KEY is public configuration and is declared in vars.
+  // SESSION_SECRET and TURNSTILE_SECRET_KEY are secrets, so set them with
+  // `wrangler secret put` for production and in the gitignored `.dev.vars`
+  // files for local development. User passwords live hashed in the `users`
+  // D1 table, not in an environment variable.
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -49,6 +49,32 @@
       "bucket_name": "blog-media"
     }
   ],
+  "env": {
+    "staging": {
+      "name": "scary-spider-seo-blog-staging",
+      "vars": {
+        "TURNSTILE_SITE_KEY": "replace-with-staging-site-key"
+      },
+      "kv_namespaces": [
+        { "binding": "NEXT_INC_CACHE_KV", "id": "d57b4db4e2e744b5b97078bac5e2b4a4" },
+        { "binding": "NEXT_TAG_CACHE_KV", "id": "d57b4db4e2e744b5b97078bac5e2b4a4" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "blog-db-staging",
+          "database_id": "9bd7d961-0496-49cd-a66f-f2d089413990",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "MEDIA",
+          "bucket_name": "blog-media-staging"
+        }
+      ]
+    }
+  },
   "observability": {
     "logs": {
       "enabled": true,

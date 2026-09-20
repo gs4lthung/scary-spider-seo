@@ -1,9 +1,11 @@
 import { getPostComments } from "@/lib/db/comment-queries";
 import { getVoterKey } from "@/lib/voter";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { CommentForm } from "@/components/CommentForm";
 import { CommentList } from "@/components/CommentList";
 
 export async function CommentSection({ postId }: { postId: number }) {
+  const { env } = await getCloudflareContext({ async: true });
   const voterKey = await getVoterKey();
   const commentList = await getPostComments(postId, voterKey);
   const commentCount = countComments(commentList);
@@ -18,7 +20,7 @@ export async function CommentSection({ postId }: { postId: number }) {
       </div>
 
       <div className="mt-6">
-        <CommentForm postId={postId} />
+        <CommentForm postId={postId} turnstileSiteKey={env.TURNSTILE_SITE_KEY} />
       </div>
 
       {commentList.length === 0 ? (
@@ -27,7 +29,7 @@ export async function CommentSection({ postId }: { postId: number }) {
         </div>
       ) : (
         <div className="mt-6">
-          <CommentList comments={commentList} postId={postId} />
+          <CommentList comments={commentList} postId={postId} turnstileSiteKey={env.TURNSTILE_SITE_KEY} />
         </div>
       )}
     </section>

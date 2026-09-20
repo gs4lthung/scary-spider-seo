@@ -11,6 +11,14 @@
   "vars": {
     "MAINTENANCE_MODE": "false"
   },
+  "env": {
+    "staging": {
+      "name": "scary-spider-seo-website-staging",
+      "vars": {
+        "MAINTENANCE_MODE": "false"
+      }
+    }
+  },
   "observability": {
     "logs": {
       "enabled": true,

@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars.staging and replace all three values locally.
+SESSION_SECRET=replace-with-a-new-staging-secret
+TURNSTILE_SECRET_KEY=replace-with-the-staging-widget-secret
+TURNSTILE_SITE_KEY=replace-with-the-staging-widget-site-key

@@ -11,7 +11,7 @@ name: CI
 # GitHub treats skipped as passing, so this doesn't block merging.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   push:
     branches: [main]
 
@@ -108,5 +108,6 @@ jobs:
           cache-dependency-path: blog/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run cf:typegen
       - run: npx tsc --noEmit
       - run: npm run cf:build
