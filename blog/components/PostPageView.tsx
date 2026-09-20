@@ -14,6 +14,7 @@ import { TableOfContents } from "@/components/TableOfContents";
 import { CommentSection } from "@/components/CommentSection";
 import { parseHeadings } from "@/lib/toc";
 import { parseFaqs } from "@/lib/post-sections";
+import { TrackPostView } from "@/components/TrackPostView";
 
 type Post = typeof posts.$inferSelect;
 
@@ -95,6 +96,7 @@ export async function PostPageView({ post }: { post: Post }) {
       {faqSchema ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
       ) : null}
+      <TrackPostView postId={post.id} />
       <SiteHeader />
 
       {/* Two rails on wide screens: the TOC rides in a sticky left column

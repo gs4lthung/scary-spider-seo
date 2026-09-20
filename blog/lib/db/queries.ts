@@ -49,7 +49,7 @@ export async function getPublishedPostsByAuthor(authorId: number) {
 export async function getPostStats() {
   const db = await getDb();
   const [rows, [{ value: categoryCount }]] = await Promise.all([
-    db.select({ status: posts.status }).from(posts),
+    db.select({ status: posts.status, viewCount: posts.viewCount }).from(posts),
     db.select({ value: sql<number>`count(*)` }).from(categories),
   ]);
   return {
@@ -57,6 +57,7 @@ export async function getPostStats() {
     published: rows.filter((r) => r.status === "published").length,
     draft: rows.filter((r) => r.status === "draft").length,
     categories: categoryCount,
+    views: rows.reduce((total, post) => total + (post.viewCount ?? 0), 0),
   };
 }
 

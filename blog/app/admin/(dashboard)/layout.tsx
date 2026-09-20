@@ -57,6 +57,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
           {session.role === "admin" ? (
             <NavGroup label="Admin">
+              <NavLink href="/admin/prompts" icon="prompts">
+                Prompts
+              </NavLink>
               <NavLink href="/admin/users" icon="users">
                 Users
               </NavLink>

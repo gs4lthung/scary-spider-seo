@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { FileText, CheckCircle, PencilSimple, Tag, Plus } from "@phosphor-icons/react/dist/ssr";
+import { FileText, CheckCircle, PencilSimple, Tag, Plus, Eye } from "@phosphor-icons/react/dist/ssr";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { getPostStats } from "@/lib/db/queries";
@@ -63,11 +63,12 @@ export default async function AdminDashboardPage() {
         </Link>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatCard label="Total posts" value={stats.total} icon={FileText} />
         <StatCard label="Published" value={stats.published} icon={CheckCircle} />
         <StatCard label="Drafts" value={stats.draft} icon={PencilSimple} />
         <StatCard label="Categories" value={stats.categories} icon={Tag} />
+        <StatCard label="Total views" value={stats.views} icon={Eye} />
       </div>
 
       <div className="mt-10">
@@ -86,6 +87,7 @@ export default async function AdminDashboardPage() {
                   <th className="px-4 py-3 font-semibold">Title</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Views</th>
                   <th className="px-4 py-3 font-semibold">Updated</th>
                   <th className="px-4 py-3 font-semibold">
                     <span className="sr-only">Actions</span>
@@ -107,6 +109,7 @@ export default async function AdminDashboardPage() {
                     <td className="px-4 py-3">
                       <StatusBadge status={post.status} />
                     </td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{post.viewCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {post.updatedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </td>

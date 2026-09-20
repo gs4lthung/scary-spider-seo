@@ -46,7 +46,7 @@ export function FeaturedPost({ post }: { post: Post }) {
           </Link>
         </h2>
 
-        {post.excerpt ? <p className="max-w-[60ch] text-muted-foreground">{post.excerpt}</p> : null}
+        {post.excerpt ? <p className="line-clamp-4 max-w-[60ch] text-muted-foreground">{post.excerpt}</p> : null}
 
         <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
           {date ? <time dateTime={post.publishedAt?.toISOString()}>{date}</time> : <span>Draft</span>}
