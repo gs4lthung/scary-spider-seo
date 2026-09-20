@@ -123,7 +123,7 @@ Add operational visibility for both sites:
 
 - An application health endpoint
 - UptimeRobot or Better Stack for uptime checks
-- Sentry for frontend and server errors
+- Cloudflare monitoring Worker for uptime checks and alerts
 - Cloudflare Worker logs and traces
 - Alerts for failed deployments, backups, and elevated errors
 

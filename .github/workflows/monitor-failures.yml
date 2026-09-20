@@ -1,0 +1,36 @@
+name: Monitor Workflow Failures
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Deploy Cloudflare Apps
+      - Deploy Cloudflare Staging
+      - Deploy D1 Backup Worker
+      - Test D1 Restore
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - name: Send failure email
+        run: node ops/monitoring/send-alert-email.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALERT_TO_EMAIL: ${{ secrets.ALERT_TO_EMAIL }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.event.workflow_run.id }}
+          GITHUB_WORKFLOW: ${{ github.event.workflow_run.name }}
+          GITHUB_REF_NAME: ${{ github.event.workflow_run.head_branch }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}

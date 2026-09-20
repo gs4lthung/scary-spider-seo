@@ -1,0 +1,35 @@
+{
+  "$schema": "../../blog/node_modules/wrangler/config-schema.json",
+  "name": "scary-spider-seo-site-monitor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "ALERT_FROM_EMAIL": "alerts@blog.scaryspiderseo.com"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "MONITOR_STATE",
+      "id": "63326c3e601147d396857112d1eef89b"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true
+    }
+  }
+}
