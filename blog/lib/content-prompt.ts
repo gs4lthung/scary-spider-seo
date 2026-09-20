@@ -1,4 +1,5 @@
 export const CONTENT_PROMPT_KEY = "content_prompt";
+export const IMAGE_PROMPT_KEY = "image_prompt";
 
 export const DEFAULT_CONTENT_PROMPT = `You are the senior editor for Scary Spider SEO Blog.
 
@@ -63,3 +64,25 @@ EXTERNAL SOURCES TO VERIFY:
 EDITOR NOTES:
 
 For ARTICLE HTML, use only h2, h3, p, strong, ul, ol, li, blockquote, and a tags.`;
+
+export const DEFAULT_IMAGE_PROMPT = `Create a distinctive editorial hero image for a Scary Spider SEO Blog article.
+
+ARTICLE TOPIC: [INSERT TOPIC]
+VISUAL IDEA: [INSERT THE CENTRAL VISUAL METAPHOR]
+ASPECT RATIO: [INSERT ASPECT RATIO, FOR EXAMPLE 16:9]
+
+Create one clear, memorable composition that communicates the article's idea at a glance. Use a sophisticated comic-book editorial style with bold ink outlines, expressive shapes, subtle halftone texture, and a dark charcoal, warm cream, and electric violet palette. The image should feel intelligent, slightly playful, and premium rather than childish or frightening.
+
+COMPOSITION
+- Make the subject large and easy to recognize at thumbnail size.
+- Use strong foreground, middle-ground, and background separation.
+- Leave calm negative space where a headline could be placed, but do not add any text.
+- Use lighting and perspective to create depth without visual clutter.
+- Make the visual metaphor specific to the article topic, not a generic laptop, graph, or magnifying glass.
+
+AVOID
+- No words, letters, captions, labels, logos, watermarks, UI screenshots, or fake readable text.
+- No stock-photo look, generic corporate imagery, photorealistic people, or excessive gradients.
+- No gore, horror, spiders covering the whole frame, or distracting decorative elements.
+
+Return only the final image. Do not explain the prompt or include alternate concepts.`;

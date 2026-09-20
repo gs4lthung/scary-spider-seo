@@ -5,11 +5,12 @@ import { postReadingTime } from "@/lib/reading-time";
 import { DEFAULT_CATEGORY } from "@/lib/post-url";
 import { parseHeadings } from "@/lib/toc";
 import { parseTakeaways, parseFaqs } from "@/lib/post-sections";
+import { sanitizePostHtml } from "@/lib/sanitize";
 
 type Post = typeof posts.$inferSelect;
 
 export function PostArticle({ post }: { post: Post }) {
-  const { html: contentHtml } = parseHeadings(post.content);
+  const { html: contentHtml } = parseHeadings(sanitizePostHtml(post.content));
   const takeaways = parseTakeaways(post.keyTakeaways);
   const faqs = parseFaqs(post.faqs);
   const category = post.category?.trim() || DEFAULT_CATEGORY;

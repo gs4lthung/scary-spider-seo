@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getContentPrompt } from "@/lib/db/settings";
+import { getImagePrompt } from "@/lib/db/settings";
 import { PromptForm } from "./PromptForm";
+import { ImagePromptForm } from "./ImagePromptForm";
 
 export default async function PromptsPage() {
   const session = await getCurrentUser();
   if (!session || session.role !== "admin") redirect("/admin");
 
-  const prompt = await getContentPrompt();
+  const [prompt, imagePrompt] = await Promise.all([getContentPrompt(), getImagePrompt()]);
 
   return (
     <div>
@@ -17,6 +19,9 @@ export default async function PromptsPage() {
       </p>
       <div className="mt-6">
         <PromptForm prompt={prompt} />
+      </div>
+      <div className="mt-6">
+        <ImagePromptForm prompt={imagePrompt} />
       </div>
     </div>
   );

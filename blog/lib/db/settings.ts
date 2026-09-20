@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "./client";
 import { settings } from "./schema";
-import { CONTENT_PROMPT_KEY, DEFAULT_CONTENT_PROMPT } from "@/lib/content-prompt";
+import { CONTENT_PROMPT_KEY, DEFAULT_CONTENT_PROMPT, DEFAULT_IMAGE_PROMPT, IMAGE_PROMPT_KEY } from "@/lib/content-prompt";
 
 export const POSTS_PER_PAGE_KEY = "posts_per_page";
 export const DEFAULT_POSTS_PER_PAGE = 9;
@@ -59,5 +59,19 @@ export async function setContentPrompt(value: string): Promise<void> {
   await db
     .insert(settings)
     .values({ key: CONTENT_PROMPT_KEY, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+}
+
+export async function getImagePrompt(): Promise<string> {
+  const db = await getDb();
+  const [row] = await db.select().from(settings).where(eq(settings.key, IMAGE_PROMPT_KEY));
+  return row?.value || DEFAULT_IMAGE_PROMPT;
+}
+
+export async function setImagePrompt(value: string): Promise<void> {
+  const db = await getDb();
+  await db
+    .insert(settings)
+    .values({ key: IMAGE_PROMPT_KEY, value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
 }

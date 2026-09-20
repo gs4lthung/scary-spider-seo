@@ -136,19 +136,19 @@ export default async function BlogHome({
         <div className="bg-dot-grid pointer-events-none absolute inset-0 text-masthead-foreground opacity-[0.14]" aria-hidden="true" />
         <SpiderWebCorner className="absolute top-0 left-0 h-24 w-24 text-masthead-foreground/20" />
         <SpiderWebCorner className="absolute top-0 right-0 h-40 w-40 -scale-x-100 text-masthead-foreground/25 lg:h-56 lg:w-56" />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_auto] lg:py-16">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-6 px-4 py-9 sm:px-6 lg:grid-cols-[1fr_auto] lg:py-10">
           <div>
             <p className="font-mono text-xs font-semibold tracking-[0.2em] text-masthead-foreground/90 uppercase">
               SEO notes
             </p>
-            <h1 className="mt-3 max-w-[16ch] text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+            <h1 className="mt-2 max-w-[16ch] text-4xl font-bold tracking-tight text-balance sm:text-5xl">
               Notes on crawling the web.
             </h1>
-            <p className="mt-4 max-w-[52ch] text-base text-masthead-foreground/90 sm:text-lg">
+            <p className="mt-3 max-w-[52ch] text-base text-masthead-foreground/90 sm:text-lg">
               SEO, site crawling, and web performance, written by the people building Scary Spider SEO.
             </p>
           </div>
-          <div className="comic-wobble relative mx-auto hidden h-48 w-48 shrink-0 sm:block lg:h-60 lg:w-60">
+          <div className="comic-wobble relative mx-auto hidden h-36 w-36 shrink-0 sm:block lg:h-44 lg:w-44">
             <div className="absolute inset-0 rounded-full bg-masthead-foreground/10 blur-xl" aria-hidden="true" />
             <Image
               src="/mascot.png"
@@ -162,7 +162,7 @@ export default async function BlogHome({
         </div>
       </section>
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-12 lg:py-16">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-10 lg:py-10">
         <div className="min-w-0">
           {category || query ? (
             <div className="mb-8 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-2 border-ink bg-card px-4 py-3 text-sm">

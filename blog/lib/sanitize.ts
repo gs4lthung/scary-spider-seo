@@ -40,8 +40,21 @@ const POST_HTML_OPTIONS: sanitizeHtml.IOptions = {
   },
 };
 
+function decodeEscapedMarkup(html: string): string {
+  if (!/&lt;\/?(?:h[2-6]|p|br|hr|ul|ol|li|blockquote|pre|code|a|img|strong|em|u|s|span|table|thead|tbody|tr|th|td)(?:\s|\/?>)/i.test(html)) {
+    return html;
+  }
+
+  return html
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/&amp;/gi, "&");
+}
+
 export function sanitizePostHtml(html: string): string {
-  return sanitizeHtml(html, POST_HTML_OPTIONS);
+  return sanitizeHtml(decodeEscapedMarkup(html), POST_HTML_OPTIONS);
 }
 
 // Strips all markup, keeping only text. Used for fields that are stored as

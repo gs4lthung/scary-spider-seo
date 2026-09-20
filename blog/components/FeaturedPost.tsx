@@ -13,14 +13,14 @@ export function FeaturedPost({ post }: { post: Post }) {
   const category = post.category?.trim() || DEFAULT_CATEGORY;
 
   return (
-    <article className="comic-panel group relative grid overflow-hidden rounded-2xl border-2 border-ink bg-card lg:grid-cols-[1.15fr_1fr]">
-      <div className="relative flex min-h-56 items-center justify-center overflow-hidden border-b-2 border-ink bg-secondary p-2 lg:border-r-2 lg:border-b-0">
+    <article className="comic-panel group relative flex flex-col overflow-hidden rounded-2xl border-2 border-ink bg-card">
+      <div className="relative flex aspect-[16/8] items-center justify-center overflow-hidden border-b-2 border-ink bg-secondary p-2 sm:aspect-[16/7]">
         {post.coverImageKey ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={post.coverImageKey}
             alt={post.coverImageAlt ?? ""}
-            className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="bg-grid-lines flex h-full w-full items-center justify-center text-primary/50">
@@ -29,7 +29,7 @@ export function FeaturedPost({ post }: { post: Post }) {
         )}
       </div>
 
-      <div className="flex flex-col justify-center gap-4 p-6 sm:p-8">
+      <div className="flex flex-col justify-center gap-3 p-5 sm:p-6">
         <div className="flex items-center gap-2">
           <span className="rounded-full border-2 border-ink bg-primary px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide text-primary-foreground uppercase">
             Latest
@@ -46,7 +46,7 @@ export function FeaturedPost({ post }: { post: Post }) {
           </Link>
         </h2>
 
-        {post.excerpt ? <p className="line-clamp-4 max-w-[60ch] text-muted-foreground">{post.excerpt}</p> : null}
+        {post.excerpt ? <p className="line-clamp-3 max-w-[60ch] text-muted-foreground">{post.excerpt}</p> : null}
 
         <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
           {date ? <time dateTime={post.publishedAt?.toISOString()}>{date}</time> : <span>Draft</span>}

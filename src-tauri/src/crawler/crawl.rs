@@ -8,6 +8,7 @@ use super::types::*;
 use dashmap::DashMap;
 use headless_chrome::Browser;
 use reqwest::Client;
+use reqwest::Method;
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -47,10 +48,25 @@ pub struct CrawlResumeState {
     pub linked_urls: HashSet<String>,
 }
 
+pub struct CrawlState {
+    pub cancel: Arc<AtomicBool>,
+    pub paused: Arc<AtomicBool>,
+    pub pages: Arc<StdMutex<Vec<PageResult>>>,
+    pub resources: Arc<DashMap<String, ResourceResult>>,
+    pub resources_checked: Arc<AtomicUsize>,
+    pub resume_slot: Arc<StdMutex<Option<CrawlResumeState>>>,
+}
+
 fn normalize(url: &Url) -> String {
     let mut u = url.clone();
     u.set_fragment(None);
     u.to_string()
+}
+
+async fn wait_for_cancellation(cancel: Arc<AtomicBool>) {
+    while !cancel.load(Ordering::Relaxed) {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 fn indexability_for(
@@ -67,7 +83,10 @@ fn indexability_for(
     if requested.as_str() != final_url.as_str() {
         return "Redirected".to_string();
     }
-    let has_noindex = |v: Option<&str>| v.map(|s| s.to_ascii_lowercase().contains("noindex")).unwrap_or(false);
+    let has_noindex = |v: Option<&str>| {
+        v.map(|s| s.to_ascii_lowercase().contains("noindex"))
+            .unwrap_or(false)
+    };
     if has_noindex(meta_robots) || has_noindex(x_robots_tag) {
         return "Non-Indexable (noindex)".to_string();
     }
@@ -104,7 +123,11 @@ fn empty_outcome(result: PageResult) -> PageFetchOutcome {
 /// were already known. `base` carries those headers (status, content-type, HSTS, etc. —
 /// see where it's built in `fetch_and_parse`), so both the JS-render fallback and the
 /// plain-fetch path can share this one path instead of each duplicating the same result.
-fn body_read_error_outcome(base: PageResult, elapsed: u64, error: reqwest::Error) -> PageFetchOutcome {
+fn body_read_error_outcome(
+    base: PageResult,
+    elapsed: u64,
+    error: reqwest::Error,
+) -> PageFetchOutcome {
     empty_outcome(PageResult {
         indexability: "Non-Indexable (Error)".to_string(),
         response_time_ms: elapsed,
@@ -122,14 +145,21 @@ struct FollowedResponse {
     redirect_capped: bool,
 }
 
-async fn fetch_following_redirects(client: &Client, start: Url) -> Result<FollowedResponse, reqwest::Error> {
+async fn fetch_following_redirects(
+    client: &Client,
+    start: Url,
+    method: Method,
+) -> Result<FollowedResponse, reqwest::Error> {
     let mut current = start;
     let mut chain = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     seen.insert(normalize(&current));
 
     loop {
-        let resp = client.get(current.clone()).send().await?;
+        let resp = client
+            .request(method.clone(), current.clone())
+            .send()
+            .await?;
         if resp.status().is_redirection() {
             let location = resp
                 .headers()
@@ -141,14 +171,22 @@ async fn fetch_following_redirects(client: &Client, start: Url) -> Result<Follow
                     chain.push(current.to_string());
                     let key = normalize(&next);
                     if chain.len() >= MAX_REDIRECT_HOPS || !seen.insert(key) {
-                        return Ok(FollowedResponse { response: resp, chain, redirect_capped: true });
+                        return Ok(FollowedResponse {
+                            response: resp,
+                            chain,
+                            redirect_capped: true,
+                        });
                     }
                     current = next;
                     continue;
                 }
             }
         }
-        return Ok(FollowedResponse { response: resp, chain, redirect_capped: false });
+        return Ok(FollowedResponse {
+            response: resp,
+            chain,
+            redirect_capped: false,
+        });
     }
 }
 
@@ -163,7 +201,12 @@ async fn fetch_and_parse(
 ) -> PageFetchOutcome {
     let started = Instant::now();
 
-    let followed = match fetch_following_redirects(client, url.clone()).await {
+    let request_method = if browser.is_some() {
+        Method::HEAD
+    } else {
+        Method::GET
+    };
+    let followed = match fetch_following_redirects(client, url.clone(), request_method).await {
         Ok(f) => f,
         Err(e) => {
             let elapsed = started.elapsed().as_millis() as u64;
@@ -227,10 +270,21 @@ async fn fetch_and_parse(
         ..PageResult::default()
     };
 
-    if !is_html {
+    if !is_html && (browser.is_none() || content_type.is_some()) {
         let elapsed = started.elapsed().as_millis() as u64;
-        let indexability = indexability_for(status, None, None, x_robots_tag.as_deref(), &url, &final_url);
-        return empty_outcome(PageResult { indexability, response_time_ms: elapsed, ..base });
+        let indexability = indexability_for(
+            status,
+            None,
+            None,
+            x_robots_tag.as_deref(),
+            &url,
+            &final_url,
+        );
+        return empty_outcome(PageResult {
+            indexability,
+            response_time_ms: elapsed,
+            ..base
+        });
     }
 
     let mut rendered = false;
@@ -242,18 +296,36 @@ async fn fetch_and_parse(
         // `config.concurrency`, keeping a high page-fetch concurrency from also meaning
         // "open that many Chrome tabs at once" on a low-core/low-RAM machine.
         let _render_permit = match &render_semaphore {
-            Some(sem) => Some(sem.clone().acquire_owned().await.unwrap()),
+            Some(sem) => Some(
+                sem.clone()
+                    .acquire_owned()
+                    .await
+                    .expect("render semaphore remains open for crawl lifetime"),
+            ),
             None => None,
         };
-        match render::render_page(browser, final_url.clone(), axe_source, run_mobile_usability_audit).await {
+        match render::render_page(
+            browser,
+            final_url.clone(),
+            axe_source,
+            run_mobile_usability_audit,
+        )
+        .await
+        {
             Ok((html, violations, mobile_violations)) => {
                 rendered = true;
                 accessibility_violations = violations;
                 mobile_usability_violations = mobile_violations;
                 html
             }
-            Err(_) => match resp.text().await {
-                Ok(b) => b,
+            Err(_) => match client.get(final_url.clone()).send().await {
+                Ok(response) => match response.text().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let elapsed = started.elapsed().as_millis() as u64;
+                        return body_read_error_outcome(base, elapsed, e);
+                    }
+                },
                 Err(e) => {
                     let elapsed = started.elapsed().as_millis() as u64;
                     return body_read_error_outcome(base, elapsed, e);
@@ -281,7 +353,11 @@ async fn fetch_and_parse(
         &final_url,
     );
 
-    let title_length = parsed.title.as_ref().map(|s| s.chars().count()).unwrap_or(0);
+    let title_length = parsed
+        .title
+        .as_ref()
+        .map(|s| s.chars().count())
+        .unwrap_or(0);
     let meta_description_length = parsed
         .meta_description
         .as_ref()
@@ -371,6 +447,7 @@ struct ResourceCheckCtx {
     app: AppHandle,
     client: Client,
     semaphore: Arc<Semaphore>,
+    cancel: Arc<AtomicBool>,
     resources: Arc<DashMap<String, ResourceResult>>,
     resources_checked: Arc<AtomicUsize>,
 }
@@ -385,8 +462,19 @@ struct ResourceCandidate {
     is_insecure: bool,
 }
 
-fn queue_resource_check(ctx: &ResourceCheckCtx, tasks: &mut JoinSet<()>, candidate: ResourceCandidate) {
-    let ResourceCandidate { url, kind, source_page, alt_text, is_internal, is_insecure } = candidate;
+fn queue_resource_check(
+    ctx: &ResourceCheckCtx,
+    tasks: &mut JoinSet<()>,
+    candidate: ResourceCandidate,
+) {
+    let ResourceCandidate {
+        url,
+        kind,
+        source_page,
+        alt_text,
+        is_internal,
+        is_insecure,
+    } = candidate;
     let key = url.to_string();
     if ctx.resources.contains_key(&key) {
         return;
@@ -409,36 +497,50 @@ fn queue_resource_check(ctx: &ResourceCheckCtx, tasks: &mut JoinSet<()>, candida
     let ctx = ctx.clone();
 
     tasks.spawn(async move {
-        let _permit = ctx.semaphore.acquire_owned().await.unwrap();
-        let (status, status_text, error) = check_resource(&ctx.client, &url).await;
-        let entry = ResourceResult {
-            url: key.clone(),
-            resource_type: kind,
-            source_page,
-            alt_text,
-            status,
-            status_text,
-            is_internal,
-            is_insecure,
-            error,
-        };
-        ctx.resources.insert(key, entry.clone());
-        ctx.resources_checked.fetch_add(1, Ordering::Relaxed);
-        let _ = ctx.app.emit("crawl://resource", entry);
+        tokio::select! {
+            _ = wait_for_cancellation(ctx.cancel.clone()) => {}
+            result = async {
+                let permit = ctx.semaphore.clone().acquire_owned().await.ok()?;
+                let result = check_resource(&ctx.client, &url).await;
+                drop(permit);
+                Some(result)
+            } => {
+                let Some((status, status_text, error)) = result else {
+                    return;
+                };
+                let entry = ResourceResult {
+                    url: key.clone(),
+                    resource_type: kind,
+                    source_page,
+                    alt_text,
+                    status,
+                    status_text,
+                    is_internal,
+                    is_insecure,
+                    error,
+                };
+                ctx.resources.insert(key, entry.clone());
+                ctx.resources_checked.fetch_add(1, Ordering::Relaxed);
+                let _ = ctx.app.emit("crawl://resource", entry);
+            }
+        }
     });
 }
 
 pub async fn run_crawl(
     app: AppHandle,
     config: CrawlConfig,
-    cancel: Arc<AtomicBool>,
-    paused: Arc<AtomicBool>,
-    pages: Arc<StdMutex<Vec<PageResult>>>,
-    resources: Arc<DashMap<String, ResourceResult>>,
-    resources_checked: Arc<AtomicUsize>,
+    state: CrawlState,
     resume: Option<CrawlResumeState>,
-    resume_slot: Arc<StdMutex<Option<CrawlResumeState>>>,
 ) -> Vec<String> {
+    let CrawlState {
+        cancel,
+        paused,
+        pages,
+        resources,
+        resources_checked,
+        resume_slot,
+    } = state;
     let start_url = match Url::parse(&config.start_url) {
         Ok(u) => u,
         Err(e) => {
@@ -500,7 +602,13 @@ pub async fn run_crawl(
                         Ok(body) => techdetect::detect_from_html(&body),
                         Err(_) => (None, Vec::new()),
                     };
-                    (header_tech.server, header_tech.powered_by, header_tech.cdn, cms, technologies)
+                    (
+                        header_tech.server,
+                        header_tech.powered_by,
+                        header_tech.cdn,
+                        cms,
+                        technologies,
+                    )
                 }
                 Err(_) => (None, None, None, None, Vec::new()),
             };
@@ -537,7 +645,10 @@ pub async fn run_crawl(
         );
     }
 
-    let browser: Option<Arc<Browser>> = if config.render_js || config.run_accessibility_audit || config.run_mobile_usability_audit {
+    let browser: Option<Arc<Browser>> = if config.render_js
+        || config.run_accessibility_audit
+        || config.run_mobile_usability_audit
+    {
         match tauri::async_runtime::spawn_blocking(render::launch_browser).await {
             Ok(Ok(b)) => Some(Arc::new(b)),
             Ok(Err(e)) => {
@@ -569,16 +680,19 @@ pub async fn run_crawl(
     // accessibility and mobile-usability audits each add nontrivial in-page JS work
     // on top of the render itself (axe.run(), the mobile-usability DOM walk), so they
     // get an even tighter cap.
-    let render_semaphore: Option<Arc<Semaphore>> = browser.as_ref().map(|_| {
-        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let render_concurrency = browser.as_ref().map(|_| {
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
         let cap = if config.run_accessibility_audit || config.run_mobile_usability_audit {
             RENDER_AUDIT_MAX_CONCURRENCY
         } else {
             RENDER_MAX_CONCURRENCY
         };
         let budget = cores.saturating_sub(1).max(1);
-        Arc::new(Semaphore::new(budget.min(config.concurrency).min(cap).max(1)))
+        budget.min(config.concurrency).min(cap).max(1)
     });
+    let render_semaphore = render_concurrency.map(|limit| Arc::new(Semaphore::new(limit)));
 
     // Accessibility audits only run when we already have a browser tab open for JS
     // rendering, since that avoids a second, separate page navigation per URL.
@@ -587,12 +701,18 @@ pub async fn run_crawl(
             Ok(resp) if resp.status().is_success() => match resp.text().await {
                 Ok(text) => Some(Arc::new(text)),
                 Err(_) => {
-                    let _ = app.emit("crawl://error", "Could not read axe-core script; skipping accessibility audit.".to_string());
+                    let _ = app.emit(
+                        "crawl://error",
+                        "Could not read axe-core script; skipping accessibility audit.".to_string(),
+                    );
                     None
                 }
             },
             _ => {
-                let _ = app.emit("crawl://error", "Could not download axe-core; skipping accessibility audit.".to_string());
+                let _ = app.emit(
+                    "crawl://error",
+                    "Could not download axe-core; skipping accessibility audit.".to_string(),
+                );
                 None
             }
         }
@@ -604,23 +724,32 @@ pub async fn run_crawl(
         app: app.clone(),
         client: client.clone(),
         semaphore: Arc::new(Semaphore::new(config.concurrency.max(1))),
+        cancel: cancel.clone(),
         resources: resources.clone(),
         resources_checked: resources_checked.clone(),
     };
     let max_pages = config.max_pages.max(1);
+    let page_concurrency = render_concurrency.unwrap_or_else(|| config.concurrency.max(1));
 
     // Continuing a stopped crawl seeds the frontier/visited/linked-urls from where it left
     // off instead of restarting at just `start_url` — see `CrawlResumeState`.
-    let (mut visited, mut frontier, mut scheduled_count, mut crawled_count, mut linked_urls) = match resume {
-        Some(r) => (r.visited, r.frontier, r.scheduled_count, r.crawled_count, r.linked_urls),
-        None => {
-            let mut visited: HashSet<String> = HashSet::new();
-            let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
-            visited.insert(normalize(&start_url));
-            frontier.push_back((start_url.clone(), 0, false));
-            (visited, frontier, 1usize, 0usize, HashSet::<String>::new())
-        }
-    };
+    let (mut visited, mut frontier, mut scheduled_count, mut crawled_count, mut linked_urls) =
+        match resume {
+            Some(r) => (
+                r.visited,
+                r.frontier,
+                r.scheduled_count,
+                r.crawled_count,
+                r.linked_urls,
+            ),
+            None => {
+                let mut visited: HashSet<String> = HashSet::new();
+                let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
+                visited.insert(normalize(&start_url));
+                frontier.push_back((start_url.clone(), 0, false));
+                (visited, frontier, 1usize, 0usize, HashSet::<String>::new())
+            }
+        };
 
     if config.use_sitemap {
         let sitemap_urls = sitemap::fetch_sitemap_urls(&client, &start_url).await;
@@ -637,7 +766,7 @@ pub async fn run_crawl(
         }
     }
 
-    let mut page_tasks: JoinSet<PageFetchOutcome> = JoinSet::new();
+    let mut page_tasks: JoinSet<Option<PageFetchOutcome>> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
 
     // The site's robots.txt Crawl-delay (if any) always wins over a shorter configured
@@ -659,15 +788,26 @@ pub async fn run_crawl(
         let is_paused = paused.load(Ordering::SeqCst);
 
         if !is_paused {
-            while page_tasks.len() < config.concurrency && !frontier.is_empty() {
-                let (url, depth, via_sitemap) = frontier.pop_front().unwrap();
+            while page_tasks.len() < page_concurrency && !frontier.is_empty() {
+                let Some((url, depth, via_sitemap)) = frontier.pop_front() else {
+                    break;
+                };
 
                 if let Some(robots) = &robots {
                     if !robots.is_allowed(url.path()) {
                         crawled_count += 1;
                         let result = robots_blocked_result(&url, depth);
                         let _ = app.emit("crawl://page", &result);
-                        pages.lock().unwrap().push(result);
+                        if let Ok(mut page_state) = pages.lock() {
+                            page_state.push(result);
+                        } else {
+                            let _ = app.emit(
+                                "crawl://error",
+                                "Application pages state lock is poisoned".to_string(),
+                            );
+                            cancel.store(true, Ordering::SeqCst);
+                            break;
+                        }
                         continue;
                     }
                 }
@@ -676,7 +816,10 @@ pub async fn run_crawl(
                     if let Some(last) = last_dispatch {
                         let elapsed = last.elapsed();
                         if elapsed < politeness_delay {
-                            tokio::time::sleep(politeness_delay - elapsed).await;
+                            tokio::select! {
+                                _ = tokio::time::sleep(politeness_delay - elapsed) => {}
+                                _ = wait_for_cancellation(cancel.clone()) => break,
+                            }
                         }
                     }
                     last_dispatch = Some(Instant::now());
@@ -687,19 +830,24 @@ pub async fn run_crawl(
                 let axe_source = axe_source.clone();
                 let render_semaphore = render_semaphore.clone();
                 let run_mobile_usability_audit = config.run_mobile_usability_audit;
+                let task_cancel = cancel.clone();
                 page_tasks.spawn(async move {
-                    let mut outcome = fetch_and_parse(
-                        &page_client,
-                        browser,
-                        axe_source,
-                        render_semaphore,
-                        url,
-                        depth,
-                        run_mobile_usability_audit,
-                    )
-                    .await;
-                    outcome.result.discovered_via_sitemap = via_sitemap;
-                    outcome
+                    tokio::select! {
+                        _ = wait_for_cancellation(task_cancel) => None,
+                        outcome = fetch_and_parse(
+                            &page_client,
+                            browser,
+                            axe_source,
+                            render_semaphore,
+                            url,
+                            depth,
+                            run_mobile_usability_audit,
+                        ) => {
+                            let mut outcome = outcome;
+                            outcome.result.discovered_via_sitemap = via_sitemap;
+                            Some(outcome)
+                        }
+                    }
                 });
             }
         }
@@ -725,7 +873,10 @@ pub async fn run_crawl(
 
         tokio::select! {
             res = page_tasks.join_next(), if !page_tasks.is_empty() => {
-                if let Some(Ok(outcome)) = res {
+                if let Some(Err(error)) = &res {
+                    let _ = app.emit("crawl://error", format!("Page fetch task failed: {error}"));
+                }
+                if let Some(Ok(Some(outcome))) = res {
                     crawled_count += 1;
                     let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images } = outcome;
 
@@ -748,7 +899,12 @@ pub async fn run_crawl(
                     let page_url = result.url.clone();
                     let page_is_https = Url::parse(&page_url).map(|u| u.scheme() == "https").unwrap_or(false);
                     let _ = app.emit("crawl://page", &result);
-                    pages.lock().unwrap().push(result);
+                    if let Ok(mut page_state) = pages.lock() {
+                        page_state.push(result);
+                    } else {
+                        let _ = app.emit("crawl://error", "Application pages state lock is poisoned".to_string());
+                        cancel.store(true, Ordering::SeqCst);
+                    }
 
                     if config.check_external_links {
                         for link in discovered_external {
@@ -789,7 +945,9 @@ pub async fn run_crawl(
                 }
             }
             res = resource_tasks.join_next(), if !resource_tasks.is_empty() => {
-                let _ = res;
+                if let Some(Err(error)) = res {
+                    let _ = app.emit("crawl://error", format!("Resource check task failed: {error}"));
+                }
                 let _ = app.emit("crawl://progress", CrawlProgress {
                     crawled: crawled_count,
                     queued: frontier.len(),
@@ -806,13 +964,26 @@ pub async fn run_crawl(
     if cancelled {
         page_tasks.abort_all();
         resource_tasks.abort_all();
+        while page_tasks.join_next().await.is_some() {}
+        while resource_tasks.join_next().await.is_some() {}
+
+        // Aborted resource tasks leave their optimistic "Checking" entries behind.
+        // Remove those entries so a resumed crawl can schedule them again.
+        let pending_resources: Vec<String> = resources
+            .iter()
+            .filter(|entry| entry.value().status_text == "Checking")
+            .map(|entry| entry.key().clone())
+            .collect();
+        for key in pending_resources {
+            resources.remove(&key);
+        }
     }
 
     // Only worth resuming if the frontier still has unfetched URLs — if it was empty when
     // stopped, the crawl had nothing left to do anyway. (Pages whose fetch was already
     // in flight at the moment of cancellation are aborted above and not re-queued here —
     // see `CrawlResumeState`'s doc comment.)
-    *resume_slot.lock().unwrap() = if cancelled && !frontier.is_empty() {
+    let resume = if cancelled && !frontier.is_empty() {
         Some(CrawlResumeState {
             start_url: config.start_url.clone(),
             frontier,
@@ -824,6 +995,14 @@ pub async fn run_crawl(
     } else {
         None
     };
+    if let Ok(mut slot) = resume_slot.lock() {
+        *slot = resume;
+    } else {
+        let _ = app.emit(
+            "crawl://error",
+            "Application resume state lock is poisoned".to_string(),
+        );
+    }
 
     linked_urls.into_iter().collect()
 }

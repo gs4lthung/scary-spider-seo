@@ -86,12 +86,37 @@ fn run_axe(tab: &Tab, axe_source: &str) -> Result<Vec<AccessibilityViolation>, S
     let mut violations = Vec::new();
     if let Value::Array(items) = raw {
         for item in items {
-            let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-            let impact = item.get("impact").and_then(|v| v.as_str()).map(|s| s.to_string());
-            let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let help_url = item.get("helpUrl").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let node_count = item.get("nodes").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
-            violations.push(AccessibilityViolation { id, impact, description, help_url, node_count });
+            let id = item
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let impact = item
+                .get("impact")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let description = item
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let help_url = item
+                .get("helpUrl")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let node_count = item
+                .get("nodes")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            violations.push(AccessibilityViolation {
+                id,
+                impact,
+                description,
+                help_url,
+                node_count,
+            });
         }
     }
     Ok(violations)
@@ -152,18 +177,48 @@ const MOBILE_USABILITY_JS: &str = r#"(() => {
     if (r.width < MIN_TARGET_PX || r.height < MIN_TARGET_PX) tooSmall++;
   }
 
-  // Pairwise spacing check is O(n^2) — skip it on pages with an unusually large number
-  // of tap targets rather than let one page stall the audit.
+  // Use a spatial grid so each target is compared only with nearby targets. The previous
+  // pairwise scan was O(n^2), which made dense pages disproportionately expensive.
   let tooClose = 0;
   if (rects.length <= 600) {
+    const GRID_SIZE_PX = 48;
+    const grid = new Map();
+    const cellKey = (x, y) => `${x}:${y}`;
+
     for (let i = 0; i < rects.length; i++) {
-      for (let j = i + 1; j < rects.length; j++) {
-        const a = rects[i];
-        const b = rects[j];
-        const dx = Math.max(a.left - b.right, b.left - a.right, 0);
-        const dy = Math.max(a.top - b.bottom, b.top - a.bottom, 0);
+      const rect = rects[i];
+      const minX = Math.floor((rect.left - MIN_SPACING_PX) / GRID_SIZE_PX);
+      const maxX = Math.floor((rect.right + MIN_SPACING_PX) / GRID_SIZE_PX);
+      const minY = Math.floor((rect.top - MIN_SPACING_PX) / GRID_SIZE_PX);
+      const maxY = Math.floor((rect.bottom + MIN_SPACING_PX) / GRID_SIZE_PX);
+      const candidates = new Set();
+
+      for (let x = minX; x <= maxX; x++) {
+        for (let y = minY; y <= maxY; y++) {
+          for (const candidateIndex of grid.get(cellKey(x, y)) || []) {
+            candidates.add(candidateIndex);
+          }
+        }
+      }
+
+      for (const candidateIndex of candidates) {
+        const candidate = rects[candidateIndex];
+        const dx = Math.max(rect.left - candidate.right, candidate.left - rect.right, 0);
+        const dy = Math.max(rect.top - candidate.bottom, candidate.top - rect.bottom, 0);
         if (dx === 0 && dy === 0) continue; // overlapping elements aren't a spacing issue
         if (dx < MIN_SPACING_PX && dy < MIN_SPACING_PX) tooClose++;
+      }
+
+      for (let x = minX; x <= maxX; x++) {
+        for (let y = minY; y <= maxY; y++) {
+          const key = cellKey(x, y);
+          const cell = grid.get(key);
+          if (cell) {
+            cell.push(i);
+          } else {
+            grid.set(key, [i]);
+          }
+        }
       }
     }
   }
@@ -210,7 +265,9 @@ fn run_mobile_usability(tab: &Tab) -> Result<Vec<MobileUsabilityViolation>, Stri
     })
     .map_err(|e| e.to_string())?;
 
-    let remote = tab.evaluate(MOBILE_USABILITY_JS, false).map_err(|e| e.to_string())?;
+    let remote = tab
+        .evaluate(MOBILE_USABILITY_JS, false)
+        .map_err(|e| e.to_string())?;
     let json_str = remote
         .value
         .ok_or_else(|| "mobile usability check returned no value".to_string())?;
@@ -222,11 +279,28 @@ fn run_mobile_usability(tab: &Tab) -> Result<Vec<MobileUsabilityViolation>, Stri
     let mut violations = Vec::new();
     if let Value::Array(items) = raw {
         for item in items {
-            let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-            let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let help_url = item.get("helpUrl").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let id = item
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            let description = item
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let help_url = item
+                .get("helpUrl")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let node_count = item.get("nodeCount").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-            violations.push(MobileUsabilityViolation { id, description, help_url, node_count });
+            violations.push(MobileUsabilityViolation {
+                id,
+                description,
+                help_url,
+                node_count,
+            });
         }
     }
     Ok(violations)
@@ -241,7 +315,14 @@ pub async fn render_page(
     url: Url,
     axe_source: Option<Arc<String>>,
     run_mobile_usability_audit: bool,
-) -> Result<(String, Vec<AccessibilityViolation>, Vec<MobileUsabilityViolation>), String> {
+) -> Result<
+    (
+        String,
+        Vec<AccessibilityViolation>,
+        Vec<MobileUsabilityViolation>,
+    ),
+    String,
+> {
     tauri::async_runtime::spawn_blocking(move || {
         let tab = browser.new_tab().map_err(|e| e.to_string())?;
         let result = (|| {

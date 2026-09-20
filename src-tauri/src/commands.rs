@@ -3,8 +3,15 @@ use crate::crawler::types::{CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult
 use crate::export;
 use crate::state::AppState;
 use std::sync::atomic::Ordering;
+use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
+
+fn lock_state<T>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>, String> {
+    mutex
+        .lock()
+        .map_err(|_| "Application state lock is poisoned".to_string())
+}
 
 #[tauri::command]
 pub async fn start_crawl(
@@ -20,13 +27,13 @@ pub async fn start_crawl(
     // there instead of clearing everything and starting over. A resume state for a
     // different start URL is stale (e.g. the user changed the URL after stopping) and
     // is discarded here so that crawl starts fresh.
-    let resume = match state.resume_state.lock().unwrap().take() {
+    let resume = match lock_state(&state.resume_state)?.take() {
         Some(r) if r.start_url == config.start_url => Some(r),
         _ => None,
     };
 
     if resume.is_none() {
-        state.pages.lock().unwrap().clear();
+        lock_state(&state.pages)?.clear();
         state.resources.clear();
         state.resources_checked.store(0, Ordering::SeqCst);
     }
@@ -47,20 +54,40 @@ pub async fn start_crawl(
         let linked_urls = crawl::run_crawl(
             app_handle.clone(),
             config,
-            cancel.clone(),
-            paused,
-            pages.clone(),
-            resources.clone(),
-            resources_checked,
+            crawl::CrawlState {
+                cancel: cancel.clone(),
+                paused,
+                pages: pages.clone(),
+                resources: resources.clone(),
+                resources_checked: resources_checked.clone(),
+                resume_slot: resume_state.clone(),
+            },
             resume,
-            resume_state.clone(),
         )
         .await;
         running.store(false, Ordering::SeqCst);
         let cancelled = cancel.load(Ordering::SeqCst);
-        let resumable = resume_state.lock().unwrap().is_some();
-        let pages_crawled = pages.lock().unwrap().len();
-        let resources_checked = resources.len();
+        let resumable = match resume_state.lock() {
+            Ok(guard) => guard.is_some(),
+            Err(_) => {
+                let _ = app_handle.emit(
+                    "crawl://error",
+                    "Application resume state lock is poisoned".to_string(),
+                );
+                false
+            }
+        };
+        let pages_crawled = match pages.lock() {
+            Ok(guard) => guard.len(),
+            Err(_) => {
+                let _ = app_handle.emit(
+                    "crawl://error",
+                    "Application pages state lock is poisoned".to_string(),
+                );
+                0
+            }
+        };
+        let resources_checked = resources_checked.load(Ordering::Relaxed);
         let _ = app_handle.emit(
             "crawl://done",
             CrawlSummary {
@@ -96,7 +123,7 @@ pub fn resume_crawl(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_pages(state: State<'_, AppState>) -> Result<Vec<PageResult>, String> {
-    Ok(state.pages.lock().unwrap().clone())
+    Ok(lock_state(&state.pages)?.clone())
 }
 
 #[tauri::command]
@@ -108,7 +135,7 @@ pub fn get_resources(state: State<'_, AppState>) -> Result<Vec<ResourceResult>, 
 pub fn export_csv(state: State<'_, AppState>, path: String, what: String) -> Result<(), String> {
     match what.as_str() {
         "pages" => {
-            let pages = state.pages.lock().unwrap();
+            let pages = lock_state(&state.pages)?;
             export::export_pages_csv(&pages, &path).map_err(|e| e.to_string())
         }
         "resources" => {
@@ -121,9 +148,14 @@ pub fn export_csv(state: State<'_, AppState>, path: String, what: String) -> Res
 }
 
 #[tauri::command]
-pub fn save_crawl(state: State<'_, AppState>, path: String, start_url: String) -> Result<(), String> {
-    let pages = state.pages.lock().unwrap().clone();
-    let resources: Vec<ResourceResult> = state.resources.iter().map(|r| r.value().clone()).collect();
+pub fn save_crawl(
+    state: State<'_, AppState>,
+    path: String,
+    start_url: String,
+) -> Result<(), String> {
+    let pages = lock_state(&state.pages)?.clone();
+    let resources: Vec<ResourceResult> =
+        state.resources.iter().map(|r| r.value().clone()).collect();
     let saved_at_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -148,12 +180,20 @@ pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnaps
     // A loaded snapshot has no in-progress frontier of its own — any leftover resume
     // state from an earlier stopped crawl no longer corresponds to what's in `pages`
     // now, so it must not be silently resumed into on the next start_crawl.
-    *state.resume_state.lock().unwrap() = None;
-    *state.pages.lock().unwrap() = snapshot.pages.clone();
+    *lock_state(&state.resume_state)? = None;
+    *lock_state(&state.pages)? = snapshot.pages.clone();
     state.resources.clear();
     for r in &snapshot.resources {
         state.resources.insert(r.url.clone(), r.clone());
     }
+    state.resources_checked.store(
+        snapshot
+            .resources
+            .iter()
+            .filter(|resource| resource.status_text != "Checking")
+            .count(),
+        Ordering::Relaxed,
+    );
 
     Ok(snapshot)
 }
