@@ -19,7 +19,7 @@ concurrency:
 jobs:
   blog:
     runs-on: ubuntu-latest
-    environment: staging
+    environment: Staging
     defaults:
       run:
         working-directory: blog

@@ -37,7 +37,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
     defaults:
       run:
         working-directory: website
@@ -60,7 +60,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.blog == 'true'
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
     defaults:
       run:
         working-directory: blog
