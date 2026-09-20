@@ -2,7 +2,12 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "./client";
 import { comments, commentVotes, posts } from "./schema";
 
-export type PostComment = typeof comments.$inferSelect & { score: number; myVote: -1 | 0 | 1 };
+export type CommentData = typeof comments.$inferSelect & {
+  score: number;
+  myVote: -1 | 0 | 1;
+};
+
+export type PostComment = CommentData & { replies: CommentData[] };
 
 export async function getPostComments(postId: number, voterKey: string | null): Promise<PostComment[]> {
   const db = await getDb();
@@ -26,11 +31,21 @@ export async function getPostComments(postId: number, voterKey: string | null): 
     if (voterKey && v.voterKey === voterKey) myVoteByComment.set(v.commentId, v.value as -1 | 1);
   }
 
-  return rows.map((r) => ({
+  const enriched: PostComment[] = rows.map((r) => ({
     ...r,
     score: scoreByComment.get(r.id) ?? 0,
     myVote: myVoteByComment.get(r.id) ?? 0,
+    replies: [] as CommentData[],
   }));
+
+  const byId = new Map(enriched.map((comment) => [comment.id, comment]));
+  const roots: PostComment[] = [];
+  for (const comment of enriched) {
+    const parent = comment.parentId ? byId.get(comment.parentId) : undefined;
+    if (parent) parent.replies.push(comment);
+    else roots.push(comment);
+  }
+  return roots;
 }
 
 export async function getCommentsForModeration() {

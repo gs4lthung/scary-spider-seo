@@ -1,14 +1,16 @@
-import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "./client";
 import { categories, posts, users } from "./schema";
+import { DEFAULT_CATEGORY } from "@/lib/post-url";
 
 export async function getCategoryCounts(): Promise<{ category: string; count: number }[]> {
   const db = await getDb();
+  const categoryLabel = sql<string>`coalesce(${posts.category}, ${DEFAULT_CATEGORY})`;
   const rows = await db
-    .select({ category: posts.category, count: sql<number>`count(*)` })
+    .select({ category: categoryLabel, count: sql<number>`count(*)` })
     .from(posts)
-    .where(and(eq(posts.status, "published"), isNotNull(posts.category)))
-    .groupBy(posts.category)
+    .where(eq(posts.status, "published"))
+    .groupBy(categoryLabel)
     .orderBy(desc(sql`count(*)`));
   return rows as { category: string; count: number }[];
 }

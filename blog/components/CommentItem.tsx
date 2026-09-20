@@ -1,0 +1,68 @@
+"use client";
+
+import { useState } from "react";
+import { ChatCircleText } from "@phosphor-icons/react";
+import type { CommentData, PostComment } from "@/lib/db/comment-queries";
+import { CommentForm } from "@/components/CommentForm";
+import { CommentVoteButtons } from "@/components/CommentVoteButtons";
+
+function formatCommentDate(date: Date) {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function CommentItem({ comment, postId }: { comment: PostComment | CommentData; postId: number }) {
+  const [replying, setReplying] = useState(false);
+  const [showReplies, setShowReplies] = useState(true);
+  const replies: CommentData[] = "replies" in comment ? comment.replies : [];
+
+  return (
+    <li className="border-b border-border py-5 last:border-b-0">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-accent text-sm font-bold text-accent-foreground">
+          {comment.authorName.slice(0, 1).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="font-bold">{comment.authorName}</span>
+            <time dateTime={comment.createdAt.toISOString()} className="text-xs text-muted-foreground">
+              {formatCommentDate(comment.createdAt)}
+            </time>
+          </div>
+          <p className="mt-2 text-sm leading-6 break-words whitespace-pre-wrap text-foreground">{comment.content}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <CommentVoteButtons commentId={comment.id} score={comment.score} myVote={comment.myVote} />
+            <button
+              type="button"
+              onClick={() => setReplying((value) => !value)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary"
+            >
+              <ChatCircleText className="h-4 w-4" weight="bold" aria-hidden="true" />
+              Reply
+            </button>
+            {replies.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowReplies((value) => !value)}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                {showReplies ? "Hide replies" : `Show ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
+              </button>
+            ) : null}
+          </div>
+          {replying ? (
+            <div className="mt-4 border-l-2 border-primary/40 pl-4">
+              <CommentForm postId={postId} parentId={comment.id} onCancel={() => setReplying(false)} />
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {showReplies && replies.length > 0 ? (
+        <ol className="mt-4 ml-4 border-l-2 border-border pl-4 sm:ml-12">
+          {replies.map((reply) => (
+            <CommentItem key={reply.id} comment={reply} postId={postId} />
+          ))}
+        </ol>
+      ) : null}
+    </li>
+  );
+}

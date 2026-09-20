@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 export const posts = sqliteTable("posts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -26,6 +26,8 @@ export const posts = sqliteTable("posts", {
   // the ~60/155 char sweet spot without changing the on-page heading.
   metaTitle: text("meta_title"),
   metaDescription: text("meta_description"),
+  // Optional editorial override; null uses the content-based estimate.
+  readingTime: integer("reading_time"),
   status: text("status", { enum: ["draft", "published"] })
     .notNull()
     .default("draft"),
@@ -83,6 +85,7 @@ export const comments = sqliteTable("comments", {
   postId: integer("post_id")
     .notNull()
     .references(() => posts.id, { onDelete: "cascade" }),
+  parentId: integer("parent_id").references((): AnySQLiteColumn => comments.id, { onDelete: "cascade" }),
   // Null for anonymous commenters (the only kind today). Once accounts are
   // required, new comments carry a userId and authorName just mirrors it;
   // until then authorName is whatever the anonymous commenter typed.
@@ -116,4 +119,19 @@ export const commentVotes = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (table) => [uniqueIndex("comment_votes_comment_voter_unique").on(table.commentId, table.voterKey)],
+);
+
+// Failed login attempts keyed by the HMAC'd IP hash (same scheme as
+// comments' ip_hash, see lib/anti-spam.ts), used to rate-limit the admin
+// login. Rows older than the lockout window are pruned on each check.
+export const loginAttempts = sqliteTable(
+  "login_attempts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ipHash: text("ip_hash").notNull(),
+    attemptedAt: integer("attempted_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("login_attempts_ip_hash_idx").on(table.ipHash)],
 );

@@ -3,11 +3,13 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
+import { requireUser } from "@/lib/authz";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export async function uploadImage(formData: FormData): Promise<{ url: string } | { error: string }> {
+  await requireUser();
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "No file provided." };
   if (!ALLOWED_TYPES.has(file.type)) return { error: "Unsupported image type." };
@@ -32,6 +34,7 @@ export async function uploadImage(formData: FormData): Promise<{ url: string } |
 // than blocking the post save/delete itself.
 export async function deleteMediaKeys(keys: string[]): Promise<void> {
   if (keys.length === 0) return;
+  await requireUser();
   try {
     const { env } = await getCloudflareContext({ async: true });
     await env.MEDIA.delete(keys);
@@ -55,6 +58,7 @@ export async function listMediaImages(options?: {
   cursor?: string;
   limit?: number;
 }): Promise<{ items: MediaItem[]; cursor: string | null }> {
+  await requireUser();
   const { env } = await getCloudflareContext({ async: true });
   const listed = await env.MEDIA.list({
     limit: options?.limit ?? 60,
@@ -79,6 +83,7 @@ export async function listMediaImages(options?: {
 // (in its body content or as the cover image). Best-effort error reporting;
 // never throws.
 export async function deleteMediaImage(key: string): Promise<{ ok: boolean; error?: string }> {
+  await requireUser();
   const db = await getDb();
   const rows = await db.select({ content: posts.content, coverImageKey: posts.coverImageKey }).from(posts);
   const referenced = rows.some(

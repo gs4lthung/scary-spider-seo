@@ -2,11 +2,27 @@
 
 import { useState } from "react";
 import { deleteMediaImage, listMediaImages, type MediaItem } from "@/app/admin/media-actions";
+import { useToast } from "@/components/Toaster";
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function mediaUrl(key: string) {
+  return new URL(`/media/${key}`, window.location.origin).toString();
+}
+
+function formatUploaded(value: string | null) {
+  if (!value) return "Upload time unavailable";
+  return new Date(value).toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export function MediaGallery({
@@ -16,6 +32,7 @@ export function MediaGallery({
   initialItems: MediaItem[];
   initialCursor: string | null;
 }) {
+  const { toast } = useToast();
   const [items, setItems] = useState<MediaItem[]>(initialItems);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [loading, setLoading] = useState(false);
@@ -41,11 +58,12 @@ export function MediaGallery({
 
   async function copyUrl(key: string) {
     try {
-      await navigator.clipboard.writeText(`/media/${key}`);
+      await navigator.clipboard.writeText(mediaUrl(key));
       setCopiedKey(key);
+      toast("URL copied");
       setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1500);
     } catch {
-      setError("Failed to copy the URL.");
+      toast("Failed to copy the URL.", "error");
     }
   }
 
@@ -57,13 +75,14 @@ export function MediaGallery({
     try {
       const res = await deleteMediaImage(key);
       if (!res.ok) {
-        setError(res.error ?? "Failed to delete the image.");
+        toast(res.error ?? "Failed to delete the image.", "error");
         return;
       }
       setItems((prev) => prev.filter((item) => item.key !== key));
       if (preview?.key === key) setPreview(null);
+      toast("Image deleted");
     } catch {
-      setError("Failed to delete the image.");
+      toast("Failed to delete the image.", "error");
     } finally {
       setDeletingKey(null);
     }
@@ -90,10 +109,21 @@ export function MediaGallery({
             </button>
             <div className="flex items-center justify-between gap-2 p-2">
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium" title={item.name}>
+                <a
+                  href={mediaUrl(item.key)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block truncate text-xs font-medium hover:text-primary hover:underline"
+                  title={mediaUrl(item.key)}
+                >
                   {item.name}
+                </a>
+                <p className="truncate text-[11px] text-muted-foreground" title={mediaUrl(item.key)}>
+                  {mediaUrl(item.key)}
                 </p>
-                <p className="text-xs text-muted-foreground">{formatSize(item.size)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatSize(item.size)} · {formatUploaded(item.uploaded)}
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
@@ -140,7 +170,15 @@ export function MediaGallery({
             <img src={`/media/${preview.key}`} alt="" className="max-h-[80vh] max-w-full rounded-lg shadow-xl" />
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="truncate font-mono text-xs text-white/80">
-                {preview.name} · /media/{preview.key}
+                <a
+                  href={mediaUrl(preview.key)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate hover:text-white hover:underline"
+                >
+                  {mediaUrl(preview.key)}
+                </a>
+                <span> · {formatUploaded(preview.uploaded)}</span>
               </span>
               <button
                 type="button"

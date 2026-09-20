@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { ProfileForm } from "./ProfileForm";
+import { ChangePasswordForm } from "./ChangePasswordForm";
 
 export default async function ProfilePage() {
-  const session = await getSession();
+  const session = await getCurrentUser();
   if (!session) redirect("/admin/login");
 
   const db = await getDb();
@@ -21,6 +22,13 @@ export default async function ProfilePage() {
       </p>
       <div className="mt-8">
         <ProfileForm user={user} />
+      </div>
+      <div className="mt-10">
+        <h2 className="text-lg font-bold">Change password</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Updates the password for your next sign-in.</p>
+        <div className="mt-4 rounded-lg border border-border bg-card p-6">
+          <ChangePasswordForm />
+        </div>
       </div>
     </div>
   );

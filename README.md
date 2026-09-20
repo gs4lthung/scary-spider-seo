@@ -6,6 +6,8 @@
 
 A desktop site crawler and SEO auditor built with **Tauri**, **React**, and **Rust**. Point it at a URL, crawl the site, and get a searchable, sortable table of every page and resource, with SEO/accessibility issues flagged inline instead of buried in a report.
 
+**Website:** [scaryspiderseo.com](https://www.scaryspiderseo.com) · **Blog:** [SEO notes](https://blog.scaryspiderseo.com)
+
 ## Download
 
 No build tools, no source code, no install wizard needed. Grab a build for your OS from the **[Releases page](https://github.com/gs4lthung/gseo/releases)**:

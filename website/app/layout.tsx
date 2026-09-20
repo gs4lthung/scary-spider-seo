@@ -64,9 +64,9 @@ export const metadata: Metadata = {
     siteName: shortTitle,
     images: [
       {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
+        url: "/og-banner.png",
+        width: 2000,
+        height: 500,
         alt: shortTitle,
       },
     ],
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description,
-    images: ["/og-image.png"],
+    images: ["/og-banner.png"],
   },
 };
 

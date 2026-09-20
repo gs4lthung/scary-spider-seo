@@ -5,12 +5,10 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { comments, posts } from "@/lib/db/schema";
 import { postPath } from "@/lib/post-url";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/authz";
 
 async function requireModerator() {
-  const session = await getSession();
-  if (!session) throw new Error("Not authenticated.");
-  return session;
+  return requireUser();
 }
 
 async function revalidateCommentedPost(commentId: number) {

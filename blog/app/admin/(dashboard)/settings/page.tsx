@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { getPostsPerPage, getCommentsRequireApproval } from "@/lib/db/settings";
 import { SettingsForm } from "./SettingsForm";
 
 export default async function SettingsPage() {
-  const session = await getSession();
+  const session = await getCurrentUser();
   if (!session || session.role !== "admin") redirect("/admin");
 
   const [postsPerPage, commentsRequireApproval] = await Promise.all([getPostsPerPage(), getCommentsRequireApproval()]);

@@ -29,28 +29,35 @@ export function CommentVoteButtons({
     });
   }
 
+  const buttonClass = (active: boolean) =>
+    `flex h-7 w-7 items-center justify-center rounded-lg border-2 transition-colors disabled:opacity-50 ${
+      active
+        ? "border-ink bg-primary text-primary-foreground"
+        : "border-transparent text-muted-foreground hover:border-ink hover:bg-secondary hover:text-foreground"
+    }`;
+
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex items-center gap-1 text-xs">
       <button
         type="button"
         onClick={() => vote(1)}
         disabled={isPending}
         aria-label="Upvote"
         aria-pressed={optimistic.myVote === 1}
-        className={`rounded p-0.5 hover:bg-secondary ${optimistic.myVote === 1 ? "text-primary" : "text-muted-foreground"}`}
+        className={buttonClass(optimistic.myVote === 1)}
       >
-        <CaretUp weight="bold" className="h-4 w-4" />
+        <CaretUp weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
-      <span className="text-xs font-semibold text-foreground">{optimistic.score}</span>
+      <span className="min-w-5 text-center font-mono font-bold text-foreground">{optimistic.score}</span>
       <button
         type="button"
         onClick={() => vote(-1)}
         disabled={isPending}
         aria-label="Downvote"
         aria-pressed={optimistic.myVote === -1}
-        className={`rounded p-0.5 hover:bg-secondary ${optimistic.myVote === -1 ? "text-primary" : "text-muted-foreground"}`}
+        className={buttonClass(optimistic.myVote === -1)}
       >
-        <CaretDown weight="bold" className="h-4 w-4" />
+        <CaretDown weight="bold" className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
     </div>
   );

@@ -274,20 +274,22 @@ dash, dot). If a future upload format changes the key shape, update
 ## 7. Public rendering and SEO
 
 Public pages query D1 on the Worker. `app/page.tsx`, `app/[category]/[slug]/page.tsx`,
-`app/[slug]/page.tsx`, and `app/author/[username]/page.tsx` set
+`app/[...slug]/page.tsx`, and `app/author/[username]/page.tsx` set
 `export const revalidate = 3600` (ISR-style caching with OpenNext), while
 `sitemap.ts` and `feed.xml/route.ts` are `force-dynamic` because a fresh
 clone/CI/local D1 has no tables yet and prerendering at build time would fail.
 
 - **Post URL scheme.** Posts live at `/<category-slug>/<slug>` when they have
   a category (slug derived from the freeform name by `lib/post-url.ts`, not a
-  DB column), and stay at `/<slug>` when uncategorized. The legacy flat route
-  `app/[slug]/page.tsx` `permanentRedirect`s categorized posts to their
-  canonical `/<category>/<slug>` path, and the `[category]` segment is
-  validated on the canonical route too, so one URL per post stays in the index.
-  Every URL producer (`sitemap.ts`, `feed.xml`, JSON-LD, `PostCard`,
-  `BlogSidebar`, comment moderation) goes through `postPath`/`postUrl`; never
-  hard-code `/${post.slug}`.
+  DB column), and stay at `/<slug>` when uncategorized. The legacy flat URL is
+  a catch-all route `app/[...slug]/page.tsx` (it must be a catch-all, not
+  `[slug]`, because Next forbids two dynamic segment names at the same level,
+  i.e. `[slug]` + `[category]` collide at the root). It `permanentRedirect`s
+  categorized posts to their canonical `/<category>/<slug>` path, and the
+  `[category]` segment is validated on the canonical route too, so one URL per
+  post stays in the index. Every URL producer (`sitemap.ts`, `feed.xml`,
+  JSON-LD, `PostCard`, `BlogSidebar`, comment moderation) goes through
+  `postPath`/`postUrl`; never hard-code `/${post.slug}`.
 
 - **Canonical trap on the home page.** Next's metadata resolver drops the
   query string when the canonical *path* is `/` (it collapses to the bare
@@ -300,7 +302,7 @@ clone/CI/local D1 has no tables yet and prerendering at build time would fail.
   "site search" pages.
 - **Metadata is not merged.** Next does not deep-merge nested `openGraph`
   objects between the root layout and a post page, so
-  `generateMetadata` in `[slug]/page.tsx` re-specifies everything, including a
+  `generateMetadata` in `[category]/[slug]/page.tsx` re-specifies everything, including a
   fallback `og-image.png` when a post has no cover.
 - **JSON-LD.** `Blog` on the home page, `BlogPosting` on post pages
   (`app/page.tsx`, `app/[category]/[slug]/page.tsx` via `PostPageView`). When a

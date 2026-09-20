@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updateUserRole, deleteUser } from "@/app/admin/users-actions";
+import { useToast } from "@/components/Toaster";
 
 type Role = "admin" | "editor";
 
@@ -12,6 +13,7 @@ export function UserRow({
   user: { id: number; username: string; displayName: string | null; jobTitle: string | null; role: Role; createdAt: Date };
   isSelf: boolean;
 }) {
+  const { toast } = useToast();
   const [role, setRole] = useState<Role>(user.role);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -23,9 +25,11 @@ export function UserRow({
     startTransition(async () => {
       try {
         await updateUserRole(user.id, next);
+        toast("Role updated");
       } catch (e) {
         setRole(prev);
         setError(e instanceof Error ? e.message : "Couldn't update role.");
+        toast(e instanceof Error ? e.message : "Couldn't update role.", "error");
       }
     });
   }
@@ -36,8 +40,10 @@ export function UserRow({
     startTransition(async () => {
       try {
         await deleteUser(user.id);
+        toast("User deleted");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't delete user.");
+        toast(e instanceof Error ? e.message : "Couldn't delete user.", "error");
       }
     });
   }

@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { categories, posts } from "@/lib/db/schema";
+import { requireUser } from "@/lib/authz";
 
 function slugify(value: string) {
   return value
@@ -14,6 +16,7 @@ function slugify(value: string) {
 }
 
 export async function createCategory(_prevState: string | null, formData: FormData): Promise<string | null> {
+  await requireUser();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return "Category name is required.";
 
@@ -24,10 +27,12 @@ export async function createCategory(_prevState: string | null, formData: FormDa
 
   await db.insert(categories).values({ name, slug });
   revalidatePath("/admin/categories");
+  redirect(`/admin/categories?toast=${encodeURIComponent("Category created")}`);
   return null;
 }
 
 export async function renameCategory(id: number, newName: string) {
+  await requireUser();
   const name = newName.trim();
   if (!name) throw new Error("Category name can't be empty.");
 
@@ -44,6 +49,7 @@ export async function renameCategory(id: number, newName: string) {
 }
 
 export async function deleteCategory(id: number) {
+  await requireUser();
   const db = await getDb();
   await db.delete(categories).where(eq(categories.id, id));
   revalidatePath("/admin/categories");

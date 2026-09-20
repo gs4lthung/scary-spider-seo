@@ -33,11 +33,13 @@ const LINKS = [
   { key: "facebook", label: "Facebook", Icon: FacebookLogo },
 ] as const;
 
-export function SocialLinks({ author }: { author: Author }) {
+export function SocialLinks({ author, className }: { author: Author; className?: string }) {
   const email = author.email?.trim();
+  const hasLinks = LINKS.some(({ key }) => toUrl(author[key]));
+  if (!hasLinks && !email) return null;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className={`flex flex-wrap items-center gap-1.5 ${className ?? ""}`}>
       {LINKS.map(({ key, label, Icon }) => {
         const href = toUrl(author[key]);
         if (!href) return null;
@@ -49,9 +51,9 @@ export function SocialLinks({ author }: { author: Author }) {
             rel="noreferrer"
             title={label}
             aria-label={label}
-            className="text-muted-foreground transition-colors hover:text-primary"
+            className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-ink bg-card text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
           </a>
         );
       })}
@@ -60,9 +62,9 @@ export function SocialLinks({ author }: { author: Author }) {
           href={`mailto:${email}`}
           title="Email"
           aria-label="Email"
-          className="text-muted-foreground transition-colors hover:text-primary"
+          className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-ink bg-card text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
         >
-          <EnvelopeSimple className="h-5 w-5" />
+          <EnvelopeSimple className="h-[18px] w-[18px]" aria-hidden="true" />
         </a>
       ) : null}
     </div>

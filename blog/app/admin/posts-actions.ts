@@ -8,6 +8,8 @@ import { posts } from "@/lib/db/schema";
 import { extractMediaKeys, diffRemovedMediaKeys } from "@/lib/media";
 import { postPath } from "@/lib/post-url";
 import { serializeTakeaways, serializeFaqs } from "@/lib/post-sections";
+import { sanitizePostHtml, stripTags } from "@/lib/sanitize";
+import { requireUser } from "@/lib/authz";
 import { deleteMediaKeys } from "@/app/admin/media-actions";
 
 function fromForm(formData: FormData) {
@@ -16,18 +18,20 @@ function fromForm(formData: FormData) {
     slug: String(formData.get("slug") ?? "").trim(),
     title: String(formData.get("title") ?? "").trim(),
     excerpt: (String(formData.get("excerpt") ?? "").trim() || null) as string | null,
-    content: String(formData.get("content") ?? ""),
-    keyTakeaways: serializeTakeaways(String(formData.get("keyTakeaways") ?? "")),
+    content: sanitizePostHtml(String(formData.get("content") ?? "")),
+    keyTakeaways: serializeTakeaways(stripTags(String(formData.get("keyTakeaways") ?? ""))),
     faqs: serializeFaqs(
       (() => {
         try {
           const raw = String(formData.get("faqs") ?? "");
           const parsed = raw ? JSON.parse(raw) : [];
           return Array.isArray(parsed)
-            ? parsed.filter(
-                (item) =>
-                  item && typeof item.question === "string" && typeof item.answer === "string",
-              )
+            ? parsed
+                .filter(
+                  (item) =>
+                    item && typeof item.question === "string" && typeof item.answer === "string",
+                )
+                .map((item) => ({ question: stripTags(item.question), answer: stripTags(item.answer) }))
             : [];
         } catch {
           return [];
@@ -40,6 +44,7 @@ function fromForm(formData: FormData) {
     category: (String(formData.get("category") ?? "").trim() || null) as string | null,
     metaTitle: (String(formData.get("metaTitle") ?? "").trim() || null) as string | null,
     metaDescription: (String(formData.get("metaDescription") ?? "").trim() || null) as string | null,
+    readingTime: Math.max(1, Number(formData.get("readingTime")) || 1),
     status: status as "draft" | "published",
   };
 }
@@ -52,6 +57,7 @@ function revalidatePublicPages(post: { slug: string; category: string | null }) 
 }
 
 export async function createPost(_prevState: string | null, formData: FormData): Promise<string | null> {
+  await requireUser();
   const data = fromForm(formData);
   if (!data.slug || !data.title || !data.content) {
     return "Slug, title, and content are required.";
@@ -66,11 +72,12 @@ export async function createPost(_prevState: string | null, formData: FormData):
     publishedAt: data.status === "published" ? new Date() : null,
   });
 
-revalidatePublicPages(data);
-  redirect("/admin");
+  revalidatePublicPages(data);
+  redirect(`/admin?toast=${encodeURIComponent("Post created")}`);
 }
 
 export async function updatePost(id: number, _prevState: string | null, formData: FormData): Promise<string | null> {
+  await requireUser();
   const data = fromForm(formData);
   if (!data.slug || !data.title || !data.content) {
     return "Slug, title, and content are required.";
@@ -96,10 +103,11 @@ export async function updatePost(id: number, _prevState: string | null, formData
 
   revalidatePublicPages(existing);
   if (existing.slug !== data.slug) revalidatePublicPages(data);
-  redirect("/admin");
+  redirect(`/admin?toast=${encodeURIComponent("Post updated")}`);
 }
 
 export async function deletePost(id: number) {
+  await requireUser();
   const db = await getDb();
   const [existing] = await db.select().from(posts).where(eq(posts.id, id));
   if (!existing) return;
@@ -107,5 +115,5 @@ export async function deletePost(id: number) {
   await db.delete(posts).where(eq(posts.id, id));
   await deleteMediaKeys(extractMediaKeys(existing.content, existing.coverImageKey));
   revalidatePublicPages(existing);
-  redirect("/admin");
+  redirect(`/admin?toast=${encodeURIComponent("Post deleted")}`);
 }
