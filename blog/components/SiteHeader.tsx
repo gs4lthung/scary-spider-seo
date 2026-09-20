@@ -13,7 +13,7 @@ function SearchField({ defaultQuery, id }: { defaultQuery?: string; id: string }
       <div className="relative min-w-0 flex-1">
         <input
           id={id}
-          type="search"
+          type="text"
           name="q"
           defaultValue={defaultQuery}
           placeholder="Search posts..."
