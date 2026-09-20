@@ -4,7 +4,7 @@ name: CI
 # something to require before merge. Release builds are separate — see
 # release.yml, which only maintainers trigger by pushing a version tag.
 #
-# app-frontend/app-backend and website are path-gated via the `changes` job
+# app-frontend/app-backend, website, and blog are path-gated via the `changes` job
 # below (job-level `if`, not a top-level `on.paths` filter) — a website-only
 # change skips the irrelevant Rust/frontend jobs entirely. They still post a
 # "skipped" status for the required-checks names in branch protection, and
