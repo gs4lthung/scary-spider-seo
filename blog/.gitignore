@@ -5,6 +5,8 @@ node_modules
 out
 *.tsbuildinfo
 next-env.d.ts
+cloudflare-env.d.ts
+.env*.local
 /cloudflare-env.d.ts
 .env*.local
 .dev.vars

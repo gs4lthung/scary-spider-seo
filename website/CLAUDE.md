@@ -22,6 +22,6 @@ Next.js App Router marketing site for the desktop app, deployed to Vercel. Indep
 
 **Maintenance mode.** `middleware.ts` enforces `MAINTENANCE_MODE=true` by rewriting every non-`/maintenance` request to `/maintenance` with a real 503.
 
-**Placeholders to fill in.** `lib/site.ts` has `CONTACT` and `SPONSOR_URL` marked `TODO` with placeholder values; check before treating them as real contact/payment info.
+**Placeholders to fill in.** `lib/site.ts` has `CONTACT` marked `TODO` with placeholder values; check before treating it as real contact info. `SPONSOR_URL` points at GitHub Sponsors (`https://github.com/sponsors/gs4lthung`).
 
 **Icons/SEO metadata** live in `app/layout.tsx` (`metadata.icons`, OpenGraph/Twitter cards, JSON-LD). Favicon PNGs in `public/` are sized as multiples of 48px (`favicon-48/96/192.png`) per Google's favicon indexing guidance, plus `app/favicon.ico` (Next.js special-file convention, auto-served at `/favicon.ico`) as a fallback discovery path.
