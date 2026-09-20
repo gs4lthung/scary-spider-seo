@@ -3,6 +3,7 @@
 
 @theme inline {
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -17,41 +18,52 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-ink: var(--comic-ink);
+  --color-masthead: var(--masthead);
+  --color-masthead-foreground: var(--masthead-foreground);
 }
 
+/*
+ * One palette for the whole site, in both modes. Violet is the product's
+ * brand accent (see src/index.css), so it is locked as the single accent and
+ * the neutrals stay violet-tinted rather than drifting to warm or cool grey.
+ */
 :root {
-  --background: oklch(0.99 0.005 293);
-  --foreground: oklch(0.16 0.02 293);
+  --background: oklch(0.985 0.006 293);
+  --foreground: oklch(0.17 0.028 293);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.02 293);
-  --primary: oklch(0.541 0.281 293.009);
+  --card-foreground: oklch(0.17 0.028 293);
+  --primary: oklch(0.53 0.245 293);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.955 0.015 293);
-  --secondary-foreground: oklch(0.32 0.05 293);
-  --muted: oklch(0.965 0.012 293);
-  --muted-foreground: oklch(0.5 0.03 293);
-  --accent: oklch(0.93 0.035 293);
-  --accent-foreground: oklch(0.541 0.281 293.009);
-  --border: oklch(0.9 0.02 293);
-  --comic-ink: oklch(0.09 0.02 293);
+  --secondary: oklch(0.955 0.018 293);
+  --secondary-foreground: oklch(0.3 0.05 293);
+  --muted: oklch(0.965 0.014 293);
+  --muted-foreground: oklch(0.47 0.035 293);
+  --accent: oklch(0.93 0.045 293);
+  --accent-foreground: oklch(0.38 0.16 293);
+  --border: oklch(0.885 0.02 293);
+  --comic-ink: oklch(0.14 0.03 293);
+  --masthead: oklch(0.52 0.245 293);
+  --masthead-foreground: oklch(0.99 0.004 293);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0.025 293);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0.035 293);
-    --card-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.606 0.25 292.717);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.269 0.035 293);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0.035 293);
-    --muted-foreground: oklch(0.708 0.025 293);
+    --background: oklch(0.17 0.022 293);
+    --foreground: oklch(0.97 0.008 293);
+    --card: oklch(0.215 0.03 293);
+    --card-foreground: oklch(0.97 0.008 293);
+    --primary: oklch(0.72 0.17 293);
+    --primary-foreground: oklch(0.16 0.03 293);
+    --secondary: oklch(0.26 0.035 293);
+    --secondary-foreground: oklch(0.95 0.01 293);
+    --muted: oklch(0.26 0.03 293);
+    --muted-foreground: oklch(0.73 0.03 293);
     --accent: oklch(0.32 0.06 293);
-    --accent-foreground: oklch(0.985 0 0);
-    --border: oklch(0.7 0.04 293 / 15%);
-    --comic-ink: oklch(0.9 0.03 293);
+    --accent-foreground: oklch(0.95 0.02 293);
+    --border: oklch(0.74 0.04 293 / 20%);
+    --comic-ink: oklch(0.85 0.045 293);
+    --masthead: oklch(0.27 0.08 293);
+    --masthead-foreground: oklch(0.97 0.01 293);
   }
 }
 
@@ -59,30 +71,51 @@
   * {
     border-color: var(--color-border);
   }
+  html {
+    scroll-behavior: smooth;
+    /* Keep in-page anchors (the table of contents) clear of the sticky header. */
+    scroll-padding-top: 6rem;
+  }
   body {
     background: var(--color-background);
     color: var(--color-foreground);
   }
+  ::selection {
+    background: color-mix(in oklch, var(--color-primary) 28%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
 }
 
-/* Thick ink outline + offset sticker shadow, same "comic chrome" language
-   used across the app (buttons/cards/nav), matching src/index.css. */
+/* The "chrome" language shared with the desktop app: thick ink outline plus a
+   hard offset sticker shadow, with a physical press on :active. Reserved for
+   the app/editorial chrome (cards, buttons, badges) and deliberately kept off
+   dense body copy so long articles stay readable. */
 @utility comic-panel {
-  box-shadow: 4px 4px 0 0 var(--color-ink);
-  transition: box-shadow 150ms ease;
+  box-shadow: 4px 4px 0 0 var(--comic-ink);
+  transition:
+    box-shadow 150ms ease,
+    transform 150ms ease;
   &:hover {
-    box-shadow: 6px 7px 0 0 var(--color-ink);
+    box-shadow: 6px 7px 0 0 var(--comic-ink);
   }
   &:active {
-    box-shadow: 2px 2px 0 0 var(--color-ink);
+    box-shadow: 2px 2px 0 0 var(--comic-ink);
   }
 }
 
 @utility comic-panel-sm {
-  box-shadow: 2px 2px 0 0 var(--color-ink);
-  transition: box-shadow 150ms ease;
+  box-shadow: 2px 2px 0 0 var(--comic-ink);
+  transition:
+    box-shadow 150ms ease,
+    transform 150ms ease;
   &:hover {
-    box-shadow: 3px 3px 0 0 var(--color-ink);
+    box-shadow: 3px 3px 0 0 var(--comic-ink);
+  }
+  &:active {
+    box-shadow: 1px 1px 0 0 var(--comic-ink);
   }
 }
 
@@ -96,6 +129,22 @@
   }
 }
 
+/* Halftone dot texture, used on masthead panels so they read as a printed
+   surface instead of a flat color fill. */
+@utility bg-dot-grid {
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -11px -11px;
+}
+
+/* Faint graph-paper grid for empty/placeholder surfaces. */
+@utility bg-grid-lines {
+  background-image:
+    linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
 /* Routes the @tailwindcss/typography plugin's color vars through our own
    tokens instead of its gray defaults, so article body copy tracks the
    brand palette (and light/dark) automatically. */
@@ -106,7 +155,7 @@
   --tw-prose-links: var(--color-primary);
   --tw-prose-bold: var(--color-foreground);
   --tw-prose-counters: var(--color-muted-foreground);
-  --tw-prose-bullets: var(--color-border);
+  --tw-prose-bullets: var(--color-primary);
   --tw-prose-hr: var(--color-border);
   --tw-prose-quotes: var(--color-foreground);
   --tw-prose-quote-borders: var(--color-primary);
@@ -175,16 +224,24 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   .animate-fade-up {
     animation: none;
   }
-}
-
-/* Subtle dot-grid texture for the primary-colored masthead banner, so it
-   reads as a designed surface rather than a flat color fill. */
-@utility bg-dot-grid {
-  background-image: radial-gradient(circle, var(--primary-foreground) 1px, transparent 1px);
-  background-size: 22px 22px;
-  background-position: -11px -11px;
-  opacity: 0.12;
+  .comic-panel,
+  .comic-panel-sm,
+  .comic-wobble {
+    transition: none;
+  }
+  .comic-panel:hover,
+  .comic-panel-sm:hover,
+  .comic-wobble:hover {
+    transform: none;
+    box-shadow: 4px 4px 0 0 var(--comic-ink);
+  }
+  .comic-panel-sm:hover {
+    box-shadow: 2px 2px 0 0 var(--comic-ink);
+  }
 }

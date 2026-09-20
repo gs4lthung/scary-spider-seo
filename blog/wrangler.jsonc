@@ -3,7 +3,9 @@
   "name": "scary-spider-seo-blog",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-09-15",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   // No "vars" block here: SESSION_SECRET is a secret, never plaintext
   // config. Set it with `wrangler secret put SESSION_SECRET` for
   // production, and in a local, gitignored `.dev.vars` file for `next dev`/
@@ -22,6 +24,16 @@
   "routes": [],
   // Run `wrangler d1 create blog-db` once, then paste the returned
   // database_id below (and mirror it in .dev.vars / wrangler for local dev).
+  // ISR cache for OpenNext: pages use `export const revalidate` and server
+  // actions call `revalidatePath()`, which only work with a real incremental
+  // cache (open-next.config.ts wires the KV-backed cache + memory queue).
+  // Run `npx wrangler kv namespace create blog-isr-cache` once, then paste the
+  // returned id in BOTH entries below (one namespace, two binding names) and
+  // uncomment. Until then the app still works, it just renders every request.
+  // "kv_namespaces": [
+  //   { "binding": "NEXT_INC_CACHE_KV", "id": "PASTE_KV_NAMESPACE_ID" },
+  //   { "binding": "NEXT_TAG_CACHE_KV", "id": "PASTE_KV_NAMESPACE_ID" }
+  // ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -37,5 +49,18 @@
       "binding": "MEDIA",
       "bucket_name": "blog-media"
     }
-  ]
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  },
 }

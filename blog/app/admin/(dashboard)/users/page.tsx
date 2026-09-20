@@ -2,12 +2,12 @@ import { redirect } from "next/navigation";
 import { desc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { UserRow } from "./UserRow";
 import { CreateUserForm } from "./CreateUserForm";
 
 export default async function UsersPage() {
-  const session = await getSession();
+  const session = await getCurrentUser();
   if (!session || session.role !== "admin") redirect("/admin");
 
   const db = await getDb();

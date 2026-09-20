@@ -97,14 +97,19 @@ export async function PostPageView({ post }: { post: Post }) {
       ) : null}
       <SiteHeader />
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-12 px-6 py-16 lg:grid-cols-[1fr_280px]">
-        <div className="min-w-0">
+      {/* Two rails on wide screens: the TOC rides in a sticky left column
+          (article next to it), with the topic/recent sidebar appearing only
+          at xl where there is room for three columns. */}
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10 lg:py-16 xl:max-w-[1320px] xl:grid-cols-[240px_minmax(0,1fr)_280px] xl:gap-12">
+        <div className="min-w-0 lg:col-start-2 lg:row-start-1">
           <PostArticle post={post} />
           {author ? <AuthorCard author={author} /> : null}
           <CommentSection postId={post.id} />
         </div>
-        <div className="space-y-10">
+        <div className="mt-10 empty:hidden -order-1 lg:order-none lg:col-start-1 lg:row-start-1 lg:mt-0">
           <TableOfContents items={toc} />
+        </div>
+        <div className="hidden xl:col-start-3 xl:row-start-1 xl:block">
           <BlogSidebar excludeSlug={post.slug} />
         </div>
       </main>

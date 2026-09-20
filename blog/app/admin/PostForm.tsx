@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { startTransition, useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import type { posts } from "@/lib/db/schema";
 import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_CONTENT_WORD_COUNT } from "@/lib/seo-limits";
@@ -77,7 +77,10 @@ export function PostForm({
   const [error, formAction, pending] = useActionState(action, null);
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
-  const [slugTouched, setSlugTouched] = useState(Boolean(post));
+  // False until the user edits the slug by hand, so the title keeps driving
+  // the slug (including on the edit page). Clearing the slug resets it back
+  // to false so title-driven generation resumes.
+  const [slugTouched, setSlugTouched] = useState(false);
   const [metaTitle, setMetaTitle] = useState(post?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
   const [wordCount, setWordCount] = useState(() => wordCountFromHtml(post?.content ?? ""));
@@ -98,7 +101,6 @@ export function PostForm({
   const contentRef = useRef(post?.content ?? "");
   const contentHiddenRef = useRef<HTMLInputElement>(null);
   const pendingImagesRef = useRef<PendingImage[]>([]);
-  const allowNativeSubmitRef = useRef(false);
 
   // Warn before leaving with unsaved changes; disabled while a save or the
   // pre-save image upload is in flight so the redirect never prompts.
@@ -108,25 +110,24 @@ export function PostForm({
   const safeCoverImageSrc = toSafeImageSrc(coverImageKey);
 
   async function onFormSubmit(e: React.FormEvent<HTMLFormElement>) {
-    // Second pass (from requestSubmit below): let the browser run the
-    // form's server action untouched.
-    if (allowNativeSubmitRef.current) {
-      allowNativeSubmitRef.current = false;
-      return;
-    }
+    // With no pending (not-yet-uploaded) images there is nothing to rewrite,
+    // so let the form submit natively through React's server action. This is
+    // the reliable path: preventDefault + requestSubmit() does NOT re-trigger
+    // a React server action.
+    if (pendingImagesRef.current.length === 0) return;
+
     e.preventDefault();
     const form = e.currentTarget;
     setSubmitError(null);
     setSubmitting(true);
     try {
       const finalHtml = await resolvePendingImageUploads(contentRef.current, pendingImagesRef.current);
-      if (contentHiddenRef.current) contentHiddenRef.current.value = finalHtml;
+      const formData = new FormData(form);
+      formData.set("content", finalHtml);
       setSubmitting(false);
-      allowNativeSubmitRef.current = true;
-      form.requestSubmit();
-      setTimeout(() => {
-        allowNativeSubmitRef.current = false;
-      }, 0);
+      startTransition(() => {
+        formAction(formData);
+      });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to upload images.");
       setSubmitting(false);
@@ -173,7 +174,7 @@ export function PostForm({
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
-            if (!slugTouched) setSlug(slugify(e.target.value));
+            if (!slugTouched || slug === "") setSlug(slugify(e.target.value));
           }}
           className="mt-1 w-full rounded border px-3 py-2"
         />
@@ -190,8 +191,10 @@ export function PostForm({
           required
           value={slug}
           onChange={(e) => {
-            setSlugTouched(true);
-            setSlug(slugify(e.target.value));
+            const next = slugify(e.target.value);
+            setSlug(next);
+            // An emptied slug hands control back to the title.
+            setSlugTouched(next !== "");
           }}
           className="mt-1 w-full rounded border px-3 py-2 font-mono text-sm"
         />

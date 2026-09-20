@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { approveComment, rejectComment, deleteComment } from "@/app/admin/comments-actions";
 import { postPath } from "@/lib/post-url";
+import { useToast } from "@/components/Toaster";
 
 type Status = "pending" | "approved" | "rejected";
 
@@ -30,24 +31,34 @@ export function CommentModerationRow({
     postTitle: string | null;
   };
 }) {
+  const { toast } = useToast();
   const [status, setStatus] = useState(comment.status);
   const [deleted, setDeleted] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function onApprove() {
     setStatus("approved");
-    startTransition(() => approveComment(comment.id));
+    startTransition(() => {
+      approveComment(comment.id);
+      toast("Comment approved");
+    });
   }
 
   function onReject() {
     setStatus("rejected");
-    startTransition(() => rejectComment(comment.id));
+    startTransition(() => {
+      rejectComment(comment.id);
+      toast("Comment rejected");
+    });
   }
 
   function onDelete() {
     if (!confirm("Delete this comment? This can't be undone.")) return;
     setDeleted(true);
-    startTransition(() => deleteComment(comment.id));
+    startTransition(() => {
+      deleteComment(comment.id);
+      toast("Comment deleted");
+    });
   }
 
   if (deleted) return null;

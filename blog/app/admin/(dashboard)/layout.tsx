@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowSquareOut, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { logout } from "@/app/admin/login/actions";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { getPendingCommentCount } from "@/lib/db/comment-queries";
 import { SITE_URL } from "@/lib/site";
 import { NavLink } from "./NavLink";
@@ -17,14 +17,14 @@ function NavGroup({ label, children }: { label: string; children: React.ReactNod
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
+  const session = await getCurrentUser();
   if (!session) redirect("/admin/login");
 
   const pendingComments = await getPendingCommentCount();
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-card px-4 py-6">
+      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-card px-4 py-6">
         <Link href="/admin" className="px-2 text-lg font-bold tracking-tight">
           Scary Spider SEO
           <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 align-middle text-xs font-semibold text-primary">Admin</span>

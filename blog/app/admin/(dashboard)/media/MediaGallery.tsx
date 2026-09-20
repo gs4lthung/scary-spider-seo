@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteMediaImage, listMediaImages, type MediaItem } from "@/app/admin/media-actions";
+import { useToast } from "@/components/Toaster";
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -16,6 +17,7 @@ export function MediaGallery({
   initialItems: MediaItem[];
   initialCursor: string | null;
 }) {
+  const { toast } = useToast();
   const [items, setItems] = useState<MediaItem[]>(initialItems);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [loading, setLoading] = useState(false);
@@ -43,9 +45,10 @@ export function MediaGallery({
     try {
       await navigator.clipboard.writeText(`/media/${key}`);
       setCopiedKey(key);
+      toast("URL copied");
       setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1500);
     } catch {
-      setError("Failed to copy the URL.");
+      toast("Failed to copy the URL.", "error");
     }
   }
 
@@ -57,13 +60,14 @@ export function MediaGallery({
     try {
       const res = await deleteMediaImage(key);
       if (!res.ok) {
-        setError(res.error ?? "Failed to delete the image.");
+        toast(res.error ?? "Failed to delete the image.", "error");
         return;
       }
       setItems((prev) => prev.filter((item) => item.key !== key));
       if (preview?.key === key) setPreview(null);
+      toast("Image deleted");
     } catch {
-      setError("Failed to delete the image.");
+      toast("Failed to delete the image.", "error");
     } finally {
       setDeletingKey(null);
     }

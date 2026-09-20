@@ -1,16 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { eq, ne, and, count } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
-import { hashPassword } from "@/lib/auth";
-import { getSession } from "@/lib/session";
+import { hashPassword, verifyPassword } from "@/lib/auth";
+import { requirePermission, requireUser } from "@/lib/authz";
 
 async function requireAdmin() {
-  const session = await getSession();
-  if (!session || session.role !== "admin") throw new Error("Forbidden");
-  return session;
+  return requirePermission("users:write");
 }
 
 export async function createUser(_prevState: string | null, formData: FormData): Promise<string | null> {
@@ -34,6 +33,7 @@ export async function createUser(_prevState: string | null, formData: FormData):
     .insert(users)
     .values({ username, passwordHash: await hashPassword(password), role, displayName, jobTitle, bio });
   revalidatePath("/admin/users");
+  redirect(`/admin/users?toast=${encodeURIComponent("User created")}`);
   return null;
 }
 
@@ -78,8 +78,7 @@ export async function deleteUser(id: number) {
 // social links). Revalidates the public author page so changes go live
 // immediately.
 export async function updateProfile(_prevState: string | null, formData: FormData): Promise<string | null> {
-  const session = await getSession();
-  if (!session) return "Not authenticated.";
+  const session = await requireUser();
 
   const displayName = String(formData.get("displayName") ?? "").trim() || null;
   const jobTitle = String(formData.get("jobTitle") ?? "").trim() || null;
@@ -98,5 +97,36 @@ export async function updateProfile(_prevState: string | null, formData: FormDat
     .set({ displayName, jobTitle, bio, avatarKey, website, email, github, twitter, linkedin, facebook })
     .where(eq(users.id, session.userId));
   revalidatePath(`/author/${session.username}`);
+  redirect(`/admin/profile?toast=${encodeURIComponent("Profile saved")}`);
+  return null;
+}
+
+const MIN_PASSWORD_LENGTH = 8;
+
+// Changes the caller's own password, verified against the current hash.
+// Sessions are stateless HMAC-signed cookies, so an already-issued session is
+// not revoked by this; existing cookies stay valid until their 7-day TTL.
+export async function changePassword(_prevState: string | null, formData: FormData): Promise<string | null> {
+  const session = await requireUser();
+
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!currentPassword) return "Enter your current password.";
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  if (newPassword !== confirmPassword) return "New passwords don't match.";
+
+  const db = await getDb();
+  const [user] = await db.select().from(users).where(eq(users.id, session.userId));
+  if (!user) throw new Error("Not authenticated.");
+  if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+    return "Current password is incorrect.";
+  }
+
+  await db.update(users).set({ passwordHash: await hashPassword(newPassword) }).where(eq(users.id, user.id));
+  redirect(`/admin/profile?toast=${encodeURIComponent("Password changed")}`);
   return null;
 }

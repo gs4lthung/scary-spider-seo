@@ -9,7 +9,12 @@ function point(radius: number, angleDeg: number) {
 /** A classic corner spider-web: radial spokes + concentric rings, anchored at (0,0). */
 export function SpiderWebCorner({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 100 100" className={className} fill="none" aria-hidden="true">
+    <svg
+      viewBox="0 0 100 100"
+      className={`pointer-events-none ${className ?? ""}`}
+      fill="none"
+      aria-hidden="true"
+    >
       {ANGLES.map((angle) => {
         const [x, y] = point(100, angle);
         return <line key={angle} x1={0} y1={0} x2={x} y2={y} stroke="currentColor" strokeWidth={0.6} />;

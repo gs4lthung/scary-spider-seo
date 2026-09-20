@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { renameCategory, deleteCategory } from "@/app/admin/categories-actions";
+import { useToast } from "@/components/Toaster";
 
 export function CategoryRow({ category }: { category: { id: number; name: string; slug: string; postCount: number } }) {
+  const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [pending, startTransition] = useTransition();
@@ -15,8 +17,10 @@ export function CategoryRow({ category }: { category: { id: number; name: string
       try {
         await renameCategory(category.id, name);
         setEditing(false);
+        toast("Category renamed");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't rename category.");
+        toast(e instanceof Error ? e.message : "Couldn't rename category.", "error");
       }
     });
   }
@@ -27,7 +31,14 @@ export function CategoryRow({ category }: { category: { id: number; name: string
         ? `Delete "${category.name}"? ${category.postCount} post(s) will keep the label until edited.`
         : `Delete "${category.name}"?`;
     if (!confirm(warning)) return;
-    startTransition(() => deleteCategory(category.id));
+    startTransition(async () => {
+      try {
+        await deleteCategory(category.id);
+        toast("Category deleted");
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "Couldn't delete category.", "error");
+      }
+    });
   }
 
   return (

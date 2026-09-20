@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { posts, categories, users } from "@/lib/db/schema";
-import { getSession } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { PostForm } from "@/app/admin/PostForm";
 import { updatePost } from "@/app/admin/posts-actions";
 
@@ -16,7 +16,7 @@ export default async function EditPostPage({ params }: { params: Promise<{ id: s
       .select({ id: users.id, username: users.username, displayName: users.displayName })
       .from(users)
       .orderBy(asc(users.username)),
-    getSession(),
+    getCurrentUser(),
   ]);
   if (!post) notFound();
 

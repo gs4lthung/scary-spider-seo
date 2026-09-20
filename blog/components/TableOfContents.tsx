@@ -29,17 +29,19 @@ export function TableOfContents({ items }: { items: TocItem[] }) {
   if (items.length < 2) return null;
 
   return (
-    <nav aria-label="Table of contents" className="sticky top-20 border-t border-border pt-4">
-      <h2 className="text-xs font-bold tracking-widest text-muted-foreground uppercase">Contents</h2>
-      <ul className="mt-4 space-y-0.5 border-l border-border">
+    <nav aria-label="Table of contents" className="sticky top-24 rounded-2xl border-2 border-ink bg-card p-5">
+      <h2 className="font-mono text-xs font-bold tracking-widest text-muted-foreground uppercase">
+        On this page
+      </h2>
+      <ul className="mt-4 space-y-0.5 border-l-2 border-border">
         {items.map((item) => {
           const active = item.id === activeId;
           return (
             <li key={item.id}>
               <a
                 href={`#${item.id}`}
-                className={`-ml-px block border-l-2 py-1.5 text-sm leading-snug transition-colors ${
-                  item.level === 3 ? "pl-7" : "pl-3"
+                className={`-ml-0.5 block border-l-2 py-1.5 text-sm leading-snug transition-colors ${
+                  item.level === 3 ? "pl-6" : "pl-3"
                 } ${active ? "border-primary font-semibold text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
                 {item.text}
