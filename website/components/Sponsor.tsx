@@ -18,7 +18,7 @@ export function Sponsor() {
           rel="noreferrer"
           className="comic-panel comic-wobble mt-8 inline-block rounded-2xl border-2 border-(--color-ink) bg-primary px-6 py-3 font-bold text-primary-foreground"
         >
-          ♥ Sponsor via Stripe
+          ♥ Sponsor on GitHub
         </a>
       </div>
     </section>

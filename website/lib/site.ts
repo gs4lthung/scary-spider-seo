@@ -23,5 +23,4 @@ export const CONTACT = {
   phone: null as string | null,
 };
 
-// TODO: swap in the real Stripe payment link.
-export const SPONSOR_URL = "https://buy.stripe.com/your-link";
+export const SPONSOR_URL = "https://github.com/sponsors/gs4lthung";

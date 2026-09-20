@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { DownloadSimple } from "@phosphor-icons/react/dist/ssr";
-import { MAIN_SITE_URL } from "@/lib/site";
+import { DownloadSimple, Heart } from "@phosphor-icons/react/dist/ssr";
+import { MAIN_SITE_URL, SPONSOR_URL } from "@/lib/site";
 
 export function SiteFooter() {
   return (
     <footer className="border-t-2 border-ink bg-secondary/50">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div className="max-w-sm">
             <div className="flex items-center gap-2.5">
               <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-ink bg-card">
@@ -59,6 +59,25 @@ export function SiteFooter() {
             >
               <DownloadSimple className="h-4 w-4" weight="bold" aria-hidden="true" />
               Get the crawler
+            </a>
+          </div>
+
+          <div className="text-sm">
+            <h2 className="font-mono text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              Support
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              Scary Spider SEO is free and open source. If it saves you time, sponsoring keeps it
+              maintained and moving forward.
+            </p>
+            <a
+              href={SPONSOR_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="comic-wobble mt-4 inline-flex items-center gap-2 rounded-lg border-2 border-ink bg-card px-4 py-2 font-semibold text-foreground hover:bg-primary hover:text-primary-foreground"
+            >
+              <Heart className="h-4 w-4" weight="fill" aria-hidden="true" />
+              Sponsor on GitHub
             </a>
           </div>
         </div>
