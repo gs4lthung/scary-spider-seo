@@ -14,6 +14,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import {
   TextB,
   TextUnderline,
+  FileHtml,
   TextItalic,
   TextHTwo,
   TextHThree,
@@ -156,7 +157,11 @@ export function RichTextEditor({
         // Content headings start at H2 — the page title is always the real H1.
         heading: { levels: [2, 3, 4, 5, 6] },
       }),
-      Link.configure({ openOnClick: false, autolink: true }),
+       Link.configure({
+         openOnClick: false,
+         autolink: true,
+         HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
+       }),
       Image,
       Placeholder.configure({ placeholder: "Write the post..." }),
       Table.configure({ resizable: true }),
@@ -375,7 +380,7 @@ export function RichTextEditor({
 
   return (
     <div className="rounded border border-border">
-      <div className="flex flex-wrap items-center gap-1 border-b border-border p-1.5">
+      <div className="sticky top-0 z-30 flex flex-wrap items-center gap-1 border-b border-border bg-background/95 p-1.5 backdrop-blur-md">
         <select
           value={t.fontSize}
           onChange={onFontSizeChange}
@@ -467,7 +472,7 @@ export function RichTextEditor({
           <Code className="h-4 w-4" weight="bold" />
         </ToolbarButton>
         <ToolbarButton label="Import HTML" onClick={() => setHtmlImportOpen(true)}>
-          <Code className="h-4 w-4" weight="bold" />
+          <FileHtml className="h-4 w-4" weight="bold" />
         </ToolbarButton>
         <ToolbarButton
           label="Code block"

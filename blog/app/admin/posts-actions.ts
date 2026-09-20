@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { extractMediaKeys, diffRemovedMediaKeys } from "@/lib/media";
@@ -45,6 +45,7 @@ function fromForm(formData: FormData) {
     metaTitle: (String(formData.get("metaTitle") ?? "").trim() || null) as string | null,
     metaDescription: (String(formData.get("metaDescription") ?? "").trim() || null) as string | null,
     readingTime: Math.max(1, Number(formData.get("readingTime")) || 1),
+    featured: formData.get("featured") === "on",
     status: status as "draft" | "published",
   };
 }
@@ -67,10 +68,14 @@ export async function createPost(_prevState: string | null, formData: FormData):
   }
 
   const db = await getDb();
-  await db.insert(posts).values({
+  const [created] = await db.insert(posts).values({
     ...data,
     publishedAt: data.status === "published" ? new Date() : null,
-  });
+  }).returning({ id: posts.id });
+
+  if (data.featured) {
+    await db.update(posts).set({ featured: false }).where(ne(posts.id, created.id));
+  }
 
   revalidatePublicPages(data);
   redirect(`/admin?toast=${encodeURIComponent("Post created")}`);
@@ -98,6 +103,10 @@ export async function updatePost(id: number, _prevState: string | null, formData
       updatedAt: new Date(),
     })
     .where(eq(posts.id, id));
+
+  if (data.featured) {
+    await db.update(posts).set({ featured: false }).where(ne(posts.id, id));
+  }
 
   await deleteMediaKeys(diffRemovedMediaKeys(existing, data));
 

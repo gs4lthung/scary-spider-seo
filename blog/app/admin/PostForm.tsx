@@ -87,6 +87,7 @@ export function PostForm({
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
   const [readingTime, setReadingTime] = useState(String(post?.readingTime ?? readingTimeMinutes(post?.content ?? "")));
   const [status, setStatus] = useState<"draft" | "published">(post?.status ?? "draft");
+  const [featured, setFeatured] = useState(post?.featured ?? false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [wordCount, setWordCount] = useState(() => wordCountFromHtml(post?.content ?? ""));
   const [authorId, setAuthorId] = useState(
@@ -486,6 +487,20 @@ export function PostForm({
         />
         <p className="mt-1 text-xs text-muted-foreground">Estimated from content length. Update it if the estimate is not accurate.</p>
       </div>
+
+      <label className="flex max-w-xl items-start gap-3 rounded-lg border border-border bg-card p-4">
+        <input
+          type="checkbox"
+          name="featured"
+          checked={featured}
+          onChange={(e) => setFeatured(e.target.checked)}
+          className="mt-1 h-4 w-4 accent-primary"
+        />
+        <span>
+          <span className="block text-sm font-semibold">Feature on homepage</span>
+          <span className="mt-1 block text-xs text-muted-foreground">This replaces the current featured post. Leave unchecked to use the latest published post.</span>
+        </span>
+      </label>
 
       <div className="flex items-center gap-4">
         <button type="submit" disabled={pending || submitting} className="comic-panel rounded bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">

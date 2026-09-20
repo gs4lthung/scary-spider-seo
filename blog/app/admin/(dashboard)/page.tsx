@@ -7,6 +7,7 @@ import { getPostStats } from "@/lib/db/queries";
 import { postPath } from "@/lib/post-url";
 import { deletePost } from "@/app/admin/posts-actions";
 import { DeleteButton } from "@/app/admin/DeleteButton";
+import { DashboardCharts } from "./DashboardCharts";
 
 function StatCard({
   label,
@@ -71,6 +72,17 @@ export default async function AdminDashboardPage() {
         <StatCard label="Total views" value={stats.views} icon={Eye} />
       </div>
 
+      <DashboardCharts
+        posts={allPosts.map((post) => ({
+          id: post.id,
+          title: post.title,
+          category: post.category,
+          status: post.status,
+          viewCount: post.viewCount,
+          featured: post.featured,
+        }))}
+      />
+
       <div className="mt-10">
         <h2 className="text-sm font-semibold text-muted-foreground">All posts</h2>
 
@@ -87,6 +99,7 @@ export default async function AdminDashboardPage() {
                   <th className="px-4 py-3 font-semibold">Title</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Homepage</th>
                   <th className="px-4 py-3 font-semibold">Views</th>
                   <th className="px-4 py-3 font-semibold">Updated</th>
                   <th className="px-4 py-3 font-semibold">
@@ -109,6 +122,7 @@ export default async function AdminDashboardPage() {
                     <td className="px-4 py-3">
                       <StatusBadge status={post.status} />
                     </td>
+                    <td className="px-4 py-3 text-muted-foreground">{post.featured ? "Featured" : ""}</td>
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">{post.viewCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {post.updatedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}

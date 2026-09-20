@@ -120,11 +120,11 @@ export default async function BlogHome({
   if (page > 1) canonicalParams.set("page", String(page));
   const canonicalQs = canonicalParams.toString();
 
-  // Only promote the newest post to the featured slot on an unfiltered first
-  // page; search and category views read better as a uniform list.
+  // Only promote a selected or newest post to the featured slot on an
+  // unfiltered first page; search and category views read better as a uniform list.
   const showFeatured = !category && !query && page === 1 && published.length > 0;
-  const featured = showFeatured ? published[0] : null;
-  const gridPosts = showFeatured ? published.slice(1) : published;
+  const featured = showFeatured ? published.find((post) => post.featured) ?? published[0] : null;
+  const gridPosts = featured ? published.filter((post) => post.id !== featured.id) : published;
 
   return (
     <div className="flex min-h-dvh flex-col">

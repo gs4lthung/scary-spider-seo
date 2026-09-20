@@ -29,6 +29,7 @@ export const posts = sqliteTable("posts", {
   // Optional editorial override; null uses the content-based estimate.
   readingTime: integer("reading_time"),
   viewCount: integer("view_count").notNull().default(0),
+  featured: integer("featured", { mode: "boolean" }).notNull().default(false),
   status: text("status", { enum: ["draft", "published"] })
     .notNull()
     .default("draft"),
