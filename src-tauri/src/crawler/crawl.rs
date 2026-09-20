@@ -19,12 +19,32 @@ use url::Url;
 
 const MAX_REDIRECT_HOPS: usize = 10;
 const AXE_CORE_URL: &str = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.0/axe.min.js";
+/// Hard cap on concurrent rendered-page tabs when only JS rendering is on (no audit).
+const RENDER_MAX_CONCURRENCY: usize = 4;
+/// Tighter cap when the accessibility and/or mobile-usability audit is running, since
+/// each adds real CPU time inside the tab on top of the render itself.
+const RENDER_AUDIT_MAX_CONCURRENCY: usize = 2;
 
 struct PageFetchOutcome {
     result: PageResult,
     discovered_internal: Vec<Url>,
     discovered_external: Vec<Url>,
     discovered_images: Vec<(Url, Option<String>)>,
+}
+
+/// The crawl loop's in-progress frontier state, captured when a crawl is stopped with
+/// pages still queued so a later `run_crawl` call for the same `start_url` can carry on
+/// instead of starting over. Not a complete pause/resume of everything in flight: page
+/// fetches already dispatched at the moment of cancellation are aborted and their URLs
+/// are not re-queued (a small, bounded loss — at most `concurrency` URLs), but the bulk
+/// of the frontier (whatever hadn't been dispatched yet) is preserved exactly.
+pub struct CrawlResumeState {
+    pub start_url: String,
+    pub frontier: VecDeque<(Url, usize, bool)>,
+    pub visited: HashSet<String>,
+    pub scheduled_count: usize,
+    pub crawled_count: usize,
+    pub linked_urls: HashSet<String>,
 }
 
 fn normalize(url: &Url) -> String {
@@ -136,8 +156,10 @@ async fn fetch_and_parse(
     client: &Client,
     browser: Option<Arc<Browser>>,
     axe_source: Option<Arc<String>>,
+    render_semaphore: Option<Arc<Semaphore>>,
     url: Url,
     depth: usize,
+    run_mobile_usability_audit: bool,
 ) -> PageFetchOutcome {
     let started = Instant::now();
 
@@ -213,11 +235,21 @@ async fn fetch_and_parse(
 
     let mut rendered = false;
     let mut accessibility_violations = Vec::new();
+    let mut mobile_usability_violations = Vec::new();
     let body: String = if let Some(browser) = browser {
-        match render::render_page(browser, final_url.clone(), axe_source).await {
-            Ok((html, violations)) => {
+        // A rendered page opens a full Chrome tab — much heavier than a plain fetch —
+        // so it's throttled by its own (CPU-core-scaled) semaphore independent of
+        // `config.concurrency`, keeping a high page-fetch concurrency from also meaning
+        // "open that many Chrome tabs at once" on a low-core/low-RAM machine.
+        let _render_permit = match &render_semaphore {
+            Some(sem) => Some(sem.clone().acquire_owned().await.unwrap()),
+            None => None,
+        };
+        match render::render_page(browser, final_url.clone(), axe_source, run_mobile_usability_audit).await {
+            Ok((html, violations, mobile_violations)) => {
                 rendered = true;
                 accessibility_violations = violations;
+                mobile_usability_violations = mobile_violations;
                 html
             }
             Err(_) => match resp.text().await {
@@ -299,6 +331,7 @@ async fn fetch_and_parse(
         structured_data_types: parsed.structured_data_types,
         structured_data_errors: parsed.structured_data_errors,
         accessibility_violations,
+        mobile_usability_violations,
         error: None,
     };
 
@@ -403,6 +436,8 @@ pub async fn run_crawl(
     pages: Arc<StdMutex<Vec<PageResult>>>,
     resources: Arc<DashMap<String, ResourceResult>>,
     resources_checked: Arc<AtomicUsize>,
+    resume: Option<CrawlResumeState>,
+    resume_slot: Arc<StdMutex<Option<CrawlResumeState>>>,
 ) -> Vec<String> {
     let start_url = match Url::parse(&config.start_url) {
         Ok(u) => u,
@@ -502,20 +537,20 @@ pub async fn run_crawl(
         );
     }
 
-    let browser: Option<Arc<Browser>> = if config.render_js || config.run_accessibility_audit {
+    let browser: Option<Arc<Browser>> = if config.render_js || config.run_accessibility_audit || config.run_mobile_usability_audit {
         match tauri::async_runtime::spawn_blocking(render::launch_browser).await {
             Ok(Ok(b)) => Some(Arc::new(b)),
             Ok(Err(e)) => {
                 let _ = app.emit(
                     "crawl://error",
-                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility audit."),
+                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility/mobile usability audit."),
                 );
                 None
             }
             Err(e) => {
                 let _ = app.emit(
                     "crawl://error",
-                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility audit."),
+                    format!("Could not launch headless Chrome ({e}). Continuing without JS rendering/accessibility/mobile usability audit."),
                 );
                 None
             }
@@ -523,6 +558,27 @@ pub async fn run_crawl(
     } else {
         None
     };
+
+    // Caps how many Chrome tabs (each its own renderer process) can be open/rendering
+    // at once. Scaled to the machine's core count rather than the (potentially much
+    // higher) page-fetch `concurrency` setting — see the comment at its acquire site
+    // in `fetch_and_parse` — but also hard-capped well below core count: a handful of
+    // full Chrome renderers pegging every core is what actually made the whole app
+    // (not just the crawl) feel laggy, not just a raw CPU-scaling problem, so this
+    // deliberately leaves headroom for the OS/UI even on a beefy machine. The
+    // accessibility and mobile-usability audits each add nontrivial in-page JS work
+    // on top of the render itself (axe.run(), the mobile-usability DOM walk), so they
+    // get an even tighter cap.
+    let render_semaphore: Option<Arc<Semaphore>> = browser.as_ref().map(|_| {
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        let cap = if config.run_accessibility_audit || config.run_mobile_usability_audit {
+            RENDER_AUDIT_MAX_CONCURRENCY
+        } else {
+            RENDER_MAX_CONCURRENCY
+        };
+        let budget = cores.saturating_sub(1).max(1);
+        Arc::new(Semaphore::new(budget.min(config.concurrency).min(cap).max(1)))
+    });
 
     // Accessibility audits only run when we already have a browser tab open for JS
     // rendering, since that avoids a second, separate page navigation per URL.
@@ -553,11 +609,18 @@ pub async fn run_crawl(
     };
     let max_pages = config.max_pages.max(1);
 
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
-    visited.insert(normalize(&start_url));
-    frontier.push_back((start_url.clone(), 0, false));
-    let mut scheduled_count: usize = 1;
+    // Continuing a stopped crawl seeds the frontier/visited/linked-urls from where it left
+    // off instead of restarting at just `start_url` — see `CrawlResumeState`.
+    let (mut visited, mut frontier, mut scheduled_count, mut crawled_count, mut linked_urls) = match resume {
+        Some(r) => (r.visited, r.frontier, r.scheduled_count, r.crawled_count, r.linked_urls),
+        None => {
+            let mut visited: HashSet<String> = HashSet::new();
+            let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
+            visited.insert(normalize(&start_url));
+            frontier.push_back((start_url.clone(), 0, false));
+            (visited, frontier, 1usize, 0usize, HashSet::<String>::new())
+        }
+    };
 
     if config.use_sitemap {
         let sitemap_urls = sitemap::fetch_sitemap_urls(&client, &start_url).await;
@@ -574,13 +637,8 @@ pub async fn run_crawl(
         }
     }
 
-    // Every internal link target discovered anywhere, used to flag orphan pages
-    // (sitemap-only URLs nothing on the site actually links to).
-    let mut linked_urls: HashSet<String> = HashSet::new();
-
     let mut page_tasks: JoinSet<PageFetchOutcome> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
-    let mut crawled_count: usize = 0;
 
     // The site's robots.txt Crawl-delay (if any) always wins over a shorter configured
     // delay — a user can politely ask to go slower than robots.txt requires, but not faster.
@@ -627,8 +685,19 @@ pub async fn run_crawl(
                 let page_client = page_client.clone();
                 let browser = browser.clone();
                 let axe_source = axe_source.clone();
+                let render_semaphore = render_semaphore.clone();
+                let run_mobile_usability_audit = config.run_mobile_usability_audit;
                 page_tasks.spawn(async move {
-                    let mut outcome = fetch_and_parse(&page_client, browser, axe_source, url, depth).await;
+                    let mut outcome = fetch_and_parse(
+                        &page_client,
+                        browser,
+                        axe_source,
+                        render_semaphore,
+                        url,
+                        depth,
+                        run_mobile_usability_audit,
+                    )
+                    .await;
                     outcome.result.discovered_via_sitemap = via_sitemap;
                     outcome
                 });
@@ -733,10 +802,28 @@ pub async fn run_crawl(
         }
     }
 
-    if cancel.load(Ordering::SeqCst) {
+    let cancelled = cancel.load(Ordering::SeqCst);
+    if cancelled {
         page_tasks.abort_all();
         resource_tasks.abort_all();
     }
+
+    // Only worth resuming if the frontier still has unfetched URLs — if it was empty when
+    // stopped, the crawl had nothing left to do anyway. (Pages whose fetch was already
+    // in flight at the moment of cancellation are aborted above and not re-queued here —
+    // see `CrawlResumeState`'s doc comment.)
+    *resume_slot.lock().unwrap() = if cancelled && !frontier.is_empty() {
+        Some(CrawlResumeState {
+            start_url: config.start_url.clone(),
+            frontier,
+            visited,
+            scheduled_count,
+            crawled_count,
+            linked_urls: linked_urls.clone(),
+        })
+    } else {
+        None
+    };
 
     linked_urls.into_iter().collect()
 }

@@ -5,18 +5,31 @@ interface CrawlActionsProps {
   running: boolean;
   paused: boolean;
   canStart: boolean;
+  /** True when a previous crawl was stopped with URLs still queued for the current start
+   * URL — the backend kept that frontier, so this click continues it instead of starting
+   * over (see AppState.resume_state). */
+  continuing: boolean;
   onStart: () => void;
   onStop: () => void;
   onPause: () => void;
   onResume: () => void;
 }
 
-export function CrawlActions({ running, paused, canStart, onStart, onStop, onPause, onResume }: CrawlActionsProps) {
+export function CrawlActions({
+  running,
+  paused,
+  canStart,
+  continuing,
+  onStart,
+  onStop,
+  onPause,
+  onResume,
+}: CrawlActionsProps) {
   if (!running) {
     return (
       <Button onClick={onStart} disabled={!canStart}>
         <Play className="fill-current" />
-        Start Crawl
+        {continuing ? "Continue Crawl" : "Start Crawl"}
       </Button>
     );
   }

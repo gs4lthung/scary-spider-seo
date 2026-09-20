@@ -4,18 +4,18 @@
 
 # Scary Spider SEO
 
-A desktop site crawler and SEO auditor built with **Tauri**, **React**, and **Rust**. Point it at a URL, crawl the site, and get a searchable, sortable table of every page and resource — with SEO/accessibility issues flagged inline, not buried in a report.
+A desktop site crawler and SEO auditor built with **Tauri**, **React**, and **Rust**. Point it at a URL, crawl the site, and get a searchable, sortable table of every page and resource, with SEO/accessibility issues flagged inline instead of buried in a report.
 
 ## Download
 
-No build tools, no source code, no install wizard needed — grab a build for your OS from the **[Releases page](https://github.com/gs4lthung/gseo/releases)**:
+No build tools, no source code, no install wizard needed. Grab a build for your OS from the **[Releases page](https://github.com/gs4lthung/gseo/releases)**:
 
 | Platform | Just want to run it | Prefer a proper install |
 | --- | --- | --- |
-| Windows | `ScarySpiderSEO-portable-windows-x64.zip` — unzip, double-click `scary-spider-seo.exe` | `.msi` or `.exe` installer |
-| macOS (Apple Silicon) | — | `.dmg` (aarch64) |
-| macOS (Intel) | — | `.dmg` (x64) |
-| Linux | `.AppImage` — mark executable, double-click | `.deb` |
+| Windows | `ScarySpiderSEO-portable-windows-x64.zip`: unzip, double-click `scary-spider-seo.exe` | `.msi` or `.exe` installer |
+| macOS (Apple Silicon) | N/A | `.dmg` (aarch64) |
+| macOS (Intel) | N/A | `.dmg` (x64) |
+| Linux | `.AppImage`: mark executable, double-click | `.deb` |
 
 Builds aren't code-signed yet, so the OS will warn before the first run:
 - **Windows**: click "More info" → "Run anyway" on the SmartScreen prompt.
@@ -33,7 +33,7 @@ If there's no release yet for the version you need, see [Getting started](#getti
 - Site fingerprinting: server/CDN/CMS detection, `llms.txt` discovery, and optional hosting/ASN lookup
 
 **Auditing**
-- 25+ built-in issue checks — broken links, missing/duplicate titles & meta descriptions, title length, H1 issues, canonical problems, insecure links, missing alt text, HSTS, hreflang, structured data errors, and more
+- 25+ built-in issue checks: broken links, missing/duplicate titles & meta descriptions, title length, H1 issues, canonical problems, insecure links, missing alt text, HSTS, hreflang, structured data errors, and more
 - Problem cells and rows are flagged inline in the table (not just in a report), with a per-page issue count and hover detail
 - A detail modal per page/resource with plain-language explanations and fixes for every flagged issue
 
@@ -87,9 +87,10 @@ website/              Marketing site (separate Next.js project, maintainer-only 
 
 ## Contributing
 
-Bug reports, fixes, and features are welcome via pull request — see
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, testing, and PR
-guidelines.
+This project does not accept pull requests — it's maintained solely by
+the owner. Found a bug or have a feature idea? Please
+[open an issue](https://github.com/gs4lthung/gseo/issues) instead; see
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for what to include.
 
 **Releases are cut by the maintainer only** — see below.
 
@@ -104,6 +105,3 @@ git push origin v0.1.0
 ```
 
 It can also be run manually from the Actions tab (`workflow_dispatch`) without a tag push.
-
-Contributors: please don't create or push version tags in a PR — open the
-PR against `main` and the maintainer will handle versioning and release.

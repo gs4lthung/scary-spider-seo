@@ -1,0 +1,9 @@
+# Scary Spider SEO Blog
+
+> SEO, crawling, and web performance notes from the team behind Scary Spider SEO, a free desktop site crawler and SEO auditor.
+
+## Links
+
+- [Blog home](https://blog.scaryspiderseo.com/)
+- [Sitemap](https://blog.scaryspiderseo.com/sitemap.xml)
+- [Main site](https://www.scaryspiderseo.com/)

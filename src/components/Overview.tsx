@@ -60,11 +60,13 @@ function StatTile({
       type="button"
       onClick={onClick}
       className={cn(
-        "comic-panel-sm comic-wobble flex flex-col items-start gap-0 rounded-lg border-2! border-(--comic-ink)! px-3 py-1.5 text-left transition-colors hover:bg-muted/60",
+        // min-w keeps the tile a stable size as its value's digit count changes during a
+        // live crawl (e.g. 0 -> 158 -> 1580) instead of visibly growing/shrinking every update.
+        "comic-panel-sm comic-wobble flex min-w-16 flex-col items-start gap-0 rounded-lg border-2! border-(--comic-ink)! px-3 py-1.5 text-left transition-colors hover:bg-muted/60",
         active && "bg-muted",
       )}
     >
-      <span className={cn("text-lg leading-tight font-semibold", tone && TONE_TEXT[tone])}>{value}</span>
+      <span className={cn("text-lg leading-tight font-semibold tabular-nums", tone && TONE_TEXT[tone])}>{value}</span>
       <span className="text-xs whitespace-nowrap text-muted-foreground">{label}</span>
     </button>
   );
@@ -109,6 +111,7 @@ export function Overview({
     let structuredDataErrors = 0;
     let missingStructuredData = 0;
     let accessibilityIssues = 0;
+    let mobileUsabilityIssues = 0;
 
     for (const p of pages) {
       const bucket = p.status ? `${Math.floor(p.status / 100)}xx` : "error";
@@ -136,6 +139,7 @@ export function Overview({
       if (p.structuredDataErrors.length > 0) structuredDataErrors++;
       if (p.htmlSizeBytes > 0 && p.structuredDataTypes.length === 0) missingStructuredData++;
       if (p.accessibilityViolations.length > 0) accessibilityIssues++;
+      if (p.mobileUsabilityViolations.length > 0) mobileUsabilityIssues++;
     }
 
     let brokenCanonicalTarget = 0;
@@ -181,6 +185,7 @@ export function Overview({
       structuredDataErrors,
       missingStructuredData,
       accessibilityIssues,
+      mobileUsabilityIssues,
     };
   }, [pages, resources, linkedUrls, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap]);
 
@@ -227,9 +232,18 @@ export function Overview({
     },
     {
       title: "Meta & Social",
+      items: [{ key: "missingSocialTags", value: summary.missingSocialTags, label: "Missing OG/Twitter tags" }],
+    },
+    {
+      title: "Mobile Usability",
       items: [
         { key: "missingViewport", value: summary.missingViewport, label: "Missing viewport tag", tone: "warn" },
-        { key: "missingSocialTags", value: summary.missingSocialTags, label: "Missing OG/Twitter tags" },
+        {
+          key: "mobileUsabilityIssues",
+          value: summary.mobileUsabilityIssues,
+          label: "Mobile usability issues",
+          tone: "bad",
+        },
       ],
     },
     {
@@ -321,7 +335,10 @@ export function Overview({
               <AccordionTrigger>
                 <span className="flex items-center gap-2">
                   {group.title}
-                  <Badge variant={groupTotal > 0 ? "secondary" : "outline"} className="h-auto py-0">
+                  <Badge
+                    variant={groupTotal > 0 ? "secondary" : "outline"}
+                    className="h-auto min-w-9 justify-center py-0 tabular-nums"
+                  >
                     {groupTotal}
                   </Badge>
                 </span>

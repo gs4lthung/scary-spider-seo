@@ -16,9 +16,20 @@ pub async fn start_crawl(
         return Err("A crawl is already running".to_string());
     }
 
-    state.pages.lock().unwrap().clear();
-    state.resources.clear();
-    state.resources_checked.store(0, Ordering::SeqCst);
+    // A stopped crawl left queued URLs behind for this exact start URL — continue from
+    // there instead of clearing everything and starting over. A resume state for a
+    // different start URL is stale (e.g. the user changed the URL after stopping) and
+    // is discarded here so that crawl starts fresh.
+    let resume = match state.resume_state.lock().unwrap().take() {
+        Some(r) if r.start_url == config.start_url => Some(r),
+        _ => None,
+    };
+
+    if resume.is_none() {
+        state.pages.lock().unwrap().clear();
+        state.resources.clear();
+        state.resources_checked.store(0, Ordering::SeqCst);
+    }
     state.cancel.store(false, Ordering::SeqCst);
     state.paused.store(false, Ordering::SeqCst);
     state.running.store(true, Ordering::SeqCst);
@@ -29,6 +40,7 @@ pub async fn start_crawl(
     let pages = state.pages.clone();
     let resources = state.resources.clone();
     let resources_checked = state.resources_checked.clone();
+    let resume_state = state.resume_state.clone();
     let app_handle = app.clone();
 
     tauri::async_runtime::spawn(async move {
@@ -40,10 +52,13 @@ pub async fn start_crawl(
             pages.clone(),
             resources.clone(),
             resources_checked,
+            resume,
+            resume_state.clone(),
         )
         .await;
         running.store(false, Ordering::SeqCst);
         let cancelled = cancel.load(Ordering::SeqCst);
+        let resumable = resume_state.lock().unwrap().is_some();
         let pages_crawled = pages.lock().unwrap().len();
         let resources_checked = resources.len();
         let _ = app_handle.emit(
@@ -52,6 +67,7 @@ pub async fn start_crawl(
                 pages_crawled,
                 resources_checked,
                 cancelled,
+                resumable,
                 linked_urls,
             },
         );
@@ -129,6 +145,10 @@ pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnaps
     let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let snapshot: CrawlSnapshot = serde_json::from_str(&content).map_err(|e| e.to_string())?;
 
+    // A loaded snapshot has no in-progress frontier of its own — any leftover resume
+    // state from an earlier stopped crawl no longer corresponds to what's in `pages`
+    // now, so it must not be silently resumed into on the next start_crawl.
+    *state.resume_state.lock().unwrap() = None;
     *state.pages.lock().unwrap() = snapshot.pages.clone();
     state.resources.clear();
     for r in &snapshot.resources {

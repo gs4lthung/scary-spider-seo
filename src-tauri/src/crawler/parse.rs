@@ -1,6 +1,25 @@
 use scraper::{Html, Selector};
 use serde_json::Value;
+use std::sync::LazyLock;
 use url::Url;
+
+// Compiled once and reused across every crawled page instead of re-parsing the
+// same selector strings on every call to `parse_page`.
+static LD_JSON_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse(r#"script[type="application/ld+json"]"#).unwrap());
+static REMOVE_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("script, style, noscript, template").unwrap());
+static TITLE_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("title").unwrap());
+static META_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("meta").unwrap());
+static H1_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("h1").unwrap());
+static CANONICAL_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse(r#"link[rel="canonical"]"#).unwrap());
+static HTML_TAG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("html").unwrap());
+static HREFLANG_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse(r#"link[rel="alternate"][hreflang]"#).unwrap());
+static BODY_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("body").unwrap());
+static A_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("a[href]").unwrap());
+static IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img[src]").unwrap());
 
 pub struct ParsedPage {
     pub title: Option<String>,
@@ -165,10 +184,9 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
     let mut html = Html::parse_document(body);
 
     // Extract JSON-LD structured data before stripping <script> tags below.
-    let ld_json_sel = Selector::parse(r#"script[type="application/ld+json"]"#).unwrap();
     let mut structured_data_types = Vec::new();
     let mut structured_data_errors = Vec::new();
-    for script in html.select(&ld_json_sel) {
+    for script in html.select(&LD_JSON_SEL) {
         let raw = script.text().collect::<String>();
         let trimmed = raw.trim();
         if trimmed.is_empty() {
@@ -182,28 +200,25 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
 
     // Strip script/style/noscript/template subtrees so word-count and text
     // extraction only reflect visible content, not embedded code or CSS.
-    let remove_sel = Selector::parse("script, style, noscript, template").unwrap();
-    let remove_ids: Vec<_> = html.select(&remove_sel).map(|e| e.id()).collect();
+    let remove_ids: Vec<_> = html.select(&REMOVE_SEL).map(|e| e.id()).collect();
     for id in remove_ids {
         if let Some(mut node) = html.tree.get_mut(id) {
             node.detach();
         }
     }
 
-    let title_sel = Selector::parse("title").unwrap();
     let title = html
-        .select(&title_sel)
+        .select(&TITLE_SEL)
         .next()
         .map(|e| e.text().collect::<String>().trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let meta_sel = Selector::parse("meta").unwrap();
     let mut meta_description = None;
     let mut meta_robots = None;
     let mut viewport = None;
     let mut has_open_graph = false;
     let mut has_twitter_card = false;
-    for meta in html.select(&meta_sel) {
+    for meta in html.select(&META_SEL) {
         let name = meta.value().attr("name").unwrap_or("").to_ascii_lowercase();
         let property = meta.value().attr("property").unwrap_or("").to_ascii_lowercase();
         if name == "description" {
@@ -232,17 +247,15 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         }
     }
 
-    let h1_sel = Selector::parse("h1").unwrap();
     let h1s: Vec<String> = html
-        .select(&h1_sel)
+        .select(&H1_SEL)
         .map(|e| e.text().collect::<String>().trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
     let h1_count = h1s.len();
     let h1 = h1s.into_iter().next();
 
-    let canonical_sel = Selector::parse(r#"link[rel="canonical"]"#).unwrap();
-    let canonical_links: Vec<_> = html.select(&canonical_sel).collect();
+    let canonical_links: Vec<_> = html.select(&CANONICAL_SEL).collect();
     let canonical_count = canonical_links.len();
     let canonical = canonical_links
         .first()
@@ -250,35 +263,31 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         .and_then(|href| resolve_url(base, href))
         .map(|u| u.to_string());
 
-    let html_tag_sel = Selector::parse("html").unwrap();
     let lang = html
-        .select(&html_tag_sel)
+        .select(&HTML_TAG_SEL)
         .next()
         .and_then(|e| e.value().attr("lang"))
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let hreflang_sel = Selector::parse(r#"link[rel="alternate"][hreflang]"#).unwrap();
     let hreflang_values: Vec<String> = html
-        .select(&hreflang_sel)
+        .select(&HREFLANG_SEL)
         .filter_map(|e| e.value().attr("hreflang"))
         .map(|s| s.to_string())
         .collect();
 
-    let body_sel = Selector::parse("body").unwrap();
     let body_text = html
-        .select(&body_sel)
+        .select(&BODY_SEL)
         .next()
         .map(|b| b.text().collect::<Vec<_>>().join(" "))
         .unwrap_or_default();
     let word_count = body_text.split_whitespace().count();
     let content_hash = hash_content(&body_text);
 
-    let a_sel = Selector::parse("a[href]").unwrap();
     let mut internal_links = Vec::new();
     let mut external_links = Vec::new();
     let mut internal_nofollow_count = 0;
-    for a in html.select(&a_sel) {
+    for a in html.select(&A_SEL) {
         if let Some(href) = a.value().attr("href") {
             if let Some(joined) = resolve_url(base, href) {
                 if is_same_site(base, &joined) {
@@ -293,12 +302,11 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         }
     }
 
-    let img_sel = Selector::parse("img[src]").unwrap();
     let mut images = Vec::new();
     // An explicit alt="" (decorative image) is intentional per accessibility best
     // practice; only a wholly absent alt attribute counts as "missing".
     let mut missing_alt_count = 0;
-    for img in html.select(&img_sel) {
+    for img in html.select(&IMG_SEL) {
         if let Some(src) = img.value().attr("src") {
             if let Some(joined) = resolve_url(base, src) {
                 let alt_attr = img.value().attr("alt");

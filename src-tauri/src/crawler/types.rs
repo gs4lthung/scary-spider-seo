@@ -33,6 +33,8 @@ pub struct CrawlConfig {
     pub lookup_hosting: bool,
     #[serde(default)]
     pub run_accessibility_audit: bool,
+    #[serde(default)]
+    pub run_mobile_usability_audit: bool,
 }
 
 fn default_max_pages() -> usize {
@@ -150,6 +152,8 @@ pub struct PageResult {
     #[serde(default)]
     pub accessibility_violations: Vec<AccessibilityViolation>,
     #[serde(default)]
+    pub mobile_usability_violations: Vec<MobileUsabilityViolation>,
+    #[serde(default)]
     pub error: Option<String>,
 }
 
@@ -158,6 +162,15 @@ pub struct PageResult {
 pub struct AccessibilityViolation {
     pub id: String,
     pub impact: Option<String>,
+    pub description: String,
+    pub help_url: String,
+    pub node_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MobileUsabilityViolation {
+    pub id: String,
     pub description: String,
     pub help_url: String,
     pub node_count: usize,
@@ -217,6 +230,11 @@ pub struct CrawlSummary {
     pub pages_crawled: usize,
     pub resources_checked: usize,
     pub cancelled: bool,
+    /// True when the crawl was stopped with URLs still queued and a matching
+    /// `CrawlResumeState` was saved — i.e. the next `start_crawl` for this same start URL
+    /// will continue rather than start over. False for a crawl that ran to completion, or
+    /// one stopped with nothing left queued (nothing to resume either way).
+    pub resumable: bool,
     pub linked_urls: Vec<String>,
 }
 

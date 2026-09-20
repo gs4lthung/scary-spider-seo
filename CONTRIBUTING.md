@@ -1,15 +1,19 @@
 # Contributing to Scary Spider SEO
 
-Thanks for wanting to help out — bug reports, fixes, and features are all
-welcome via pull request.
+This project does not accept pull requests — it's maintained solely by
+the owner. If you find a bug or have an idea for a feature, please
+[open an issue](https://github.com/gs4lthung/gseo/issues) instead.
+Unsolicited PRs will be closed without review.
 
-## Before you start
+## Reporting a bug
 
-- For anything beyond a small fix, open an issue first to discuss the
-  approach. Saves everyone from a rewritten PR.
-- Keep PRs focused — one fix or feature per PR.
+Please include:
 
-## Development setup
+- What you did, what you expected, and what happened instead
+- Your OS and the build you're using (installer filename or app version)
+- Steps to reproduce, and a URL to crawl if the issue is site-specific
+
+## Building locally (to help reproduce or investigate an issue)
 
 Prerequisites: [Node.js](https://nodejs.org/), [Rust](https://www.rust-lang.org/tools/install),
 and the [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
@@ -29,31 +33,13 @@ npm test                     # frontend (Vitest)
 cd src-tauri && cargo test   # backend (Rust)
 ```
 
-Please add or update tests for behavior changes.
-
 ## The website
 
 `website/` is the marketing site (separate Next.js project, its own
-`package.json`, independent of the app) — **maintained solely by the
-project owner. Please don't open PRs that touch it**; contributions
-should focus on the app (`src/`, `src-tauri/`). It's listed in
-[`.github/CODEOWNERS`](.github/CODEOWNERS), so any PR touching it needs
-the owner's review regardless.
-
-## Pull requests
-
-- Branch off `main`, keep commits focused, and describe what changed and
-  how you tested it.
-- CI must pass before merge.
-
-## Releases
-
-Releases are cut by the maintainer only, by pushing a `vX.Y.Z` tag (which
-triggers [`.github/workflows/release.yml`](.github/workflows/release.yml)).
-**Please don't create or push version tags in a PR** — open the PR, and
-the maintainer will handle versioning and the release once it's merged.
+`package.json`, independent of the app) — maintained solely by the
+project owner.
 
 ## Code of conduct
 
-Be respectful and constructive. Report unacceptable behavior directly to
-the maintainer.
+Be respectful and constructive when opening issues. Report unacceptable
+behavior directly to the maintainer.

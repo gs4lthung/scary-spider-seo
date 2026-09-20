@@ -3,6 +3,8 @@ export const SITE_URL = "https://www.scaryspiderseo.com";
 export const REPO_URL = "https://github.com/gs4lthung/scary-spider-seo";
 export const RELEASES_URL = `${REPO_URL}/releases`;
 export const LATEST_RELEASE_URL = `${REPO_URL}/releases/latest`;
+export const BLOG_URL =
+  process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://blog.scaryspiderseo.com";
 
 export const NAV_LINKS = [
   { href: "#how-it-works", label: "How it works" },

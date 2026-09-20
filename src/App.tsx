@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UrlCombobox } from "@/components/url-combobox";
 import { CrawlActions } from "@/components/crawl-actions";
 import { CrawlOptionsSheet } from "@/components/crawl-options-sheet";
@@ -19,6 +18,7 @@ import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
 import { DetailModal } from "./components/DetailModal";
 import { LinkCell } from "./components/link-cell";
+import { SiteTree } from "./components/SiteTree";
 import { SiteInfoPanel } from "./components/SiteInfoPanel";
 import {
   DEFAULT_CONFIG,
@@ -34,22 +34,21 @@ import {
   type FilterKey,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
+  createDuplicateTracker,
   filterPages,
   filterResources,
   filterTab,
-  getCanonicalStatusMap,
-  getDuplicateContentSet,
-  getDuplicateMetaSet,
-  getDuplicateTitleSet,
   getPageIssueKeys,
   getResourceIssueKeys,
+  ingestDuplicateValue,
   searchPages,
   searchResources,
 } from "./lib/filters";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { cn } from "@/lib/utils";
+import { withScheme } from "./lib/url";
 
-type Tab = "overview" | "pages" | "resources";
+type Tab = "overview" | "pages" | "resources" | "sitemap";
 
 /** Wraps a cell's rendered value in destructive styling when `bad` is true — the inline, at-a-glance counterpart to DetailModal's `isError` fields. */
 function flagCell(value: React.ReactNode, bad: boolean) {
@@ -90,6 +89,28 @@ interface PageColumnsContext {
 }
 
 function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[] {
+  // The Issues column's accessorFn runs for every row on every table rebuild (react-table
+  // builds the full row model regardless of virtualization), and its cell renderer runs
+  // again for visible rows — without this cache that's getPageIssueKeys' 26 sub-filters
+  // computed twice per row per update. Scoped to this ctx (rebuilt whenever ctx's deps
+  // change), keyed by page object identity so unrelated pages never invalidate each other.
+  const issueCache = new WeakMap<PageResult, FilterKey[]>();
+  function issuesFor(page: PageResult): FilterKey[] {
+    let keys = issueCache.get(page);
+    if (!keys) {
+      keys = getPageIssueKeys(
+        page,
+        ctx.duplicateTitles,
+        ctx.duplicateContent,
+        ctx.duplicateMeta,
+        ctx.canonicalStatusMap,
+        ctx.linkedUrls,
+      );
+      issueCache.set(page, keys);
+    }
+    return keys;
+  }
+
   return [
     {
       accessorKey: "url",
@@ -103,44 +124,22 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       header: "Issues",
       size: 80,
       meta: { description: "Number of SEO issues detected for this page. Hover the warning icon in a row for details." },
-      accessorFn: (page) =>
-        getPageIssueKeys(
-          page,
-          ctx.duplicateTitles,
-          ctx.duplicateContent,
-          ctx.duplicateMeta,
-          ctx.canonicalStatusMap,
-          ctx.linkedUrls,
-        ).length,
+      accessorFn: (page) => issuesFor(page).length,
+      // A native `title` tooltip rather than the Radix Tooltip used elsewhere in the app:
+      // this cell renders for every visible row of a virtualized table (most rows have
+      // >=1 issue), and mounting a JS-positioned tooltip per row measurably added up
+      // during fast scrolling — rows would render blank until React caught up. `title`
+      // supports the same newline-joined multi-issue list at effectively zero cost.
       cell: (c) => {
         const count = c.getValue() as number;
         if (count === 0) return <span className="text-muted-foreground">—</span>;
-        const keys = getPageIssueKeys(
-          c.row.original,
-          ctx.duplicateTitles,
-          ctx.duplicateContent,
-          ctx.duplicateMeta,
-          ctx.canonicalStatusMap,
-          ctx.linkedUrls,
-        );
+        const keys = issuesFor(c.row.original);
         const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean);
         return (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex items-center gap-1 font-medium text-destructive">
-                <TriangleAlert className="size-3.5" />
-                {count}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs items-start gap-2 text-left break-words">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-              <span className="flex flex-col gap-0.5">
-                {titles.map((t) => (
-                  <span key={t}>{t}</span>
-                ))}
-              </span>
-            </TooltipContent>
-          </Tooltip>
+          <span title={titles.join("\n")} className="inline-flex items-center gap-1 font-medium text-destructive">
+            <TriangleAlert className="size-3.5" />
+            {count}
+          </span>
         );
       },
     },
@@ -401,6 +400,13 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
       meta: { description: "Number of accessibility violations detected on the page." },
       cell: (c) => flagCell((c.getValue() as unknown[]).length, (c.getValue() as unknown[]).length > 0),
     },
+    {
+      accessorKey: "mobileUsabilityViolations",
+      header: "Mobile Usability Issues",
+      size: 170,
+      meta: { description: "Number of mobile usability violations (content width, font size, tap targets) detected on the page." },
+      cell: (c) => flagCell((c.getValue() as unknown[]).length, (c.getValue() as unknown[]).length > 0),
+    },
   ];
 }
 
@@ -485,11 +491,40 @@ function App() {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
   const [linkedUrls, setLinkedUrls] = useState<string[]>([]);
+  // Which scheme to assume for a start URL typed without one (e.g. "example.com") — a
+  // URL that already specifies http:// or https:// is never overridden by this.
+  const [preferHttps, setPreferHttps] = useState(true);
   const pagesBufRef = useRef<PageResult[]>([]);
   const resourcesBufRef = useRef<ResourceResult[]>([]);
+  // Backs the duplicate-title/meta/content and canonical-status derivations below with
+  // incremental accumulators instead of full-array rescans (see the useMemo that reads
+  // them for why). Reset via resetDerivedTrackers() whenever `pages` is replaced wholesale
+  // rather than appended to.
+  const titleTrackerRef = useRef(createDuplicateTracker());
+  const contentTrackerRef = useRef(createDuplicateTracker());
+  const metaTrackerRef = useRef(createDuplicateTracker());
+  const canonicalStatusRef = useRef(new Map<string, number | null>());
+  const ingestedPagesCountRef = useRef(0);
+
+  const resetDerivedTrackers = useCallback(() => {
+    titleTrackerRef.current = createDuplicateTracker();
+    contentTrackerRef.current = createDuplicateTracker();
+    metaTrackerRef.current = createDuplicateTracker();
+    canonicalStatusRef.current = new Map();
+    ingestedPagesCountRef.current = 0;
+  }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
   // (registered once on mount) always reads current values instead of a stale closure.
   const closeGuardRef = useRef({ running: false, pagesCount: 0, resourcesCount: 0 });
+  // The start URL a stopped-but-unfinished crawl can be continued for (the backend keeps
+  // the matching frontier around — see AppState.resume_state). Cleared whenever a crawl
+  // finishes normally or a snapshot is loaded, so Start only continues when it's the same
+  // crawl that was stopped, never a stale one.
+  const [resumableStartUrl, setResumableStartUrl] = useState<string | null>(null);
+  // Always the start URL of whichever crawl most recently started, read by the
+  // `crawl://done` listener below (registered once on mount) instead of `config.startUrl`,
+  // which would otherwise be a stale closure from that first render.
+  const activeStartUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     // `listen()`/unlisten are async, and React StrictMode's dev-only
@@ -551,6 +586,7 @@ function App() {
         setPaused(false);
         setLinkedUrls(payload.linkedUrls);
         setProgress((prev) => (prev ? { ...prev, running: false, paused: false } : prev));
+        setResumableStartUrl(payload.resumable ? activeStartUrlRef.current : null);
       });
       await registerListener<string>("crawl://error", (payload) => {
         toast.error(payload);
@@ -600,23 +636,38 @@ function App() {
   }, []);
 
   const handleStart = useCallback(async () => {
-    setPages([]);
-    setResources([]);
+    // A URL typed without a scheme (e.g. "example.com") gets the checkbox's preferred
+    // one; a URL that already specifies http:// or https:// is left untouched.
+    const startUrl = withScheme(config.startUrl, preferHttps);
+    const nextConfig = { ...config, startUrl };
+
+    // Continuing a crawl stopped with URLs still queued (the backend kept its frontier
+    // for this exact start URL — see AppState.resume_state): keep the results gathered
+    // so far instead of wiping them, since the backend will append to them, not replace
+    // them. A different start URL (or a crawl that ran to completion) always starts fresh.
+    const continuing = resumableStartUrl === startUrl;
+    activeStartUrlRef.current = startUrl;
+    if (!continuing) {
+      setPages([]);
+      setResources([]);
+      setSiteInfo(null);
+      setLinkedUrls([]);
+      resetDerivedTrackers();
+      pagesBufRef.current = [];
+      resourcesBufRef.current = [];
+    }
+    setConfig(nextConfig);
     setProgress(null);
     setFilter("all");
     setPaused(false);
-    setSiteInfo(null);
-    setLinkedUrls([]);
-    pagesBufRef.current = [];
-    resourcesBufRef.current = [];
     setRunning(true);
     try {
-      await invoke("start_crawl", { config });
+      await invoke("start_crawl", { config: nextConfig });
     } catch (err) {
       toast.error(String(err));
       setRunning(false);
     }
-  }, [config]);
+  }, [config, preferHttps, resumableStartUrl, resetDerivedTrackers]);
 
   const handleStop = useCallback(async () => {
     try {
@@ -680,6 +731,8 @@ function App() {
       });
       if (!path || typeof path !== "string") return;
       const snapshot = await invoke<CrawlSnapshot>("load_crawl", { path });
+      resetDerivedTrackers();
+      setResumableStartUrl(null);
       setPages(snapshot.pages);
       setResources(snapshot.resources);
       setProgress(null);
@@ -689,12 +742,36 @@ function App() {
     } catch (err) {
       toast.error(String(err));
     }
-  }, []);
+  }, [resetDerivedTrackers]);
 
-  const duplicateTitleSet = useMemo(() => getDuplicateTitleSet(pages), [pages]);
-  const duplicateContentSet = useMemo(() => getDuplicateContentSet(pages), [pages]);
-  const duplicateMetaSet = useMemo(() => getDuplicateMetaSet(pages), [pages]);
-  const canonicalStatusMap = useMemo(() => getCanonicalStatusMap(pages), [pages]);
+  // Ingests only the pages not yet seen by the trackers (normally just the latest batch —
+  // `pages` only grows by appending during a crawl) instead of rescanning/rehashing every
+  // page crawled so far on every ~150ms UI flush, which is what made this cost trend toward
+  // O(n²) over a long crawl. Still produces fresh Set/Map instances each time so downstream
+  // useMemo/props comparisons below see them exactly as before.
+  const { duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap } = useMemo(() => {
+    if (ingestedPagesCountRef.current > pages.length) {
+      // `pages` was replaced wholesale rather than appended to (defensive fallback —
+      // handleStart/handleOpenCrawl already call resetDerivedTrackers() explicitly).
+      resetDerivedTrackers();
+    }
+    for (let i = ingestedPagesCountRef.current; i < pages.length; i++) {
+      const p = pages[i];
+      ingestDuplicateValue(titleTrackerRef.current, p.title);
+      ingestDuplicateValue(contentTrackerRef.current, p.contentHash);
+      ingestDuplicateValue(metaTrackerRef.current, p.metaDescription);
+      canonicalStatusRef.current.set(p.url, p.status);
+    }
+    ingestedPagesCountRef.current = pages.length;
+
+    return {
+      duplicateTitleSet: new Set(titleTrackerRef.current.duplicates),
+      duplicateContentSet: new Set(contentTrackerRef.current.duplicates),
+      duplicateMetaSet: new Set(metaTrackerRef.current.duplicates),
+      canonicalStatusMap: new Map(canonicalStatusRef.current),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
+  }, [pages]);
   const linkedUrlSet = useMemo(() => new Set(linkedUrls), [linkedUrls]);
   const filteredPages = useMemo(
     () =>
@@ -744,6 +821,12 @@ function App() {
     });
   }, []);
 
+  const handleViewInPages = useCallback((query: string) => {
+    setTab("pages");
+    setFilter("all");
+    setSearch(query);
+  }, []);
+
   const exportTab: "pages" | "resources" = tab === "resources" ? "resources" : "pages";
   const exportCount = exportTab === "resources" ? resources.length : pages.length;
 
@@ -758,11 +841,14 @@ function App() {
           disabled={running}
           onChange={(startUrl) => setConfig((c) => ({ ...c, startUrl }))}
           onSubmit={handleStart}
+          preferHttps={preferHttps}
+          onToggleScheme={() => setPreferHttps((v) => !v)}
         />
         <CrawlActions
           running={running}
           paused={paused}
           canStart={!!config.startUrl}
+          continuing={resumableStartUrl === config.startUrl}
           onStart={handleStart}
           onStop={handleStop}
           onPause={handlePause}
@@ -787,6 +873,7 @@ function App() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="pages">Pages ({pages.length})</TabsTrigger>
             <TabsTrigger value="resources">Links & Images ({resources.length})</TabsTrigger>
+            <TabsTrigger value="sitemap">Site Map</TabsTrigger>
           </TabsList>
           {filter !== "all" && (
             <Badge variant="secondary" className="h-auto gap-1.5 py-1">
@@ -801,7 +888,7 @@ function App() {
               </button>
             </Badge>
           )}
-          {tab !== "overview" && (
+          {(tab === "pages" || tab === "resources") && (
             <InputGroup className="w-64">
               <InputGroupAddon>
                 <SearchIcon className="size-4" />
@@ -876,6 +963,19 @@ function App() {
             emptyLabel="No external links or images checked yet."
             onRowClick={setSelectedResource}
             storageKey="resources"
+          />
+        </TabsContent>
+
+        <TabsContent value="sitemap" className="min-h-0 flex-1">
+          <SiteTree
+            pages={pages}
+            duplicateTitles={duplicateTitleSet}
+            duplicateContent={duplicateContentSet}
+            duplicateMeta={duplicateMetaSet}
+            canonicalStatusMap={canonicalStatusMap}
+            linkedUrls={linkedUrlSet}
+            onSelectPage={setSelectedPage}
+            onViewInPages={handleViewInPages}
           />
         </TabsContent>
       </Tabs>
@@ -954,6 +1054,14 @@ function App() {
               value:
                 selectedPage.accessibilityViolations.length > 0
                   ? selectedPage.accessibilityViolations.map((v) => `${v.id} (${v.nodeCount} nodes)`).join("; ")
+                  : null,
+              isError: true,
+            },
+            {
+              label: "Mobile Usability Violations",
+              value:
+                selectedPage.mobileUsabilityViolations.length > 0
+                  ? selectedPage.mobileUsabilityViolations.map((v) => `${v.id} (${v.nodeCount} nodes)`).join("; ")
                   : null,
               isError: true,
             },

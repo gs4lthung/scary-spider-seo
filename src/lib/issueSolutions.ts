@@ -261,4 +261,13 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
       url: "https://www.deque.com/axe/axe-core/",
     },
   },
+  mobileUsabilityIssues: {
+    title: "Mobile usability issues",
+    problem: "Detected by emulating a phone viewport (375px wide) on the rendered page and checking the same signals behind Google Search Console's old Mobile Usability report and Lighthouse's mobile-friendly audits: content wider than the screen (forces horizontal scrolling), body text rendered below a comfortably readable size, and tap targets (links/buttons) that are too small or packed too close together to hit reliably with a finger.",
+    fix: "For \"content wider than screen\", find the element forcing the width (often a fixed-width table, image, or element with a hardcoded px width) and make it responsive (max-width: 100%, or a horizontally-scrollable wrapper for tables). For \"font size\", raise the base body font size (16px CSS px is a safe minimum) rather than relying on mobile browsers' auto-zoom. For tap targets, size interactive elements to at least 48x48 CSS px and add margin so adjacent targets aren't touching. Each violation lists the specific check and affected element count; open the page on a real phone (or Chrome DevTools' device toolbar) to see exactly which elements triggered it.",
+    source: {
+      label: "web.dev: Tap targets and text size for mobile",
+      url: "https://web.dev/articles/accessible-tap-targets",
+    },
+  },
 };

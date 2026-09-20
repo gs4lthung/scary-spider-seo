@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LATEST_RELEASE_URL, NAV_LINKS, REPO_URL, SPONSOR_URL } from "@/lib/site";
+import { BLOG_URL, LATEST_RELEASE_URL, NAV_LINKS, REPO_URL, SPONSOR_URL } from "@/lib/site";
 
 export function Nav() {
   return (
@@ -27,6 +27,12 @@ export function Nav() {
               {link.label}
             </a>
           ))}
+          <a
+            href={BLOG_URL}
+            className="text-foreground/80 transition hover:text-primary"
+          >
+            Blog
+          </a>
           <a
             href={REPO_URL}
             target="_blank"

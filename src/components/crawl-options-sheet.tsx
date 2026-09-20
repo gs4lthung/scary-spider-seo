@@ -148,7 +148,8 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
                 <span className="text-sm font-medium">Render JavaScript</span>
                 <span className="text-xs text-muted-foreground">
                   Renders each page with headless Chrome before parsing. Requires Chrome/Chromium; much slower per
-                  page.
+                  page. Rendered pages are capped at a handful running at once (fewer still with an audit below on)
+                  to keep the rest of the app responsive.
                 </span>
               </div>
               <Switch
@@ -159,6 +160,7 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
                     ...config,
                     renderJs: checked,
                     runAccessibilityAudit: checked ? config.runAccessibilityAudit : false,
+                    runMobileUsabilityAudit: checked ? config.runMobileUsabilityAudit : false,
                   })
                 }
               />
@@ -178,6 +180,27 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
                   onChange({
                     ...config,
                     runAccessibilityAudit: checked,
+                    renderJs: checked ? true : config.renderJs,
+                  })
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">Mobile usability audit</span>
+                <span className="text-xs text-muted-foreground">
+                  Emulates a phone viewport on the rendered page and checks for content wider than the screen, text
+                  too small to read, and tap targets that are too small or too close together. Requires Render
+                  JavaScript, so enabling this turns it on automatically.
+                </span>
+              </div>
+              <Switch
+                checked={config.runMobileUsabilityAudit}
+                disabled={running}
+                onCheckedChange={(checked) =>
+                  onChange({
+                    ...config,
+                    runMobileUsabilityAudit: checked,
                     renderJs: checked ? true : config.renderJs,
                   })
                 }

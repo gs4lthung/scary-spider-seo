@@ -8,7 +8,7 @@ const geist = Geist({
   subsets: ["latin"],
 });
 
-const title = "Scary Spider SEO | Desktop Site Crawler & SEO Auditor";
+const title = "Scary Spider SEO: Desktop Site Crawler & SEO Auditor";
 const shortTitle = "Scary Spider SEO";
 const description =
   "Crawl any site and get a sortable table of every page. SEO and accessibility issues are flagged inline. Free desktop app for Windows, macOS, and Linux.";
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: title,
-    template: `%s | ${shortTitle}`,
+    template: `%s: ${shortTitle}`,
   },
   description,
   keywords: [
@@ -51,7 +51,9 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-128.png", sizes: "128x128", type: "image/png" },
+      { url: "/favicon-48.png", sizes: "48x48", type: "image/png" },
+      { url: "/favicon-96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon-192.png", sizes: "192x192", type: "image/png" },
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
