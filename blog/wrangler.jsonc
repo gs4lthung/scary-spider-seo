@@ -6,13 +6,14 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  // No "vars" block here: SESSION_SECRET is a secret, never plaintext
-  // config. Set it with `wrangler secret put SESSION_SECRET` for
-  // production, and in a local, gitignored `.dev.vars` file for `next dev`/
-  // `wrangler dev` — see `.dev.vars.example`. Its TypeScript type is
-  // declared by hand in `lib/cloudflare-env.d.ts` since it doesn't come
-  // from `wrangler types` (nothing here declares it). User passwords live
-  // hashed in the `users` D1 table, not in an env var.
+  // No "vars" block here: SESSION_SECRET and TURNSTILE_SECRET_KEY are
+  // secrets, never plaintext config. Set them with
+  // `wrangler secret put SESSION_SECRET` and `wrangler secret put TURNSTILE_SECRET_KEY`
+  // for production, and in a local, gitignored `.dev.vars` file for
+  // `next dev`/`wrangler dev` — see `.dev.vars.example`. Their TypeScript
+  // types are declared by hand in `lib/cloudflare-env.d.ts` since they
+  // don't come from `wrangler types` (nothing here declares them). User
+  // passwords live hashed in the `users` D1 table, not in an env var.
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

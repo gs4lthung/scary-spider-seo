@@ -1,8 +1,12 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import Script from "next/script";
 import { PencilSimpleLine, ShieldCheck } from "@phosphor-icons/react";
 import { submitComment } from "@/app/comments-actions";
+
+const TURNSTILE_SITE_KEY = "0x4AAAAAAE9tZeVsVwqnGp2Z";
+const TURNSTILE_ACTION = "submit_comment";
 
 const REMEMBERED_NAME_KEY = "blog_comment_author";
 
@@ -40,6 +44,9 @@ export function CommentForm({
         }
       }
       formRef.current?.reset();
+      if (window.turnstile) {
+        window.turnstile.reset();
+      }
     }
   }, [state]);
 
@@ -47,8 +54,9 @@ export function CommentForm({
     <form
       ref={formRef}
       action={formAction}
-      className="comic-panel relative overflow-hidden rounded-2xl border-2 border-ink bg-card p-5"
+      className="comic-panel relative overflow-hidden rounded-2xl border-2 border-ink bg-card p-4 sm:p-5"
     >
+      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="lazyOnload" />
       {/* Folded-corner dog-ear, drawn with the comic ink color so it reads as
           a note that has been dog-eared, not a flat rectangle. */}
       <span
@@ -60,13 +68,16 @@ export function CommentForm({
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-ink bg-primary text-primary-foreground">
           <PencilSimpleLine className="h-4 w-4" weight="bold" aria-hidden="true" />
         </span>
-        <h3 className="font-mono text-xs font-bold tracking-widest text-muted-foreground uppercase">
+        <h3 className="font-mono text-xs font-bold tracking-widest text-foreground uppercase">
           Leave a comment
         </h3>
         <span className="ml-auto hidden rounded-full border-2 border-ink bg-accent px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-widest text-accent-foreground uppercase sm:inline-block">
           Speak up
         </span>
       </div>
+      <p className="mt-2 max-w-md text-sm text-muted-foreground">
+        Add your perspective to the conversation. Keep it useful and kind.
+      </p>
 
       <input type="hidden" name="postId" value={postId} />
       <input type="hidden" name="parentId" value={parentId ?? ""} />
@@ -92,7 +103,7 @@ export function CommentForm({
             defaultValue={rememberedName ?? undefined}
             key={rememberedName}
             placeholder="Your name"
-            className="mt-1.5 w-full rounded-lg border-2 border-ink bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
+             className="mt-1.5 w-full rounded-lg border-2 border-ink bg-background px-3 py-2 text-sm placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none"
           />
         </div>
         <div>
@@ -108,28 +119,31 @@ export function CommentForm({
             rows={4}
             maxLength={3000}
             placeholder="Share your thoughts..."
-            className="mt-1.5 w-full rounded-lg border-2 border-ink bg-background px-3 py-2 text-sm leading-7 placeholder:text-muted-foreground bg-[repeating-linear-gradient(to_bottom,color-mix(in_oklch,var(--color-ink)_18%,transparent)_0,color-mix(in_oklch,var(--color-ink)_18%,transparent)_1px,transparent_1px,transparent_28px)]"
+             className="mt-1.5 w-full rounded-lg border-2 border-ink bg-background px-3 py-2 text-sm leading-7 placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-200 focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none bg-[repeating-linear-gradient(to_bottom,color-mix(in_oklch,var(--color-ink)_18%,transparent)_0,color-mix(in_oklch,var(--color-ink)_18%,transparent)_1px,transparent_1px,transparent_28px)]"
           />
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="submit"
           disabled={pending}
-          className="comic-wobble rounded-lg border-2 border-ink bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          className="comic-wobble rounded-lg border-2 border-ink bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60"
         >
           {pending ? "Posting..." : parentId ? "Post reply" : "Post comment"}
         </button>
         {onCancel ? (
-          <button type="button" onClick={onCancel} className="text-sm text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={onCancel} className="rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
             Cancel
           </button>
         ) : null}
-        <p className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-          <ShieldCheck className="h-4 w-4" weight="bold" aria-hidden="true" />
-          Checked before it goes live
-        </p>
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+          <div className="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-action={TURNSTILE_ACTION} />
+          <p className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+            <ShieldCheck className="h-4 w-4" weight="bold" aria-hidden="true" />
+            Checked before it goes live
+          </p>
+        </div>
       </div>
 
       {state && "error" in state ? (

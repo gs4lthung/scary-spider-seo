@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { and, eq, gte } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db/client";
@@ -17,8 +18,39 @@ const MAX_COMMENT_LENGTH = 3000;
 const MIN_FILL_TIME_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX = 3;
+const TURNSTILE_ACTION = "submit_comment";
+const TURNSTILE_SECRET_KEY_LENGTH_MAX = 2048;
 
 export type CommentActionState = { error: string } | { success: true; pending: boolean } | null;
+
+async function verifyTurnstileToken(
+  token: string,
+  secretKey: string,
+  remoteIp: string | null,
+): Promise<boolean> {
+  const body = new URLSearchParams({
+    secret: secretKey,
+    response: token,
+  });
+  if (remoteIp) body.set("remoteip", remoteIp);
+
+  let result: { success: boolean; action?: string; hostname?: string };
+  try {
+    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(10_000),
+      body,
+    });
+    if (!r.ok) return false;
+    result = await r.json();
+  } catch {
+    return false;
+  }
+
+  if (!result.success || result.action !== TURNSTILE_ACTION) return false;
+  return true;
+}
 
 export async function submitComment(_prevState: CommentActionState, formData: FormData): Promise<CommentActionState> {
   // Honeypot: a field real visitors never see or fill in. Bots that
@@ -30,6 +62,19 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   const formStartedAt = Number(formData.get("formStartedAt"));
   if (Number.isFinite(formStartedAt) && Date.now() - formStartedAt < MIN_FILL_TIME_MS) {
     return { error: "Please take a moment before submitting." };
+  }
+
+  const turnstileToken = String(formData.get("cf-turnstile-response") ?? "").trim();
+  if (!turnstileToken || turnstileToken.length > TURNSTILE_SECRET_KEY_LENGTH_MAX) {
+    return { error: "Verification failed. Please try again." };
+  }
+
+  const { env } = await getCloudflareContext({ async: true });
+  const hdrs = await headers();
+  const remoteIp = hdrs.get("cf-connecting-ip") ?? hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const turnstileValid = await verifyTurnstileToken(turnstileToken, env.TURNSTILE_SECRET_KEY, remoteIp);
+  if (!turnstileValid) {
+    return { error: "Verification failed. Please try again." };
   }
 
   const postId = Number(formData.get("postId"));
@@ -61,7 +106,6 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
     }
   }
 
-  const { env } = await getCloudflareContext({ async: true });
   const ipHash = await getRequestIpHash(env.SESSION_SECRET);
   if (ipHash) {
     const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);

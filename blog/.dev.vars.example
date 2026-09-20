@@ -1,1 +1,2 @@
 SESSION_SECRET=replace-with-a-long-random-string
+TURNSTILE_SECRET_KEY=replace-with-your-turnstile-secret-key
