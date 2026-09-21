@@ -25,6 +25,7 @@ jobs:
       app: ${{ steps.filter.outputs.app }}
       website: ${{ steps.filter.outputs.website }}
       blog: ${{ steps.filter.outputs.blog }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -44,6 +45,9 @@ jobs:
               - '.github/workflows/**'
             blog:
               - 'blog/**'
+              - '.github/workflows/**'
+            dashboard:
+              - 'cf-dashboard/**'
               - '.github/workflows/**'
 
   app-frontend:
@@ -111,3 +115,20 @@ jobs:
       - run: npm run cf:typegen
       - run: npx tsc --noEmit
       - run: npm run cf:build
+
+  dashboard:
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cf-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: cf-dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run build

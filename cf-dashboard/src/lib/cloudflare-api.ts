@@ -18,7 +18,8 @@ function getZoneId(): string {
   return id;
 }
 
-async function cfFetch<T>(path: string): Promise<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function cfFetch<T>(path: string): Promise<any> {
   const res = await fetch(`${CF_API_BASE}${path}`, {
     headers: {
       Authorization: `Bearer ${getToken()}`,
@@ -28,7 +29,8 @@ async function cfFetch<T>(path: string): Promise<T> {
   const json = (await res.json()) as {
     success: boolean;
     errors: { code: number; message: string }[];
-    result: T;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result: any;
   };
   if (!json.success) {
     throw new Error(json.errors.map((e) => e.message).join(", "));
@@ -101,49 +103,45 @@ export interface ResourceCounts {
 
 export async function getD1Databases(): Promise<D1Database[]> {
   const accountId = getAccountId();
-  return cfFetch<D1Database[]>(`/accounts/${accountId}/d1/database`);
+  const result = await cfFetch(`/accounts/${accountId}/d1/database`);
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getR2Buckets(): Promise<R2Bucket[]> {
   const accountId = getAccountId();
-  return cfFetch<R2Bucket[]>(`/accounts/${accountId}/r2/buckets`);
+  const result = await cfFetch(`/accounts/${accountId}/r2/buckets`);
+  if (result?.buckets) return result.buckets;
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getKVNamespaces(): Promise<KVNamespace[]> {
   const accountId = getAccountId();
-  const result = await cfFetch<{ result: KVNamespace[] }>(
-    `/accounts/${accountId}/storage/kv/namespaces`
-  );
-  return result.result;
+  const result = await cfFetch(`/accounts/${accountId}/storage/kv/namespaces`);
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getWorkerScripts(): Promise<WorkerScript[]> {
   const accountId = getAccountId();
-  const result = await cfFetch<{ result: WorkerScript[] }>(
-    `/accounts/${accountId}/workers/scripts`
-  );
-  return result.result;
+  const result = await cfFetch(`/accounts/${accountId}/workers/scripts`);
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getDNSRecords(): Promise<DNSRecord[]> {
   const zoneId = getZoneId();
-  return cfFetch<DNSRecord[]>(`/zones/${zoneId}/dns_records`);
+  const result = await cfFetch(`/zones/${zoneId}/dns_records`);
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getQueues(): Promise<Queue[]> {
   const accountId = getAccountId();
-  const result = await cfFetch<{ result: Queue[] }>(
-    `/accounts/${accountId}/queues/v2`
-  );
-  return result.result;
+  const result = await cfFetch(`/accounts/${accountId}/queues/v2`);
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getRulesets(): Promise<Ruleset[]> {
   const zoneId = getZoneId();
-  const result = await cfFetch<{ result: Ruleset[] }>(
-    `/zones/${zoneId}/rulesets`
-  );
-  return result.result;
+  const result = await cfFetch(`/zones/${zoneId}/rulesets`);
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getAllResources() {
@@ -158,21 +156,21 @@ export async function getAllResources() {
   ]);
 
   return {
-    d1,
-    r2,
-    kv,
-    workers,
-    dns,
-    queues,
-    rulesets,
+    d1: d1 ?? [],
+    r2: r2 ?? [],
+    kv: kv ?? [],
+    workers: workers ?? [],
+    dns: dns ?? [],
+    queues: queues ?? [],
+    rulesets: rulesets ?? [],
     counts: {
-      d1: d1.length,
-      r2: r2.length,
-      kv: kv.length,
-      workers: workers.length,
-      dns: dns.length,
-      queues: queues.length,
-      rulesets: rulesets.length,
+      d1: (d1 ?? []).length,
+      r2: (r2 ?? []).length,
+      kv: (kv ?? []).length,
+      workers: (workers ?? []).length,
+      dns: (dns ?? []).length,
+      queues: (queues ?? []).length,
+      rulesets: (rulesets ?? []).length,
     } as ResourceCounts,
   };
 }
