@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAllResources } from "@/lib/cloudflare-api";
 
-export const runtime = "edge";
-
 export async function GET() {
   try {
     const resources = await getAllResources();
