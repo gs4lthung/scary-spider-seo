@@ -198,7 +198,7 @@ function R2Tab({ buckets }: { buckets: Resources["r2"] }) {
         </thead>
         <tbody>
           {buckets.map((bucket) => (
-            <tr key={bucket.id} className="border-b border-gray-800/50 hover:bg-gray-900/30">
+            <tr key={bucket.name} className="border-b border-gray-800/50 hover:bg-gray-900/30">
               <td className="px-4 py-3 font-mono text-sm">{bucket.name}</td>
               <td className="px-4 py-3 text-gray-400">{bucket.location}</td>
             </tr>
