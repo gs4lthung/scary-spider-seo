@@ -10,8 +10,7 @@
     "lint": "next lint",
     "cf:build": "npx @opennextjs/cloudflare build",
     "cf:preview": "npx wrangler dev",
-    "cf:deploy": "npx wrangler deploy",
-    "cf:deploy:staging": "npx wrangler deploy --env staging"
+    "cf:deploy": "npx wrangler deploy"
   },
   "dependencies": {
     "next": "^15.5.4",
