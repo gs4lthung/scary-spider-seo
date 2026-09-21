@@ -1,0 +1,15 @@
+# Terraform state and variables (contain sensitive data)
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+# .terraform.lock.hcl is committed (ensures consistent provider versions)
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
