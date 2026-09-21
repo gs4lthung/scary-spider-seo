@@ -51,6 +51,14 @@
       "bucket_name": "blog-media"
     }
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "COMMENT_NOTIFICATIONS",
+        "queue": "comment-notifications"
+      }
+    ]
+  },
   "env": {
     "staging": {
       "name": "scary-spider-seo-blog-staging",
@@ -76,7 +84,15 @@
           "binding": "MEDIA",
           "bucket_name": "blog-media-staging"
         }
-      ]
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "COMMENT_NOTIFICATIONS",
+            "queue": "comment-notifications-staging"
+          }
+        ]
+      }
     }
   },
   "observability": {

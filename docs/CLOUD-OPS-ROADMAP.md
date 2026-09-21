@@ -177,6 +177,8 @@ Use Cloudflare Queues for work that should not block a request:
 - Crawl report processing
 - Sitemap refreshes
 
+The first implementation is the comment notification Queue pipeline. Image processing, analytics batching, sitemap refreshes, and crawl report processing remain deferred until their volume or retry requirements justify moving them off the request path.
+
 Use Cron Triggers to start scheduled jobs and Workflows for multi-step jobs that need retries or waiting.
 
 Learn:

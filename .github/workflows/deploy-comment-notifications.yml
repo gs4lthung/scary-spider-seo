@@ -1,0 +1,69 @@
+name: Deploy Comment Notifications
+
+on:
+  push:
+    branches: [main, staging]
+    paths:
+      - "ops/comment-notifications/**"
+      - "blog/wrangler.jsonc"
+      - ".github/workflows/deploy-comment-notifications.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comment-notifications-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  production:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: Production
+    defaults:
+      run:
+        working-directory: blog
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: blog/package-lock.json
+      - run: npm ci
+      - run: >-
+          npx wrangler types ../ops/comment-notifications/worker-configuration.d.ts
+          --config ../ops/comment-notifications/wrangler.jsonc
+          --include-runtime
+      - run: npx tsc --noEmit --project ../ops/comment-notifications/tsconfig.json
+      - run: npx wrangler deploy ../ops/comment-notifications/src/index.ts --config ../ops/comment-notifications/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  staging:
+    if: github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    environment: Staging
+    defaults:
+      run:
+        working-directory: blog
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: blog/package-lock.json
+      - run: npm ci
+      - run: >-
+          npx wrangler types ../ops/comment-notifications/worker-configuration.d.ts
+          --config ../ops/comment-notifications/wrangler.jsonc
+          --env staging
+          --include-runtime
+      - run: npx tsc --noEmit --project ../ops/comment-notifications/tsconfig.json
+      - run: npx wrangler deploy ../ops/comment-notifications/src/index.ts --config ../ops/comment-notifications/wrangler.jsonc --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

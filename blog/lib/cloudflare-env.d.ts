@@ -8,4 +8,5 @@ interface CloudflareEnv {
   TURNSTILE_SITE_KEY: string;
   TURNSTILE_HOSTNAME: string;
   RATE_LIMITS: KVNamespace;
+  COMMENT_NOTIFICATIONS: Queue;
 }

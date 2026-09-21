@@ -24,6 +24,17 @@ const TURNSTILE_SECRET_KEY_LENGTH_MAX = 2048;
 
 export type CommentActionState = { error: string } | { success: true; pending: boolean } | null;
 
+type CommentNotification = {
+  version: 1;
+  type: "comment.created";
+  eventId: string;
+  commentId: number;
+  postId: number;
+  postSlug: string;
+  authorName: string;
+  contentPreview: string;
+};
+
 async function verifyTurnstileToken(
   token: string,
   secretKey: string,
@@ -126,14 +137,36 @@ export async function submitComment(_prevState: CommentActionState, formData: Fo
   }
 
   const requireApproval = await getCommentsRequireApproval();
-  await db.insert(comments).values({
+  const [createdComment] = await db.insert(comments).values({
     postId,
     parentId,
     authorName,
     content,
     ipHash,
     status: requireApproval ? "pending" : "approved",
-  });
+  }).returning({ id: comments.id });
+
+  try {
+    const notification: CommentNotification = {
+      version: 1,
+      type: "comment.created",
+      eventId: `comment:${createdComment.id}`,
+      commentId: createdComment.id,
+      postId,
+      postSlug: post.slug,
+      authorName,
+      contentPreview: content.slice(0, 200),
+    };
+    await env.COMMENT_NOTIFICATIONS.send(notification);
+  } catch (error) {
+    // The comment is already persisted. Keep the request successful and let
+    // the structured log expose a producer failure for operations follow-up.
+    console.error(JSON.stringify({
+      event: "comment_notification_enqueue_failed",
+      commentId: createdComment.id,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
 
   revalidatePath(`/${post.slug}`);
   revalidatePath(postPath({ slug: post.slug, category: post.category }));
