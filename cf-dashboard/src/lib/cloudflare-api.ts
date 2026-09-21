@@ -1,0 +1,178 @@
+const CF_API_BASE = "https://api.cloudflare.com/client/v4";
+
+function getToken(): string {
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!token) throw new Error("CLOUDFLARE_API_TOKEN not set");
+  return token;
+}
+
+function getAccountId(): string {
+  const id = process.env.CLOUDFLARE_ACCOUNT_ID;
+  if (!id) throw new Error("CLOUDFLARE_ACCOUNT_ID not set");
+  return id;
+}
+
+function getZoneId(): string {
+  const id = process.env.CLOUDFLARE_ZONE_ID;
+  if (!id) throw new Error("CLOUDFLARE_ZONE_ID not set");
+  return id;
+}
+
+async function cfFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${CF_API_BASE}${path}`, {
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const json = (await res.json()) as {
+    success: boolean;
+    errors: { code: number; message: string }[];
+    result: T;
+  };
+  if (!json.success) {
+    throw new Error(json.errors.map((e) => e.message).join(", "));
+  }
+  return json.result;
+}
+
+export interface D1Database {
+  id: string;
+  name: string;
+  created_on: string;
+  file_size: number;
+  num_tables: number;
+  version: string;
+}
+
+export interface R2Bucket {
+  id: string;
+  name: string;
+  location: string;
+  created_on: string;
+}
+
+export interface KVNamespace {
+  id: string;
+  title: string;
+  supports_url_encoding: boolean;
+}
+
+export interface WorkerScript {
+  id: string;
+  name: string;
+  modified_on: string;
+  created_on: string;
+}
+
+export interface DNSRecord {
+  id: string;
+  type: string;
+  name: string;
+  content: string;
+  ttl: number;
+  proxied: boolean;
+}
+
+export interface Queue {
+  id: string;
+  queue_name: string;
+  created_on: string;
+}
+
+export interface Ruleset {
+  id: string;
+  name: string;
+  description: string;
+  kind: string;
+  phase: string;
+  version: string;
+}
+
+export interface ResourceCounts {
+  d1: number;
+  r2: number;
+  kv: number;
+  workers: number;
+  dns: number;
+  queues: number;
+  rulesets: number;
+}
+
+export async function getD1Databases(): Promise<D1Database[]> {
+  const accountId = getAccountId();
+  return cfFetch<D1Database[]>(`/accounts/${accountId}/d1/database`);
+}
+
+export async function getR2Buckets(): Promise<R2Bucket[]> {
+  const accountId = getAccountId();
+  return cfFetch<R2Bucket[]>(`/accounts/${accountId}/r2/buckets`);
+}
+
+export async function getKVNamespaces(): Promise<KVNamespace[]> {
+  const accountId = getAccountId();
+  const result = await cfFetch<{ result: KVNamespace[] }>(
+    `/accounts/${accountId}/storage/kv/namespaces`
+  );
+  return result.result;
+}
+
+export async function getWorkerScripts(): Promise<WorkerScript[]> {
+  const accountId = getAccountId();
+  const result = await cfFetch<{ result: WorkerScript[] }>(
+    `/accounts/${accountId}/workers/scripts`
+  );
+  return result.result;
+}
+
+export async function getDNSRecords(): Promise<DNSRecord[]> {
+  const zoneId = getZoneId();
+  return cfFetch<DNSRecord[]>(`/zones/${zoneId}/dns_records`);
+}
+
+export async function getQueues(): Promise<Queue[]> {
+  const accountId = getAccountId();
+  const result = await cfFetch<{ result: Queue[] }>(
+    `/accounts/${accountId}/queues/v2`
+  );
+  return result.result;
+}
+
+export async function getRulesets(): Promise<Ruleset[]> {
+  const zoneId = getZoneId();
+  const result = await cfFetch<{ result: Ruleset[] }>(
+    `/zones/${zoneId}/rulesets`
+  );
+  return result.result;
+}
+
+export async function getAllResources() {
+  const [d1, r2, kv, workers, dns, queues, rulesets] = await Promise.all([
+    getD1Databases().catch(() => [] as D1Database[]),
+    getR2Buckets().catch(() => [] as R2Bucket[]),
+    getKVNamespaces().catch(() => [] as KVNamespace[]),
+    getWorkerScripts().catch(() => [] as WorkerScript[]),
+    getDNSRecords().catch(() => [] as DNSRecord[]),
+    getQueues().catch(() => [] as Queue[]),
+    getRulesets().catch(() => [] as Ruleset[]),
+  ]);
+
+  return {
+    d1,
+    r2,
+    kv,
+    workers,
+    dns,
+    queues,
+    rulesets,
+    counts: {
+      d1: d1.length,
+      r2: r2.length,
+      kv: kv.length,
+      workers: workers.length,
+      dns: dns.length,
+      queues: queues.length,
+      rulesets: rulesets.length,
+    } as ResourceCounts,
+  };
+}
