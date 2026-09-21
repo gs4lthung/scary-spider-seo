@@ -83,8 +83,8 @@ export async function listMediaImages(options?: {
   });
 
   const items = listed.objects
-    .filter((object) => /\.(webp|png|jpe?g|gif|avif)$/i.test(object.key))
-    .map((object) => ({
+    .filter((object: R2Object) => /\.(webp|png|jpe?g|gif|avif)$/i.test(object.key))
+    .map((object: R2Object) => ({
       key: object.key,
       name: object.customMetadata?.name || object.key,
       size: object.size,
