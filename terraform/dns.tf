@@ -36,3 +36,18 @@ resource "cloudflare_dns_record" "blog_staging" {
   ttl     = 1
   proxied = true
 }
+
+resource "cloudflare_dns_record" "dashboard" {
+  zone_id = var.zone_id
+  name    = "dashboard"
+  type    = "AAAA"
+  content = "100::"
+  ttl     = 1
+  proxied = true
+}
+
+resource "cloudflare_workers_route" "dashboard" {
+  zone_id = var.zone_id
+  pattern = "dashboard.scaryspiderseo.com/*"
+  script  = "cf-dashboard"
+}
