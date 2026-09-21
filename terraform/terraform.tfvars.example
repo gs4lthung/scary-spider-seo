@@ -1,6 +1,0 @@
-# Copy this file to terraform.tfvars and fill in the values.
-# terraform.tfvars is gitignored and must never be committed.
-
-cloudflare_account_id = "dd5400122da97f9210e1f2f16e4ff869"
-cloudflare_api_token  = "YOUR_CLOUDFLARE_API_TOKEN_HERE"
-zone_id               = "YOUR_ZONE_ID_HERE"
