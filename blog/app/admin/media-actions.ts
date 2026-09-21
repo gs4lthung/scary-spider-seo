@@ -7,6 +7,13 @@ import { requirePermission, requireUser } from "@/lib/authz";
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
 const MAX_BYTES = 8 * 1024 * 1024;
+type ListedMediaObject = {
+  key: string;
+  customMetadata?: Record<string, string>;
+  size: number;
+  uploaded?: Date;
+  httpMetadata?: { contentType?: string };
+};
 
 function hasImageSignature(bytes: Uint8Array, type: string): boolean {
   if (type === "image/png") return bytes.length >= 8 && bytes.slice(0, 8).toString() === "137,80,78,71,13,10,26,10";
@@ -83,8 +90,8 @@ export async function listMediaImages(options?: {
   });
 
   const items = listed.objects
-    .filter((object: R2Object) => /\.(webp|png|jpe?g|gif|avif)$/i.test(object.key))
-    .map((object: R2Object) => ({
+    .filter((object: ListedMediaObject) => /\.(webp|png|jpe?g|gif|avif)$/i.test(object.key))
+    .map((object: ListedMediaObject) => ({
       key: object.key,
       name: object.customMetadata?.name || object.key,
       size: object.size,
