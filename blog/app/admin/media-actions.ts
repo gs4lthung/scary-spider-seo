@@ -89,7 +89,8 @@ export async function listMediaImages(options?: {
     cursor: options?.cursor,
   });
 
-  const items = listed.objects
+  const objects = listed.objects as ListedMediaObject[];
+  const items = objects
     .filter((object: ListedMediaObject) => /\.(webp|png|jpe?g|gif|avif)$/i.test(object.key))
     .map((object: ListedMediaObject) => ({
       key: object.key,
