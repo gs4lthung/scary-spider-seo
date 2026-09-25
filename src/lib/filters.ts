@@ -63,6 +63,55 @@ export function getCanonicalStatusMap(pages: PageResult[]): Map<string, number |
   return map;
 }
 
+/** URL -> crawled page, so cross-page checks (canonical targets) can look up what the crawl
+ * observed at another URL in O(1). */
+export function getPageByUrlMap(pages: PageResult[]): Map<string, PageResult> {
+  const map = new Map<string, PageResult>();
+  for (const p of pages) map.set(p.url, p);
+  return map;
+}
+
+/** Robots directives that take a value after a colon (`max-snippet: 20`). A token starting with
+ * one of these is a directive, not a `botname: directive` prefix. */
+const VALUED_ROBOTS_DIRECTIVES = new Set(["max-snippet", "max-image-preview", "max-video-preview", "unavailable_after"]);
+
+/**
+ * Every robots directive a page declares, from its meta robots content and its X-Robots-Tag
+ * header, lowercased and trimmed (`"noindex"`, `"nofollow"`, `"max-snippet:20"`, ...). A leading
+ * user-agent prefix (`googlebot: noindex`) is dropped, so the directive counts whichever crawler
+ * it names.
+ */
+export function parseRobotsDirectives(metaRobots: string | null, xRobotsTag: string | null): Set<string> {
+  const directives = new Set<string>();
+  for (const source of [metaRobots, xRobotsTag]) {
+    if (!source) continue;
+    for (const raw of source.toLowerCase().split(",")) {
+      let token = raw.trim();
+      const colon = token.indexOf(":");
+      if (colon > 0) {
+        const head = token.slice(0, colon).trim();
+        const rest = token.slice(colon + 1).trim();
+        token = VALUED_ROBOTS_DIRECTIVES.has(head) ? `${head}:${rest}` : rest;
+      }
+      if (token) directives.add(token);
+    }
+  }
+  return directives;
+}
+
+// Directive predicates run once per issue per page on every recount, so the parse is cached per
+// page object (pages are immutable once received).
+const directivesCache = new WeakMap<PageResult, Set<string>>();
+
+function pageDirectives(p: PageResult): Set<string> {
+  let directives = directivesCache.get(p);
+  if (!directives) {
+    directives = parseRobotsDirectives(p.metaRobots, p.xRobotsTag);
+    directivesCache.set(p, directives);
+  }
+  return directives;
+}
+
 /**
  * Counts occurrences of a value (title / meta description / content hash) one page at
  * a time, so duplicate detection can stay incremental during a live crawl.
@@ -104,6 +153,8 @@ export interface FilterContext {
   duplicateMeta: Set<string>;
   canonicalStatusMap: Map<string, number | null>;
   linkedUrls: Set<string>;
+  /** Every crawled page by URL (see `getPageByUrlMap`). */
+  pageByUrl: Map<string, PageResult>;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -113,6 +164,7 @@ export function emptyFilterContext(): FilterContext {
     duplicateMeta: new Set(),
     canonicalStatusMap: new Map(),
     linkedUrls: new Set(),
+    pageByUrl: new Map(),
   };
 }
 
@@ -239,6 +291,15 @@ function normalizeHeadingText(text: string): string {
 
 /** Number of characters (code points, like the crawler's lengths) in the first H1. */
 const h1Length = (p: PageResult) => (p.h1 ? Array.from(p.h1.trim()).length : 0);
+
+/** The crawled page a page's canonical points at, or undefined when the canonical is missing,
+ * self-referencing, or its target was not crawled. */
+function canonicalTarget(p: PageResult, ctx: FilterContext): PageResult | undefined {
+  if (!p.canonical || p.canonical === p.url) return undefined;
+  return ctx.pageByUrl.get(p.canonical);
+}
+
+const is2xx = (p: PageResult) => p.status !== null && p.status >= 200 && p.status < 300;
 
 const PERCENT_ESCAPE = /%[0-9A-Fa-f]{2}/g;
 /** A percent-escaped byte >= 0x80, i.e. part of an encoded non-ASCII (UTF-8) character. */
@@ -426,6 +487,75 @@ export const ISSUE_DEFS = [
       const targetStatus = ctx.canonicalStatusMap.get(p.canonical);
       return targetStatus === null || targetStatus === undefined || targetStatus >= 400;
     },
+  }),
+  pageIssue({
+    key: "missingCanonical",
+    label: "Missing canonical",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    // A redirected URL is reported by its destination, not for a canonical of its own.
+    test: (p) => hasHtml(p) && is2xx(p) && !p.redirectUrl && !p.canonical,
+  }),
+  pageIssue({
+    key: "canonicalised",
+    label: "Canonicalised",
+    group: "indexing",
+    section: "Canonical & Indexing",
+    test: (p) => p.indexability === "Canonicalised",
+  }),
+  pageIssue({
+    key: "canonicalToNonIndexable",
+    label: "Canonical to non-indexable page",
+    group: "indexing",
+    tone: "bad",
+    section: "Canonical & Indexing",
+    test: (p, ctx) => {
+      const target = canonicalTarget(p, ctx);
+      return target !== undefined && target.indexability !== "Indexable";
+    },
+  }),
+  pageIssue({
+    key: "canonicalToRedirect",
+    label: "Canonical to redirect",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p, ctx) => {
+      const target = canonicalTarget(p, ctx);
+      if (!target) return false;
+      const status3xx = target.status !== null && target.status >= 300 && target.status < 400;
+      return status3xx || !!target.redirectUrl;
+    },
+  }),
+  pageIssue({
+    key: "directiveNoindex",
+    label: "Noindex directive",
+    group: "indexing",
+    section: "Canonical & Indexing",
+    test: (p) => pageDirectives(p).has("noindex"),
+  }),
+  pageIssue({
+    key: "directiveNofollow",
+    label: "Nofollow directive",
+    group: "indexing",
+    section: "Canonical & Indexing",
+    test: (p) => pageDirectives(p).has("nofollow"),
+  }),
+  pageIssue({
+    key: "directiveNone",
+    label: "None directive",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => pageDirectives(p).has("none"),
+  }),
+  pageIssue({
+    key: "xRobotsTagPresent",
+    label: "Directives in X-Robots-Tag",
+    group: "indexing",
+    section: "Canonical & Indexing",
+    test: (p) => parseRobotsDirectives(null, p.xRobotsTag).size > 0,
   }),
   pageIssue({
     key: "redirectChainTooLong",

@@ -269,6 +269,86 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://sitebulb.com/hints/indexability/canonical-points-to-a-url-that-is-not-found-404/",
     },
   },
+  missingCanonical: {
+    title: "Page has no canonical tag",
+    problem:
+      "Without a rel=\"canonical\" link, Google picks the canonical URL itself when the same content is reachable at several URLs (tracking parameters, trailing slashes, http and https). Its choice may not be the URL you want shown in search results.",
+    fix: "Add a <link rel=\"canonical\" href=\"...\"> in the <head> with the absolute URL of the preferred version. On a page that is its own preferred version, point the canonical at the page itself (a self-referencing canonical).",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  canonicalised: {
+    title: "Page is canonicalised to another URL",
+    problem:
+      "The page declares a canonical URL other than itself, so it asks search engines to index the other URL instead. That is correct for true duplicates and variants, but a mistake on a page that should rank in its own right.",
+    fix: "Check that this URL really is a duplicate or variant of its canonical target. If it should be indexed on its own, change the canonical to point at the page itself. Also link internally to the canonical URL rather than to this one.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  canonicalToNonIndexable: {
+    title: "Canonical points to a non-indexable page",
+    problem:
+      "The canonical target is itself not indexable (noindex, a redirect, an error, blocked, or canonicalised elsewhere). The signals conflict, so Google is likely to ignore the canonical and choose a URL on its own.",
+    fix: "Point the canonical at the final, indexable URL that returns 200 and has no noindex. If the target was made non-indexable on purpose, make this page self-canonical instead.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  canonicalToRedirect: {
+    title: "Canonical points to a redirecting URL",
+    problem:
+      "The canonical target redirects somewhere else. Google has to follow the redirect to find the real preferred URL, and a canonical that disagrees with the redirect destination is a weaker, mixed signal.",
+    fix: "Update the canonical to the redirect's final destination URL, so it points straight at a page that answers 200.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  directiveNoindex: {
+    title: "Page has a noindex directive",
+    problem:
+      "A noindex in the meta robots tag or the X-Robots-Tag header tells search engines to drop the page from their index. That is intended for thank-you pages, internal search results and similar, but a disaster on a page that should rank.",
+    fix: "Confirm the page should stay out of search results. If not, remove noindex from the robots meta tag and the X-Robots-Tag header. Do not also block the URL in robots.txt, or crawlers never see the directive.",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
+  directiveNofollow: {
+    title: "Page has a nofollow directive",
+    problem:
+      "A page-level nofollow (meta robots or X-Robots-Tag) tells search engines not to follow any link on the page, so pages linked only from here may not be discovered and receive no signals from it.",
+    fix: "Remove the page-level nofollow unless you really want crawlers to ignore every link on the page. To exclude single links, use rel=\"nofollow\" on those links instead.",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
+  directiveNone: {
+    title: "Page has a none directive",
+    problem:
+      "The none directive is shorthand for noindex, nofollow: the page is dropped from the index and none of its links are followed. It is easy to add by mistake, thinking it means \"no restrictions\".",
+    fix: "If the page should be indexed, remove none. If you want no restrictions, remove the robots directive entirely (the default is index, follow).",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
+  xRobotsTagPresent: {
+    title: "Directives set in the X-Robots-Tag header",
+    problem:
+      "The page sends robots directives in an X-Robots-Tag HTTP header. They are invisible in the HTML, so they are easy to forget when a noindex or nofollow set at the server or CDN level is no longer wanted.",
+    fix: "Review the directives in the header and confirm they are intended for this URL. Change them in the server, CDN or application configuration that adds the header.",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
   slowResponse: {
     title: "Slow server response time",
     problem: "Time to first byte (TTFB) sets a floor under Largest Contentful Paint, so a slow-responding server makes good Core Web Vitals scores hard to hit regardless of front-end optimization. Google's crawl rate itself also drops when a site responds slowly or errors, meaning fewer pages get crawled per visit.",

@@ -29,10 +29,12 @@ import {
   getDuplicateMetaSet,
   getDuplicateTitleSet,
   getMetaPixelWidth,
+  getPageByUrlMap,
   getPageIssueKeys,
   getResourceIssueKeys,
   getTitlePixelWidth,
   ingestDuplicateValue,
+  parseRobotsDirectives,
   searchPages,
   searchResources,
 } from "./filters";
@@ -761,6 +763,15 @@ describe("issue registry", () => {
       at(`long-${"x".repeat(URL_MAX_LENGTH)}`),
       at("caf%C3%A9"),
       at("a//b"),
+      at("noindex", { metaRobots: "noindex, follow", indexability: "Non-Indexable (noindex)" }),
+      at("meta-nofollow", { metaRobots: "nofollow" }),
+      at("robots-none", { metaRobots: "none" }),
+      at("x-robots", { xRobotsTag: "googlebot: noarchive" }),
+      at("no-canonical", { canonical: null }),
+      at("canonicalised", { canonical: "https://example.com/clean", indexability: "Canonicalised" }),
+      at("canonical-to-noindex", { canonical: "https://example.com/noindex" }),
+      at("moved", { redirectUrl: "https://example.com/clean", indexability: "Redirected" }),
+      at("canonical-to-moved", { canonical: "https://example.com/moved" }),
     ];
     const resources = [
       makeResource(),
@@ -774,6 +785,7 @@ describe("issue registry", () => {
       duplicateMeta: getDuplicateMetaSet(pages),
       canonicalStatusMap: getCanonicalStatusMap(pages),
       linkedUrls: new Set(["https://example.com/clean"]),
+      pageByUrl: getPageByUrlMap(pages),
     };
     return { pages, resources, ctx };
   }
@@ -809,5 +821,115 @@ describe("issue registry", () => {
     for (const def of ISSUE_DEFS) {
       expect(filterTab(def.key), def.key).toBe(def.scope === "resource" ? "resources" : "pages");
     }
+  });
+});
+
+describe("directive and canonical issues", () => {
+  const run = (key: FilterKey, overrides: Partial<PageResult>, ctx: FilterContext = emptyFilterContext()) =>
+    filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("parseRobotsDirectives handles bot prefixes and spacing", () => {
+    expect(parseRobotsDirectives(" NoIndex ,  FOLLOW ", null)).toEqual(new Set(["noindex", "follow"]));
+    expect(parseRobotsDirectives(null, "googlebot: noindex, nofollow")).toEqual(new Set(["noindex", "nofollow"]));
+    expect(parseRobotsDirectives(null, "otherbot:none")).toEqual(new Set(["none"]));
+    expect(parseRobotsDirectives("max-snippet: 20, max-image-preview:large", null)).toEqual(
+      new Set(["max-snippet:20", "max-image-preview:large"]),
+    );
+    expect(parseRobotsDirectives("index", "noarchive")).toEqual(new Set(["index", "noarchive"]));
+    expect(parseRobotsDirectives(null, null).size).toBe(0);
+    expect(parseRobotsDirectives(" , ", "").size).toBe(0);
+  });
+
+  it("directiveNoindex flags noindex from meta robots or X-Robots-Tag", () => {
+    expect(run("directiveNoindex", { metaRobots: "noindex, follow" })).toBe(true);
+    expect(run("directiveNoindex", { xRobotsTag: "googlebot: noindex" })).toBe(true);
+    expect(run("directiveNoindex", { metaRobots: "index, follow" })).toBe(false);
+    expect(run("directiveNoindex", { metaRobots: "none" })).toBe(false);
+  });
+
+  it("directiveNofollow flags a page-level nofollow", () => {
+    expect(run("directiveNofollow", { metaRobots: "nofollow" })).toBe(true);
+    expect(run("directiveNofollow", { xRobotsTag: "noindex, nofollow" })).toBe(true);
+    expect(run("directiveNofollow", { metaRobots: "noindex, follow" })).toBe(false);
+  });
+
+  it("directiveNone flags the none directive", () => {
+    expect(run("directiveNone", { metaRobots: "NONE" })).toBe(true);
+    expect(run("directiveNone", { xRobotsTag: "bingbot: none" })).toBe(true);
+    expect(run("directiveNone", { metaRobots: "noindex, nofollow" })).toBe(false);
+  });
+
+  it("xRobotsTagPresent flags pages with directives in the X-Robots-Tag header only", () => {
+    expect(run("xRobotsTagPresent", { xRobotsTag: "noarchive" })).toBe(true);
+    expect(run("xRobotsTagPresent", { xRobotsTag: null, metaRobots: "noindex" })).toBe(false);
+    expect(run("xRobotsTagPresent", { xRobotsTag: " " })).toBe(false);
+  });
+
+  it("missingCanonical flags 2xx HTML pages without a canonical", () => {
+    expect(run("missingCanonical", { canonical: null })).toBe(true);
+    expect(run("missingCanonical", { canonical: "https://example.com/" })).toBe(false);
+    expect(run("missingCanonical", { canonical: null, status: 404 })).toBe(false);
+    expect(run("missingCanonical", { canonical: null, status: 301 })).toBe(false);
+    expect(run("missingCanonical", { canonical: null, htmlSizeBytes: 0, contentType: "application/pdf" })).toBe(false);
+    expect(run("missingCanonical", { canonical: null, redirectUrl: "https://example.com/new" })).toBe(false);
+  });
+
+  it("canonicalised flags pages the crawler classified as canonicalised", () => {
+    expect(run("canonicalised", { canonical: "https://example.com/other", indexability: "Canonicalised" })).toBe(true);
+    expect(run("canonicalised", { indexability: "Indexable" })).toBe(false);
+  });
+
+  it("canonicalToNonIndexable flags a page whose canonical target is noindex", () => {
+    // Shaped like the fixture site: /canonical-to-noindex.html -> /noindex.html, / is self-canonical.
+    const home = makePage({ url: "https://example.com/", canonical: "https://example.com/" });
+    const noindex = makePage({
+      url: "https://example.com/noindex.html",
+      canonical: null,
+      metaRobots: "noindex, follow",
+      indexability: "Non-Indexable (noindex)",
+    });
+    const source = makePage({
+      url: "https://example.com/canonical-to-noindex.html",
+      canonical: "https://example.com/noindex.html",
+      indexability: "Canonicalised",
+    });
+    const pages = [home, noindex, source];
+    const ctx = { ...emptyFilterContext(), pageByUrl: getPageByUrlMap(pages) };
+    expect(filterPages(pages, "canonicalToNonIndexable", ctx)).toEqual([source]);
+    expect(getPageIssueKeys(source, ctx)).toContain("canonicalToNonIndexable");
+    expect(getPageIssueKeys(home, ctx)).not.toContain("canonicalToNonIndexable");
+  });
+
+  it("canonicalToNonIndexable is silent for indexable, self-referencing and uncrawled targets", () => {
+    const target = makePage({ url: "https://example.com/target", canonical: "https://example.com/target" });
+    const ctx = { ...emptyFilterContext(), pageByUrl: getPageByUrlMap([target]) };
+    expect(run("canonicalToNonIndexable", { url: "https://example.com/a", canonical: target.url }, ctx)).toBe(false);
+    expect(
+      run("canonicalToNonIndexable", { url: "https://example.com/b", canonical: "https://example.com/uncrawled" }, ctx),
+    ).toBe(false);
+    const noindexSelf = makePage({
+      url: "https://example.com/self",
+      canonical: "https://example.com/self",
+      indexability: "Non-Indexable (noindex)",
+    });
+    const selfCtx = { ...emptyFilterContext(), pageByUrl: getPageByUrlMap([noindexSelf]) };
+    expect(filterPages([noindexSelf], "canonicalToNonIndexable", selfCtx)).toEqual([]);
+  });
+
+  it("canonicalToRedirect flags a canonical whose target redirects", () => {
+    const moved = makePage({
+      url: "https://example.com/old-page",
+      status: 200,
+      redirectUrl: "https://example.com/new-page.html",
+      indexability: "Redirected",
+    });
+    const bare3xx = makePage({ url: "https://example.com/loop", status: 301, redirectUrl: null });
+    const live = makePage({ url: "https://example.com/live", canonical: "https://example.com/live" });
+    const ctx = { ...emptyFilterContext(), pageByUrl: getPageByUrlMap([moved, bare3xx, live]) };
+    const from = (canonical: string) => ({ url: "https://example.com/a", canonical });
+    expect(run("canonicalToRedirect", from(moved.url), ctx)).toBe(true);
+    expect(run("canonicalToRedirect", from(bare3xx.url), ctx)).toBe(true);
+    expect(run("canonicalToRedirect", from(live.url), ctx)).toBe(false);
+    expect(run("canonicalToRedirect", from("https://example.com/uncrawled"), ctx)).toBe(false);
   });
 });
