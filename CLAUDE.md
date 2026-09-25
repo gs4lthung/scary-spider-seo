@@ -50,6 +50,12 @@ npm run release              # cuts a version bump + tag (scripts/release.mjs); 
 
 **Frontend state ownership.** `src/App.tsx` is the single owner of crawl state (pages, resources, progress, site info) and composes the major views (`DataTable`, `DetailModal`, `Overview`, `SiteTree`, `SiteInfoPanel`) as props-down children — there is no separate store/context layer.
 
+## Agent harness (desktop app)
+
+Planned work on the desktop app lives in `docs/plan/` as tasks `T<m>.<n>`. Implement a task with the `gseo-task` skill; run a whole milestone unattended with `/gseo-run M<n>` or `node scripts/harness/run.mjs M<n>` (details: `docs/harness/README.md`). Area conventions are in the `gseo-crawler`, `gseo-audit-checks` and `gseo-ui` skills.
+
+Before calling desktop-app work done, run `node scripts/harness/gate.mjs --full` and get `"ok":true`. It mirrors CI and includes `cargo test`, which crawls the fixture site in `src-tauri/tests/fixtures/site/` end to end; every new crawl signal needs a fixture page and assertion there.
+
 ## Writing style: no em dashes in public-facing copy
 
 Never use em dashes (—) in text a user, reader, or search engine sees: website copy (`website/`), blog post/reader-facing content (`blog/`), README product descriptions, and GitHub release notes (`.github/workflows/release.yml`).
