@@ -4,4 +4,5 @@
   <url><loc>{{ORIGIN}}/orphan.html</loc></url>
   <url><loc>{{ORIGIN}}/noindex-in-sitemap.html</loc></url>
   <url><loc>{{ORIGIN}}/gone-in-sitemap.html</loc></url>
+  <url><loc>{{ORIGIN}}/private/in-sitemap.html</loc></url>
 </urlset>

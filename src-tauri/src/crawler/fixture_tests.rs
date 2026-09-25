@@ -431,4 +431,9 @@ async fn seeds_orphans_from_the_sitemap() {
     let gone = with.page(&site.url("/gone-in-sitemap.html"));
     assert!(gone.discovered_via_sitemap);
     assert_eq!(gone.status, Some(404));
+
+    // A robots.txt-disallowed URL listed only in the sitemap keeps its sitemap flag.
+    let blocked = with.page(&site.url("/private/in-sitemap.html"));
+    assert!(blocked.discovered_via_sitemap);
+    assert_eq!(blocked.indexability, "Non-Indexable (robots.txt)");
 }
