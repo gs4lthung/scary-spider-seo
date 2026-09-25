@@ -919,11 +919,7 @@ function App() {
           <Overview
             pages={pages}
             resources={resources}
-            linkedUrls={linkedUrlSet}
-            duplicateTitles={duplicateTitleSet}
-            duplicateContent={duplicateContentSet}
-            duplicateMeta={duplicateMetaSet}
-            canonicalStatusMap={canonicalStatusMap}
+            filterContext={filterContext}
             progress={progress}
             running={running}
             paused={paused}
