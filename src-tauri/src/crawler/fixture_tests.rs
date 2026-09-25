@@ -189,6 +189,8 @@ async fn crawls_every_linked_page_exactly_once() {
 
     let expected: Vec<String> = [
         "/",
+        "/URL_Page.html?ref=nav",
+        "/a//b.html",
         "/bad-jsonld.html",
         "/canonicalised.html",
         "/dup-a.html",
@@ -229,7 +231,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 11);
+    assert_eq!(home.internal_link_count, 13);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -258,6 +260,20 @@ async fn extracts_on_page_signals() {
     let bad = out.page(&site.url("/bad-jsonld.html"));
     assert_eq!(bad.structured_data_errors.len(), 1);
     assert!(bad.structured_data_types.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn url_audit_fixtures_are_crawled_verbatim() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // The frontend's URL structure checks read `page.url`, so case, the query string
+    // and the repeated slash must survive link resolution and normalisation untouched.
+    for path in ["/URL_Page.html?ref=nav", "/a//b.html"] {
+        let page = out.page(&site.url(path));
+        assert_eq!(page.status, Some(200), "{path}");
+        assert_eq!(page.url, site.url(path));
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

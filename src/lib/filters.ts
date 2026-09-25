@@ -4,6 +4,8 @@ export const TITLE_MIN_LENGTH = 30;
 export const TITLE_MAX_LENGTH = 60;
 export const LOW_TEXT_RATIO_THRESHOLD_PCT = 10;
 export const SLOW_RESPONSE_THRESHOLD_MS = 600;
+/** Screaming Frog's "Over 115 Characters" URL threshold, measured on the full URL. */
+export const URL_MAX_LENGTH = 115;
 
 export function getDuplicateTitleSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
@@ -117,7 +119,8 @@ export type OverviewSection =
   | "Structured Data"
   | "Accessibility"
   | "Security"
-  | "International";
+  | "International"
+  | "URL";
 
 interface IssueDefBase<K extends string> {
   key: K;
@@ -154,6 +157,48 @@ function resourceIssue<K extends string>(def: Omit<ResourceIssueDef<K>, "scope">
 }
 
 const hasHtml = (p: PageResult) => p.htmlSizeBytes > 0;
+
+interface UrlParts {
+  /** Path as stored by the crawler (percent-encoded). */
+  path: string;
+  /** Query string including the leading `?`; empty for no query or a bare trailing `?`. */
+  query: string;
+}
+
+// URL structure predicates run once per issue per page on every recount, so the parse is
+// cached per page object (pages are immutable once received).
+const urlPartsCache = new WeakMap<PageResult, UrlParts | null>();
+
+function urlParts(p: PageResult): UrlParts | null {
+  const cached = urlPartsCache.get(p);
+  if (cached !== undefined) return cached;
+  let parts: UrlParts | null;
+  try {
+    const u = new URL(p.url);
+    parts = { path: u.pathname, query: u.search };
+  } catch {
+    parts = null;
+  }
+  urlPartsCache.set(p, parts);
+  return parts;
+}
+
+/** URL structure issues only apply to URLs that answered 2xx or 3xx, so a broken URL is
+ * reported once (as 4xx/5xx) rather than again for its shape. */
+const isLiveUrl = (p: PageResult) => p.status !== null && p.status >= 200 && p.status < 400;
+
+/** Runs `test` on the path plus query of a live page's URL (never the host). */
+function urlIssue(test: (parts: UrlParts) => boolean): (p: PageResult) => boolean {
+  return (p) => {
+    if (!isLiveUrl(p)) return false;
+    const parts = urlParts(p);
+    return parts !== null && test(parts);
+  };
+}
+
+const PERCENT_ESCAPE = /%[0-9A-Fa-f]{2}/g;
+/** A percent-escaped byte >= 0x80, i.e. part of an encoded non-ASCII (UTF-8) character. */
+const NON_ASCII_ESCAPE = /%[89A-Fa-f][0-9A-Fa-f]/;
 
 /**
  * The single source of truth for every audit issue: its predicate, Overview label, tone and
@@ -386,6 +431,53 @@ export const ISSUE_DEFS = [
     group: "indexing",
     section: "International",
     test: (p) => hasHtml(p) && p.hreflangValues.length === 0,
+  }),
+  pageIssue({
+    key: "urlUppercase",
+    label: "Uppercase in URL",
+    group: "technical",
+    tone: "warn",
+    section: "URL",
+    // Hex digits of percent-escapes (e.g. %C3) are uppercase by convention, not by choice.
+    test: urlIssue(({ path, query }) => /[A-Z]/.test((path + query).replace(PERCENT_ESCAPE, ""))),
+  }),
+  pageIssue({
+    key: "urlUnderscores",
+    label: "Underscores in URL",
+    group: "technical",
+    section: "URL",
+    test: urlIssue(({ path, query }) => (path + query).includes("_")),
+  }),
+  pageIssue({
+    key: "urlParameters",
+    label: "URL has parameters",
+    group: "technical",
+    section: "URL",
+    test: urlIssue(({ query }) => query.length > 0),
+  }),
+  pageIssue({
+    key: "urlOver115",
+    label: `URL over ${URL_MAX_LENGTH} characters`,
+    group: "technical",
+    tone: "warn",
+    section: "URL",
+    test: (p) => isLiveUrl(p) && p.url.length > URL_MAX_LENGTH,
+  }),
+  pageIssue({
+    key: "urlNonAscii",
+    label: "Non-ASCII characters in URL",
+    group: "technical",
+    tone: "warn",
+    section: "URL",
+    test: urlIssue(({ path, query }) => NON_ASCII_ESCAPE.test(path + query)),
+  }),
+  pageIssue({
+    key: "urlMultipleSlashes",
+    label: "Multiple slashes in URL",
+    group: "technical",
+    tone: "warn",
+    section: "URL",
+    test: urlIssue(({ path }) => path.includes("//")),
   }),
 ] as const;
 

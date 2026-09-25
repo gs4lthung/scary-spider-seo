@@ -18,6 +18,8 @@ must produce.
 | `/private/secret.html` | disallowed by `robots.txt` |
 | `/gone.html` | 404 (file intentionally absent) |
 | `/bad-jsonld.html` | invalid JSON-LD |
+| `/URL_Page.html?ref=nav` | URL with uppercase, an underscore and a query string (linked exactly like this) |
+| `/a//b.html` | URL with repeated slashes in the path (serves `a/b.html`) |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
 
 `{{ORIGIN}}` in any served file is replaced with the server's `http://127.0.0.1:<port>`.
