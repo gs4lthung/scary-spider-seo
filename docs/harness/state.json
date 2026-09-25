@@ -1,6 +1,9 @@
 {
   "run": {
-    "active": false
+    "active": true,
+    "milestone": 1,
+    "startedAt": "2026-09-25T18:11:55.142Z",
+    "lastProgressAt": "2026-09-25T18:27:53.029Z"
   },
   "tasks": {
     "T1.1": {
@@ -8,10 +11,10 @@
       "milestone": 1,
       "plan": "docs/plan/M1-derived-audits.md",
       "deps": [],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.856Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "f1c748e",
+      "updatedAt": "2026-09-25T18:27:53.027Z"
     },
     "T1.2": {
       "title": "URL structure audits",
