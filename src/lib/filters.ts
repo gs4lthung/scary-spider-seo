@@ -1,4 +1,5 @@
 import type { PageResult, ResourceResult } from "../types";
+import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 
 export const TITLE_MIN_LENGTH = 30;
 export const TITLE_MAX_LENGTH = 60;
@@ -6,6 +7,17 @@ export const LOW_TEXT_RATIO_THRESHOLD_PCT = 10;
 export const SLOW_RESPONSE_THRESHOLD_MS = 600;
 /** Screaming Frog's "Over 115 Characters" URL threshold, measured on the full URL. */
 export const URL_MAX_LENGTH = 115;
+/** Screaming Frog's Page Titles pixel-width thresholds (Arial 20 px). */
+export const TITLE_MAX_PIXELS = 561;
+export const TITLE_MIN_PIXELS = 200;
+/** Screaming Frog's Meta Description character thresholds. */
+export const META_MAX_LENGTH = 155;
+export const META_MIN_LENGTH = 70;
+/** Screaming Frog's Meta Description pixel-width thresholds (Arial 14 px). */
+export const META_MAX_PIXELS = 985;
+export const META_MIN_PIXELS = 400;
+/** Screaming Frog's H1 "Over 70 Characters" threshold. */
+export const H1_MAX_LENGTH = 70;
 
 export function getDuplicateTitleSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
@@ -196,6 +208,38 @@ function urlIssue(test: (parts: UrlParts) => boolean): (p: PageResult) => boolea
   };
 }
 
+// Pixel widths are read by several predicates and the Pages table columns on every recount,
+// so each is computed once per page object (pages are immutable once received).
+const titlePixelCache = new WeakMap<PageResult, number>();
+const metaPixelCache = new WeakMap<PageResult, number>();
+
+function cachedWidth(cache: WeakMap<PageResult, number>, p: PageResult, text: string | null, fontPx: number): number {
+  let width = cache.get(p);
+  if (width === undefined) {
+    width = text ? estimatePixelWidth(text, fontPx) : 0;
+    cache.set(p, width);
+  }
+  return width;
+}
+
+/** Estimated SERP width of the page title in pixels (0 when there is no title). */
+export function getTitlePixelWidth(p: PageResult): number {
+  return cachedWidth(titlePixelCache, p, p.title, TITLE_FONT_PX);
+}
+
+/** Estimated SERP width of the meta description in pixels (0 when there is none). */
+export function getMetaPixelWidth(p: PageResult): number {
+  return cachedWidth(metaPixelCache, p, p.metaDescription, META_FONT_PX);
+}
+
+/** Case-insensitive, whitespace-collapsed form used to compare a title with an H1. */
+function normalizeHeadingText(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/** Number of characters (code points, like the crawler's lengths) in the first H1. */
+const h1Length = (p: PageResult) => (p.h1 ? Array.from(p.h1.trim()).length : 0);
+
 const PERCENT_ESCAPE = /%[0-9A-Fa-f]{2}/g;
 /** A percent-escaped byte >= 0x80, i.e. part of an encoded non-ASCII (UTF-8) character. */
 const NON_ASCII_ESCAPE = /%[89A-Fa-f][0-9A-Fa-f]/;
@@ -243,6 +287,31 @@ export const ISSUE_DEFS = [
     test: (p) => p.titleLength > TITLE_MAX_LENGTH,
   }),
   pageIssue({
+    key: "titleOverPixels",
+    label: `Title over ${TITLE_MAX_PIXELS} px`,
+    group: "content",
+    section: "Titles",
+    test: (p) => !!p.title && getTitlePixelWidth(p) > TITLE_MAX_PIXELS,
+  }),
+  pageIssue({
+    key: "titleUnderPixels",
+    label: `Title below ${TITLE_MIN_PIXELS} px`,
+    group: "content",
+    section: "Titles",
+    test: (p) => !!p.title && getTitlePixelWidth(p) < TITLE_MIN_PIXELS,
+  }),
+  pageIssue({
+    key: "titleSameAsH1",
+    label: "Title same as H1",
+    group: "content",
+    section: "Titles",
+    test: (p) => {
+      if (!p.title || !p.h1) return false;
+      const title = normalizeHeadingText(p.title);
+      return title.length > 0 && title === normalizeHeadingText(p.h1);
+    },
+  }),
+  pageIssue({
     key: "missingMeta",
     label: "Missing meta desc.",
     group: "content",
@@ -257,12 +326,47 @@ export const ISSUE_DEFS = [
     test: (p, ctx) => !!p.metaDescription && ctx.duplicateMeta.has(p.metaDescription),
   }),
   pageIssue({
+    key: "metaTooLong",
+    label: `Meta desc. over ${META_MAX_LENGTH} chars`,
+    group: "content",
+    section: "Content",
+    test: (p) => !!p.metaDescription && p.metaDescriptionLength > META_MAX_LENGTH,
+  }),
+  pageIssue({
+    key: "metaTooShort",
+    label: `Meta desc. below ${META_MIN_LENGTH} chars`,
+    group: "content",
+    section: "Content",
+    test: (p) => !!p.metaDescription && p.metaDescriptionLength < META_MIN_LENGTH,
+  }),
+  pageIssue({
+    key: "metaOverPixels",
+    label: `Meta desc. over ${META_MAX_PIXELS} px`,
+    group: "content",
+    section: "Content",
+    test: (p) => !!p.metaDescription && getMetaPixelWidth(p) > META_MAX_PIXELS,
+  }),
+  pageIssue({
+    key: "metaUnderPixels",
+    label: `Meta desc. below ${META_MIN_PIXELS} px`,
+    group: "content",
+    section: "Content",
+    test: (p) => !!p.metaDescription && getMetaPixelWidth(p) < META_MIN_PIXELS,
+  }),
+  pageIssue({
     key: "h1Issues",
     label: "H1 issues",
     group: "content",
     section: "Content",
     // Missing (0) and multiple (>1) H1s in one issue.
     test: (p) => p.h1Count !== 1,
+  }),
+  pageIssue({
+    key: "h1TooLong",
+    label: `H1 over ${H1_MAX_LENGTH} chars`,
+    group: "content",
+    section: "Content",
+    test: (p) => h1Length(p) > H1_MAX_LENGTH,
   }),
   pageIssue({
     key: "duplicateContent",

@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { PageResult, ResourceResult } from "../types";
 import { ISSUE_SOLUTIONS } from "./issueSolutions";
+import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 import {
   type FilterContext,
   type FilterKey,
+  H1_MAX_LENGTH,
   ISSUE_DEFS,
   LOW_TEXT_RATIO_THRESHOLD_PCT,
+  META_MAX_LENGTH,
+  META_MAX_PIXELS,
+  META_MIN_LENGTH,
+  META_MIN_PIXELS,
   SLOW_RESPONSE_THRESHOLD_MS,
   TITLE_MAX_LENGTH,
+  TITLE_MAX_PIXELS,
   TITLE_MIN_LENGTH,
+  TITLE_MIN_PIXELS,
   URL_MAX_LENGTH,
   countIssues,
   createDuplicateTracker,
@@ -20,8 +28,10 @@ import {
   getDuplicateContentSet,
   getDuplicateMetaSet,
   getDuplicateTitleSet,
+  getMetaPixelWidth,
   getPageIssueKeys,
   getResourceIssueKeys,
+  getTitlePixelWidth,
   ingestDuplicateValue,
   searchPages,
   searchResources,
@@ -36,8 +46,8 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     contentType: "text/html",
     title: "A perfectly fine title that is long enough for SEO purposes",
     titleLength: 55,
-    metaDescription: "A perfectly fine meta description that is long enough.",
-    metaDescriptionLength: 55,
+    metaDescription: "A perfectly fine meta description that is long enough to describe this page to searchers.",
+    metaDescriptionLength: 89,
     h1: "Heading",
     h1Count: 1,
     wordCount: 500,
@@ -574,6 +584,136 @@ describe("URL structure issues", () => {
   });
 });
 
+describe("title, meta description and H1 length issues", () => {
+  const run = (key: FilterKey, overrides: Partial<PageResult>) =>
+    filterPages([makePage(overrides)], key, emptyFilterContext()).length === 1;
+
+  /** The longest run of `unit` whose estimated width does not exceed `maxPx`. */
+  function widestUpTo(unit: string, maxPx: number, fontPx: number): string {
+    let text = unit;
+    while (estimatePixelWidth(text + unit, fontPx) <= maxPx) text += unit;
+    return text;
+  }
+
+  /** The shortest run of `unit` whose estimated width reaches `minPx`. */
+  function narrowestFrom(unit: string, minPx: number, fontPx: number): string {
+    let text = unit;
+    while (estimatePixelWidth(text, fontPx) < minPx) text += unit;
+    return text;
+  }
+
+  it("titleOverPixels flags a title one glyph wider than the limit, not one at it", () => {
+    const atLimit = widestUpTo("a", TITLE_MAX_PIXELS, TITLE_FONT_PX);
+    expect(run("titleOverPixels", { title: atLimit })).toBe(false);
+    expect(run("titleOverPixels", { title: atLimit + "a" })).toBe(true);
+    expect(run("titleOverPixels", { title: "W".repeat(40) })).toBe(true);
+  });
+
+  it("titleOverPixels ignores a missing title", () => {
+    expect(run("titleOverPixels", { title: null })).toBe(false);
+  });
+
+  it("titleUnderPixels flags a title one glyph narrower than the limit, not one at it", () => {
+    const atLimit = narrowestFrom("a", TITLE_MIN_PIXELS, TITLE_FONT_PX);
+    expect(run("titleUnderPixels", { title: atLimit })).toBe(false);
+    expect(run("titleUnderPixels", { title: atLimit.slice(1) })).toBe(true);
+    expect(run("titleUnderPixels", { title: "Home" })).toBe(true);
+  });
+
+  it("titleUnderPixels ignores the default title and a missing title", () => {
+    expect(run("titleUnderPixels", {})).toBe(false);
+    expect(run("titleUnderPixels", { title: null })).toBe(false);
+  });
+
+  it("titleSameAsH1 flags a title equal to the H1 ignoring case and whitespace", () => {
+    expect(run("titleSameAsH1", { title: "Blue  Widgets\n", h1: " blue widgets" })).toBe(true);
+  });
+
+  it("titleSameAsH1 ignores a different H1 and a missing one", () => {
+    expect(run("titleSameAsH1", { title: "Blue widgets", h1: "Blue widgets for sale" })).toBe(false);
+    expect(run("titleSameAsH1", { title: "Blue widgets", h1: null })).toBe(false);
+    expect(run("titleSameAsH1", { title: null, h1: null })).toBe(false);
+    expect(run("titleSameAsH1", { title: " ", h1: " " })).toBe(false);
+  });
+
+  it("metaTooLong flags a description one character over the limit, not at it", () => {
+    expect(run("metaTooLong", { metaDescriptionLength: META_MAX_LENGTH + 1 })).toBe(true);
+    expect(run("metaTooLong", { metaDescriptionLength: META_MAX_LENGTH })).toBe(false);
+  });
+
+  it("metaTooLong ignores a missing description", () => {
+    expect(run("metaTooLong", { metaDescription: null, metaDescriptionLength: META_MAX_LENGTH + 1 })).toBe(false);
+  });
+
+  it("metaTooShort flags a description one character under the limit, not at it", () => {
+    expect(run("metaTooShort", { metaDescriptionLength: META_MIN_LENGTH - 1 })).toBe(true);
+    expect(run("metaTooShort", { metaDescriptionLength: META_MIN_LENGTH })).toBe(false);
+  });
+
+  it("metaTooShort ignores a missing description", () => {
+    expect(run("metaTooShort", { metaDescription: null, metaDescriptionLength: 0 })).toBe(false);
+  });
+
+  it("metaOverPixels flags a description one glyph wider than the limit, not one at it", () => {
+    const atLimit = widestUpTo("a", META_MAX_PIXELS, META_FONT_PX);
+    expect(run("metaOverPixels", { metaDescription: atLimit })).toBe(false);
+    expect(run("metaOverPixels", { metaDescription: atLimit + "a" })).toBe(true);
+  });
+
+  it("metaOverPixels ignores the default description and a missing one", () => {
+    expect(run("metaOverPixels", {})).toBe(false);
+    expect(run("metaOverPixels", { metaDescription: null })).toBe(false);
+  });
+
+  it("metaUnderPixels flags a description one glyph narrower than the limit, not one at it", () => {
+    const atLimit = narrowestFrom("a", META_MIN_PIXELS, META_FONT_PX);
+    expect(run("metaUnderPixels", { metaDescription: atLimit })).toBe(false);
+    expect(run("metaUnderPixels", { metaDescription: atLimit.slice(1) })).toBe(true);
+  });
+
+  it("metaUnderPixels ignores the default description and a missing one", () => {
+    expect(run("metaUnderPixels", {})).toBe(false);
+    expect(run("metaUnderPixels", { metaDescription: null })).toBe(false);
+  });
+
+  it("h1TooLong flags an H1 one character over the limit, not at it", () => {
+    expect(run("h1TooLong", { h1: "h".repeat(H1_MAX_LENGTH + 1) })).toBe(true);
+    expect(run("h1TooLong", { h1: "h".repeat(H1_MAX_LENGTH) })).toBe(false);
+  });
+
+  it("h1TooLong ignores a missing H1 and surrounding whitespace", () => {
+    expect(run("h1TooLong", { h1: null })).toBe(false);
+    expect(run("h1TooLong", { h1: `  ${"h".repeat(H1_MAX_LENGTH)}  ` })).toBe(false);
+  });
+
+  it("reports the new issues in getPageIssueKeys", () => {
+    const page = makePage({
+      hreflangValues: ["en"],
+      discoveredViaSitemap: false,
+      title: "Blue widgets",
+      titleLength: 12,
+      h1: "Blue widgets",
+      metaDescription: "Widgets",
+      metaDescriptionLength: 7,
+    });
+    expect(getPageIssueKeys(page, emptyFilterContext())).toEqual([
+      "titleTooShort",
+      "titleUnderPixels",
+      "titleSameAsH1",
+      "metaTooShort",
+      "metaUnderPixels",
+    ]);
+  });
+
+  it("pixel width helpers measure the title and meta description at their SERP font sizes", () => {
+    const page = makePage();
+    expect(getTitlePixelWidth(page)).toBe(estimatePixelWidth(page.title ?? "", TITLE_FONT_PX));
+    expect(getMetaPixelWidth(page)).toBe(estimatePixelWidth(page.metaDescription ?? "", META_FONT_PX));
+    expect(getTitlePixelWidth(makePage({ title: null }))).toBe(0);
+    expect(getMetaPixelWidth(makePage({ metaDescription: null }))).toBe(0);
+  });
+});
+
 describe("issue registry", () => {
   const violation = { id: "x", description: "x", helpUrl: "https://example.com/help", nodeCount: 1 };
 
@@ -589,6 +729,12 @@ describe("issue registry", () => {
       at("short-title", { title: "Short", titleLength: 5 }),
       at("long-title", { titleLength: TITLE_MAX_LENGTH + 20 }),
       at("no-meta", { metaDescription: null }),
+      at("wide-title", { title: "W".repeat(40) }),
+      at("same-as-h1", { title: "Heading", h1: "Heading" }),
+      at("long-meta", { metaDescriptionLength: META_MAX_LENGTH + 1 }),
+      at("short-meta", { metaDescription: "Short", metaDescriptionLength: 5 }),
+      at("wide-meta", { metaDescription: "W".repeat(80) }),
+      at("long-h1", { h1: "h".repeat(H1_MAX_LENGTH + 1) }),
       at("no-h1", { h1Count: 0 }),
       at("two-h1", { h1Count: 2 }),
       at("thin", { textRatioPct: LOW_TEXT_RATIO_THRESHOLD_PCT - 1 }),
