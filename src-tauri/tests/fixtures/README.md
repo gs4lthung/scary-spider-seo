@@ -20,6 +20,7 @@ must produce.
 | `/bad-jsonld.html` | invalid JSON-LD |
 | `/URL_Page.html?ref=nav` | URL with uppercase, an underscore and a query string (linked exactly like this) |
 | `/a//b.html` | URL with repeated slashes in the path (serves `a/b.html`) |
+| `/title-equals-h1.html` | title identical to the h1, meta description over 155 characters |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
 
 `{{ORIGIN}}` in any served file is replaced with the server's `http://127.0.0.1:<port>`.
