@@ -197,3 +197,33 @@ pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnaps
 
     Ok(snapshot)
 }
+
+/// Writes text built by the frontend (e.g. the bulk issues CSV, whose rows come from the
+/// frontend's issue classification) to `path`, replacing any existing file.
+#[tauri::command]
+pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::save_text_file;
+
+    #[test]
+    fn save_text_file_writes_contents_verbatim() {
+        let path = std::env::temp_dir().join(format!("gseo-save-text-{}.csv", std::process::id()));
+        let contents = "\u{feff}\"URL\",\"Issue\"\r\n\"https://example.com/caf\u{e9}\",\"x\"\r\n";
+        save_text_file(path.to_string_lossy().into_owned(), contents.to_string()).unwrap();
+        let written = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(written, contents.as_bytes());
+    }
+
+    #[test]
+    fn save_text_file_reports_errors_as_strings() {
+        let dir = std::env::temp_dir();
+        // A directory path can't be written as a file.
+        let err = save_text_file(dir.to_string_lossy().into_owned(), String::new()).unwrap_err();
+        assert!(!err.is_empty());
+    }
+}

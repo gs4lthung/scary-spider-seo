@@ -21,6 +21,7 @@ pub fn run() {
             commands::export_csv,
             commands::save_crawl,
             commands::load_crawl,
+            commands::save_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
