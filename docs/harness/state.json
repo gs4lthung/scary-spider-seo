@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 1,
     "startedAt": "2026-09-25T18:11:55.142Z",
-    "lastProgressAt": "2026-09-25T19:02:42.661Z"
+    "lastProgressAt": "2026-09-25T19:19:30.116Z"
   },
   "tasks": {
     "T1.1": {
@@ -59,10 +59,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.857Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "aee2d1e",
+      "updatedAt": "2026-09-25T19:19:30.115Z"
     },
     "T1.6": {
       "title": "Content, depth, size and redirect target audits",
