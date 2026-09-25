@@ -25,6 +25,8 @@ must produce.
 | `/canonical-to-noindex.html` | canonical pointing at `/noindex.html` (a non-indexable page) |
 | `/canonical-to-redirect.html` | canonical pointing at `/old-page` (a redirect) |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
+| `/noindex-in-sitemap.html` | not linked; listed in `sitemap.xml` and noindex (non-indexable URL in the sitemap) |
+| `/gone-in-sitemap.html` | not linked; listed in `sitemap.xml`, file intentionally absent so it answers 404 |
 
 `{{ORIGIN}}` in any served file is replaced with the server's `http://127.0.0.1:<port>`.
 

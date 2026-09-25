@@ -422,4 +422,13 @@ async fn seeds_orphans_from_the_sitemap() {
     let orphan = with.page(&site.url("/orphan.html"));
     assert!(orphan.discovered_via_sitemap);
     assert!(!with.page(&site.url("/dup-a.html")).discovered_via_sitemap);
+
+    // Sitemap audits: a noindex URL and a 404 URL, both listed only in the sitemap.
+    let noindex = with.page(&site.url("/noindex-in-sitemap.html"));
+    assert!(noindex.discovered_via_sitemap);
+    assert_eq!(noindex.indexability, "Non-Indexable (noindex)");
+
+    let gone = with.page(&site.url("/gone-in-sitemap.html"));
+    assert!(gone.discovered_via_sitemap);
+    assert_eq!(gone.status, Some(404));
 }
