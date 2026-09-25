@@ -32,6 +32,7 @@ import {
   getPageByUrlMap,
   getPageIssueKeys,
   getResourceIssueKeys,
+  getSitemapUsed,
   getTitlePixelWidth,
   ingestDuplicateValue,
   parseRobotsDirectives,
@@ -772,6 +773,7 @@ describe("issue registry", () => {
       at("canonical-to-noindex", { canonical: "https://example.com/noindex" }),
       at("moved", { redirectUrl: "https://example.com/clean", indexability: "Redirected" }),
       at("canonical-to-moved", { canonical: "https://example.com/moved" }),
+      at("linked-only", { discoveredViaSitemap: false, depth: 1 }),
     ];
     const resources = [
       makeResource(),
@@ -786,6 +788,7 @@ describe("issue registry", () => {
       canonicalStatusMap: getCanonicalStatusMap(pages),
       linkedUrls: new Set(["https://example.com/clean"]),
       pageByUrl: getPageByUrlMap(pages),
+      sitemapUsed: getSitemapUsed(pages),
     };
     return { pages, resources, ctx };
   }
@@ -931,5 +934,67 @@ describe("directive and canonical issues", () => {
     expect(run("canonicalToRedirect", from(bare3xx.url), ctx)).toBe(true);
     expect(run("canonicalToRedirect", from(live.url), ctx)).toBe(false);
     expect(run("canonicalToRedirect", from("https://example.com/uncrawled"), ctx)).toBe(false);
+  });
+});
+
+describe("sitemap issues", () => {
+  const sitemapCtx: FilterContext = { ...emptyFilterContext(), sitemapUsed: true };
+  const run = (key: FilterKey, overrides: Partial<PageResult>, ctx: FilterContext = sitemapCtx) =>
+    filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("getSitemapUsed is true only when a page came from the sitemap", () => {
+    expect(getSitemapUsed([makePage({ discoveredViaSitemap: false }), makePage({ discoveredViaSitemap: true })])).toBe(true);
+    expect(getSitemapUsed([makePage({ discoveredViaSitemap: false })])).toBe(false);
+    expect(getSitemapUsed([])).toBe(false);
+  });
+
+  it("sitemapNonIndexable flags non-indexable URLs discovered via the sitemap", () => {
+    expect(run("sitemapNonIndexable", { discoveredViaSitemap: true, indexability: "Non-Indexable (noindex)" })).toBe(true);
+    expect(run("sitemapNonIndexable", { discoveredViaSitemap: true, status: 404, indexability: "Non-Indexable (404)" })).toBe(
+      true,
+    );
+    expect(run("sitemapNonIndexable", { discoveredViaSitemap: true, indexability: "Canonicalised" })).toBe(true);
+    expect(run("sitemapNonIndexable", { discoveredViaSitemap: true, indexability: "Indexable" })).toBe(false);
+    expect(run("sitemapNonIndexable", { discoveredViaSitemap: false, indexability: "Non-Indexable (noindex)" })).toBe(false);
+  });
+
+  it("sitemapNon200 flags sitemap URLs that errored or redirected", () => {
+    expect(run("sitemapNon200", { discoveredViaSitemap: true, status: 404 })).toBe(true);
+    expect(run("sitemapNon200", { discoveredViaSitemap: true, status: null, error: "timeout" })).toBe(true);
+    expect(run("sitemapNon200", { discoveredViaSitemap: true, status: 301 })).toBe(true);
+    expect(
+      run("sitemapNon200", { discoveredViaSitemap: true, status: 200, redirectUrl: "https://example.com/new" }),
+    ).toBe(true);
+    expect(run("sitemapNon200", { discoveredViaSitemap: true, status: 200 })).toBe(false);
+    expect(run("sitemapNon200", { discoveredViaSitemap: false, status: 404 })).toBe(false);
+  });
+
+  it("notInSitemap flags indexable linked pages missing from the sitemap", () => {
+    const linked = { discoveredViaSitemap: false, depth: 1, indexability: "Indexable" };
+    expect(run("notInSitemap", linked)).toBe(true);
+    expect(run("notInSitemap", { ...linked, discoveredViaSitemap: true })).toBe(false);
+    expect(run("notInSitemap", { ...linked, indexability: "Non-Indexable (noindex)" })).toBe(false);
+    expect(run("notInSitemap", { ...linked, htmlSizeBytes: 0, contentType: "application/pdf" })).toBe(false);
+  });
+
+  it("notInSitemap skips the start URL", () => {
+    expect(run("notInSitemap", { discoveredViaSitemap: false, depth: 0, indexability: "Indexable" })).toBe(false);
+  });
+
+  it("notInSitemap is silent when no page came from a sitemap", () => {
+    const pages = [
+      makePage({ url: "https://example.com/", depth: 0, discoveredViaSitemap: false }),
+      makePage({ url: "https://example.com/a", depth: 1, discoveredViaSitemap: false }),
+    ];
+    const ctx = { ...emptyFilterContext(), sitemapUsed: getSitemapUsed(pages) };
+    expect(filterPages(pages, "notInSitemap", ctx)).toEqual([]);
+  });
+
+  it("sitemap issues appear in getPageIssueKeys", () => {
+    const page = makePage({ discoveredViaSitemap: true, status: 404, indexability: "Non-Indexable (404)" });
+    const keys = getPageIssueKeys(page, sitemapCtx);
+    expect(keys).toContain("sitemapNonIndexable");
+    expect(keys).toContain("sitemapNon200");
+    expect(getPageIssueKeys(makePage({ discoveredViaSitemap: false, depth: 2 }), sitemapCtx)).toContain("notInSitemap");
   });
 });

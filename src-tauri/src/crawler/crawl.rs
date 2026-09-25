@@ -812,7 +812,8 @@ pub async fn run_crawl<R: Runtime>(
                 if let Some(robots) = &robots {
                     if !robots.is_allowed(url.path()) {
                         crawled_count += 1;
-                        let result = robots_blocked_result(&url, depth);
+                        let mut result = robots_blocked_result(&url, depth);
+                        result.discovered_via_sitemap = via_sitemap;
                         let _ = app.emit("crawl://page", &result);
                         if let Ok(mut page_state) = pages.lock() {
                             page_state.push(result);

@@ -2,4 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>{{ORIGIN}}/</loc></url>
   <url><loc>{{ORIGIN}}/orphan.html</loc></url>
+  <url><loc>{{ORIGIN}}/noindex-in-sitemap.html</loc></url>
+  <url><loc>{{ORIGIN}}/gone-in-sitemap.html</loc></url>
+  <url><loc>{{ORIGIN}}/private/in-sitemap.html</loc></url>
 </urlset>

@@ -394,6 +394,36 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://victorious.com/blog/orphan-pages/",
     },
   },
+  sitemapNonIndexable: {
+    title: "Non-indexable URL listed in the sitemap",
+    problem:
+      "The sitemap lists this URL, but the page cannot be indexed (it is noindex, canonicalised to another URL, redirected, blocked or broken). A sitemap should only list the canonical URLs you want in search results; listing others sends Google mixed signals and wastes crawl effort.",
+    fix: "Remove the URL from the sitemap, or make the page indexable if it should rank. When the page is canonicalised or redirected, list its canonical or final URL instead.",
+    source: {
+      label: "Google Search Central: Build and submit a sitemap",
+      url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+    },
+  },
+  sitemapNon200: {
+    title: "Sitemap URL does not answer 200",
+    problem:
+      "The sitemap lists this URL, but it answered with a redirect, an error status or no response. Google expects a sitemap to list live, final URLs, so every redirect or broken entry makes the sitemap less trustworthy.",
+    fix: "Replace redirected entries with their final destination URL, and remove URLs that return 4xx or 5xx (or fix the page if it should be live). Regenerate the sitemap from your CMS so stale entries do not come back.",
+    source: {
+      label: "Google Search Central: Build and submit a sitemap",
+      url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+    },
+  },
+  notInSitemap: {
+    title: "Indexable URL missing from the sitemap",
+    problem:
+      "This page is indexable and was found through internal links, but the sitemap does not list it. A sitemap tells Google which URLs you consider important; pages left out may be discovered and recrawled more slowly. Only checked when the crawl used a sitemap. The start URL is never reported, because it is queued before the sitemap's URLs are added.",
+    fix: "Add the URL to the sitemap if it should appear in search. If it should not, make it non-indexable (noindex or a canonical to the preferred URL) so the sitemap and the page agree.",
+    source: {
+      label: "Google Search Central: Build and submit a sitemap",
+      url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+    },
+  },
   structuredDataErrors: {
     title: "Structured data (JSON-LD) parse/validation errors",
     problem: "A syntax error (mismatched brackets, a trailing comma, an unescaped quote) makes the entire JSON-LD block unparseable, and a missing required property (e.g. no image/author/datePublished for Article) makes an otherwise-valid block ineligible for rich results. Either way, Google gets nothing usable from it.",
