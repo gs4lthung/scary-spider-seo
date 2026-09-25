@@ -4,9 +4,15 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CheckCircle2, SearchIcon, TriangleAlert, XCircle, XIcon } from "lucide-react";
+import { CheckCircle2, ChevronDown, SearchIcon, TriangleAlert, XCircle, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,6 +59,7 @@ import {
   searchResources,
 } from "./lib/filters";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
+import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
 import { withScheme } from "./lib/url";
 
@@ -827,6 +834,28 @@ function App() {
     [resources, filter, search, filterContext],
   );
 
+  // Issue exports are classified here (the frontend owns classification); the backend only
+  // writes the finished text to disk.
+  const handleExportIssues = useCallback(
+    async (kind: "issues" | "summary") => {
+      try {
+        const path = await save({
+          filters: [{ name: "CSV", extensions: ["csv"] }],
+          defaultPath: kind === "issues" ? "issues-export.csv" : "issues-summary.csv",
+        });
+        if (!path) return;
+        const contents =
+          kind === "issues"
+            ? buildIssuesCsv(pages, resources, filterContext)
+            : buildIssueSummaryCsv(pages, resources, filterContext);
+        await invoke("save_text_file", { path, contents });
+      } catch (err) {
+        toast.error(String(err));
+      }
+    },
+    [pages, resources, filterContext],
+  );
+
   const pageColumns = useMemo(() => buildPageColumns(filterContext), [filterContext]);
 
   const selectedPageIssues = useMemo(() => {
@@ -955,6 +984,18 @@ function App() {
           <Button variant="outline" size="sm" onClick={() => handleExport(exportTab)} disabled={exportCount === 0}>
             Export {exportTab === "pages" ? "Pages" : "Resources"} CSV
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={pages.length === 0 && resources.length === 0}>
+                Export Issues
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => handleExportIssues("issues")}>Export issues…</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExportIssues("summary")}>Export issue summary…</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <TabsContent value="overview" className="flex flex-col gap-4 overflow-y-auto">
