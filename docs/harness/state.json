@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 1,
     "startedAt": "2026-09-25T18:11:55.142Z",
-    "lastProgressAt": "2026-09-25T18:27:53.029Z"
+    "lastProgressAt": "2026-09-25T18:38:36.651Z"
   },
   "tasks": {
     "T1.1": {
@@ -23,10 +23,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.857Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "e3b90e5",
+      "updatedAt": "2026-09-25T18:38:36.651Z"
     },
     "T1.3": {
       "title": "Title and meta description length, pixel width and duplication with H1",
