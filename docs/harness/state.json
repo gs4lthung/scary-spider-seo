@@ -1,9 +1,10 @@
 {
   "run": {
-    "active": true,
+    "active": false,
     "milestone": 1,
     "startedAt": "2026-09-25T18:11:55.142Z",
-    "lastProgressAt": "2026-09-25T19:40:05.058Z"
+    "lastProgressAt": "2026-09-25T19:40:05.058Z",
+    "finishedAt": "2026-09-25T19:40:06.121Z"
   },
   "tasks": {
     "T1.1": {
