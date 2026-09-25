@@ -200,6 +200,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/dup-b.html",
         "/gone.html",
         "/h1-and-images.html",
+        "/headings.html",
         "/loop-a",
         "/missing-title.html",
         "/nofollow.html",
@@ -237,7 +238,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 18);
+    assert_eq!(home.internal_link_count, 19);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -297,6 +298,23 @@ async fn title_equals_h1_fixture() {
         "{}",
         page.meta_description_length
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn headings_fixture() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signals for the frontend's missingH2 and nonSequentialHeadings checks.
+    let page = out.page(&site.url("/headings.html"));
+    assert_eq!(page.status, Some(200));
+    assert_eq!(page.h2_count, 0);
+    assert!(page.h2_values.is_empty());
+    assert_eq!(page.heading_levels, vec![1, 3]);
+    assert_eq!(page.h1_values, vec!["Heading outline fixture"]);
+
+    let images = out.page(&site.url("/h1-and-images.html"));
+    assert_eq!(images.h1_values.len(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]

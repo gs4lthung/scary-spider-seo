@@ -7,6 +7,7 @@ import {
   type FilterKey,
   DEEP_PAGE_DEPTH,
   H1_MAX_LENGTH,
+  H2_MAX_LENGTH,
   ISSUE_DEFS,
   LARGE_HTML_BYTES,
   LOW_WORD_COUNT,
@@ -29,6 +30,8 @@ import {
   filterTab,
   getCanonicalStatusMap,
   getDuplicateContentSet,
+  getDuplicateH1Set,
+  getDuplicateH2Set,
   getDuplicateMetaSet,
   getDuplicateTitleSet,
   getMetaPixelWidth,
@@ -37,6 +40,7 @@ import {
   getResourceIssueKeys,
   getSitemapUsed,
   getTitlePixelWidth,
+  hasHeadingLevelSkip,
   ingestDuplicateValue,
   parseRobotsDirectives,
   searchPages,
@@ -56,6 +60,10 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     metaDescriptionLength: 89,
     h1: "Heading",
     h1Count: 1,
+    h1Values: ["Heading"],
+    h2Values: ["Subheading"],
+    h2Count: 1,
+    headingLevels: [1, 2],
     wordCount: 500,
     canonical: "https://example.com/",
     metaRobots: null,
@@ -780,6 +788,10 @@ describe("issue registry", () => {
       at("few-words", { wordCount: LOW_WORD_COUNT - 1 }),
       at("deep", { depth: DEEP_PAGE_DEPTH + 1 }),
       at("huge", { htmlSizeBytes: LARGE_HTML_BYTES + 1 }),
+      at("no-h2", { h2Values: [], h2Count: 0, headingLevels: [1] }),
+      at("two-h2", { h2Values: ["One", "Two"], h2Count: 2, headingLevels: [1, 2, 2] }),
+      at("long-h2", { h2Values: ["h".repeat(H2_MAX_LENGTH + 1)] }),
+      at("skipped-level", { headingLevels: [1, 3] }),
       at("linked-redirect", {
         redirectChain: ["https://example.com/linked-redirect"],
         redirectUrl: "https://example.com/clean",
@@ -801,6 +813,8 @@ describe("issue registry", () => {
       duplicateTitles: getDuplicateTitleSet(pages),
       duplicateContent: getDuplicateContentSet(pages),
       duplicateMeta: getDuplicateMetaSet(pages),
+      duplicateH1s: getDuplicateH1Set(pages),
+      duplicateH2s: getDuplicateH2Set(pages),
       canonicalStatusMap: getCanonicalStatusMap(pages),
       linkedUrls: new Set(["https://example.com/clean", "https://example.com/linked-redirect"]),
       pageByUrl: getPageByUrlMap(pages),
@@ -1074,5 +1088,112 @@ describe("content, depth, size and redirect target issues", () => {
     }
     expect(keys).not.toContain("redirectToError");
     expect(getPageIssueKeys(makePage({ redirectChain: [url], status: 404 }), ctx)).toContain("redirectToError");
+  });
+});
+
+describe("heading outline issues", () => {
+  const run = (key: FilterKey, overrides: Partial<PageResult>, ctx: FilterContext = emptyFilterContext()) =>
+    filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("getDuplicateH1Set compares the first H1 and ignores pages without one", () => {
+    const pages = [
+      makePage({ h1: "Same", h1Values: ["Same"] }),
+      makePage({ h1: "Same", h1Values: ["Same", "Other"] }),
+      makePage({ h1: "Unique", h1Values: ["Unique", "Other"] }),
+      makePage({ h1: null, h1Values: [], h1Count: 0 }),
+      makePage({ h1: null, h1Values: [], h1Count: 0 }),
+    ];
+    expect([...getDuplicateH1Set(pages)]).toEqual(["Same"]);
+  });
+
+  it("getDuplicateH2Set compares the first H2 and ignores pages without one", () => {
+    const pages = [
+      makePage({ h2Values: ["Intro", "A"] }),
+      makePage({ h2Values: ["Intro"] }),
+      makePage({ h2Values: ["A", "Intro"] }),
+      makePage({ h2Values: [] }),
+      makePage({ h2Values: [] }),
+    ];
+    expect([...getDuplicateH2Set(pages)]).toEqual(["Intro"]);
+  });
+
+  it("duplicateH1 flags a page whose first H1 is shared, not one with a unique H1", () => {
+    const ctx: FilterContext = { ...emptyFilterContext(), duplicateH1s: new Set(["Same"]) };
+    expect(run("duplicateH1", { h1: "Same" }, ctx)).toBe(true);
+    expect(run("duplicateH1", { h1: "Unique" }, ctx)).toBe(false);
+    expect(run("duplicateH1", { h1: null, h1Values: [], h1Count: 0 }, ctx)).toBe(false);
+  });
+
+  it("duplicateH2 flags a page whose first H2 is shared, not one with a unique H2", () => {
+    const ctx: FilterContext = { ...emptyFilterContext(), duplicateH2s: new Set(["Intro"]) };
+    expect(run("duplicateH2", { h2Values: ["Intro"] }, ctx)).toBe(true);
+    expect(run("duplicateH2", { h2Values: ["Specific", "Intro"] }, ctx)).toBe(false);
+    expect(run("duplicateH2", { h2Values: [], h2Count: 0 }, ctx)).toBe(false);
+  });
+
+  it("missingH2 flags a 2xx HTML page with no H2", () => {
+    expect(run("missingH2", { h2Values: [], h2Count: 0, headingLevels: [1, 3] })).toBe(true);
+    expect(run("missingH2", { h2Values: [], h2Count: 0, headingLevels: [], h1: null, h1Values: [], h1Count: 0 })).toBe(
+      true,
+    );
+    expect(run("missingH2", {})).toBe(false);
+  });
+
+  it("missingH2 ignores non-HTML, non-2xx and pre-heading-outline pages", () => {
+    const noH2 = { h2Values: [], h2Count: 0, headingLevels: [] };
+    expect(run("missingH2", { ...noH2, h1: null, h1Count: 0, htmlSizeBytes: 0 })).toBe(false);
+    expect(run("missingH2", { ...noH2, h1: null, h1Count: 0, status: 404 })).toBe(false);
+    // A crawl saved before heading levels existed: an H1 was seen but no levels recorded.
+    expect(run("missingH2", { ...noH2, h1Count: 1 })).toBe(false);
+  });
+
+  it("multipleH2 flags more than one H2, not exactly one", () => {
+    expect(run("multipleH2", { h2Count: 2 })).toBe(true);
+    expect(run("multipleH2", { h2Count: 1 })).toBe(false);
+    expect(run("multipleH2", { h2Count: 0 })).toBe(false);
+  });
+
+  it("h2TooLong flags any H2 one character over the limit, not at it", () => {
+    expect(run("h2TooLong", { h2Values: ["Short", "h".repeat(H2_MAX_LENGTH + 1)] })).toBe(true);
+    expect(run("h2TooLong", { h2Values: ["h".repeat(H2_MAX_LENGTH)] })).toBe(false);
+    expect(run("h2TooLong", { h2Values: [`  ${"h".repeat(H2_MAX_LENGTH)}  `] })).toBe(false);
+    expect(run("h2TooLong", { h2Values: [] })).toBe(false);
+  });
+
+  it("h1TooLong checks every H1, not only the first", () => {
+    expect(run("h1TooLong", { h1: "Short", h1Values: ["Short", "h".repeat(H1_MAX_LENGTH + 1)] })).toBe(true);
+    expect(run("h1TooLong", { h1: "Short", h1Values: ["Short", "h".repeat(H1_MAX_LENGTH)] })).toBe(false);
+  });
+
+  it("hasHeadingLevelSkip flags an increase of more than one level only", () => {
+    expect(hasHeadingLevelSkip([1, 3])).toBe(true);
+    expect(hasHeadingLevelSkip([1, 2, 4])).toBe(true);
+    expect(hasHeadingLevelSkip([1, 2, 3, 2, 3, 1, 2])).toBe(false);
+    // Stepping back up any number of levels is fine.
+    expect(hasHeadingLevelSkip([1, 2, 3, 4, 1])).toBe(false);
+    expect(hasHeadingLevelSkip([])).toBe(false);
+    expect(hasHeadingLevelSkip([3])).toBe(false);
+  });
+
+  it("nonSequentialHeadings flags H1 then H3, not H1 then H2", () => {
+    expect(run("nonSequentialHeadings", { headingLevels: [1, 3] })).toBe(true);
+    expect(run("nonSequentialHeadings", { headingLevels: [1, 2, 3] })).toBe(false);
+  });
+
+  it("the new issues appear in getPageIssueKeys", () => {
+    const ctx: FilterContext = {
+      ...emptyFilterContext(),
+      duplicateH1s: new Set(["Heading"]),
+      duplicateH2s: new Set(["Subheading"]),
+    };
+    const keys = getPageIssueKeys(makePage({ headingLevels: [1, 2, 4, 2], h2Count: 2 }), ctx);
+    for (const key of ["duplicateH1", "multipleH2", "duplicateH2", "nonSequentialHeadings"] as const) {
+      expect(keys).toContain(key);
+    }
+    const missing = getPageIssueKeys(
+      makePage({ h2Values: ["h".repeat(H2_MAX_LENGTH + 1)], h2Count: 0, headingLevels: [1] }),
+      emptyFilterContext(),
+    );
+    expect(missing).toEqual(expect.arrayContaining(["missingH2", "h2TooLong"]));
   });
 });

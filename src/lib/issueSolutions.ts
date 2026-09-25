@@ -112,6 +112,66 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
     },
   },
+  duplicateH1: {
+    title: "Duplicate H1 across pages",
+    problem:
+      "The main heading (compared on the first H1, as Screaming Frog does) is identical on more than one page. The H1 is how readers and screen reader users confirm which page they are on, so a shared H1 makes pages hard to tell apart and often points at templated or duplicate content.",
+    fix: "Give each page an H1 that describes its own specific topic. If the pages really cover the same topic, consolidate them or point the weaker one at the stronger one with a canonical.",
+    source: {
+      label: "MDN: The HTML Section Heading elements",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+    },
+  },
+  missingH2: {
+    title: "Missing H2",
+    problem:
+      "The page has no non-empty H2, so its content has no second-level structure. Readers skimming the page and screen reader users navigating by headings have nothing to jump between below the main heading.",
+    fix: "Break the content into sections and give each one a descriptive H2 nested under the page's H1. Very short pages with a single topic can reasonably have none, so treat this as a prompt to check, not a hard error.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
+  multipleH2: {
+    title: "Multiple H2s",
+    problem:
+      "The page has more than one H2. That is normal for a structured page and not an error on its own, but Screaming Frog lists it so you can confirm each H2 marks a real section rather than styling text to look large.",
+    fix: "Check that every H2 introduces a distinct section of the content. Use CSS, not heading elements, for text that only needs to look prominent, and nest subsections under their H2 with H3s.",
+    source: {
+      label: "MDN: The HTML Section Heading elements",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+    },
+  },
+  duplicateH2: {
+    title: "Duplicate H2 across pages",
+    problem:
+      "The first H2 on this page is identical on other pages. When the opening section heading repeats across a site it usually comes from a shared template or duplicated content, and it gives readers no sense of what is specific to this page.",
+    fix: "Write the first H2 for this page's own content. If the heading comes from a template component (a sidebar or a newsletter box), make sure it is not the first H2 in the main content, or use a non-heading element for it.",
+    source: {
+      label: "MDN: The HTML Section Heading elements",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+    },
+  },
+  h2TooLong: {
+    title: "H2 is over 70 characters",
+    problem:
+      "At least one H2 is over 70 characters (Screaming Frog's threshold). Long subheadings read like sentences, are harder to scan, and make navigating by headings with a screen reader slower.",
+    fix: "Shorten the H2 to a concise label for the section and move the supporting detail into the paragraph that follows it.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
+  nonSequentialHeadings: {
+    title: "Non-sequential heading order",
+    problem:
+      "The heading levels skip a step somewhere on the page, for example an H1 followed directly by an H3. Screen reader users navigate by heading level, and a skipped level suggests missing sections and makes the outline confusing.",
+    fix: "Nest headings one level at a time: H2 under H1, H3 under H2, and so on. If a heading was chosen for its size, keep the correct level and change its appearance with CSS instead.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
   duplicateContent: {
     title: "Duplicate or near-identical content",
     problem: "When multiple URLs serve the same content, Google has to pick one as canonical itself, which can dilute ranking signals (links, engagement) that would otherwise all point to a single URL.",

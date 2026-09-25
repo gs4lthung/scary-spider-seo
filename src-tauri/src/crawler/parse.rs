@@ -12,6 +12,9 @@ static REMOVE_SEL: LazyLock<Selector> =
 static TITLE_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("title").unwrap());
 static META_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("meta").unwrap());
 static H1_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("h1").unwrap());
+static H2_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("h2").unwrap());
+static HEADING_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("h1, h2, h3, h4, h5, h6").unwrap());
 static CANONICAL_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse(r#"link[rel="canonical"]"#).unwrap());
 static HTML_TAG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("html").unwrap());
@@ -21,12 +24,22 @@ static BODY_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("body").u
 static A_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("a[href]").unwrap());
 static IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img[src]").unwrap());
 
+/// Most H1/H2 texts stored per page, so one pathological page cannot bloat the
+/// crawl event or the saved file. Counts (`h1_count`, `h2_count`) stay exact.
+pub const MAX_HEADINGS: usize = 20;
+/// Most heading levels stored per page for the heading-order check.
+pub const MAX_HEADING_LEVELS: usize = 200;
+
 pub struct ParsedPage {
     pub title: Option<String>,
     pub meta_description: Option<String>,
     pub meta_robots: Option<String>,
     pub h1: Option<String>,
     pub h1_count: usize,
+    pub h1_values: Vec<String>,
+    pub h2_values: Vec<String>,
+    pub h2_count: usize,
+    pub heading_levels: Vec<u8>,
     pub word_count: usize,
     pub canonical: Option<String>,
     pub canonical_count: usize,
@@ -77,6 +90,23 @@ fn collect_schema_types(value: &Value, out: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+/// Trimmed, non-empty text of every element matching `selector`, in document order.
+fn heading_texts(html: &Html, selector: &Selector) -> Vec<String> {
+    html.select(selector)
+        .map(|e| e.text().collect::<String>().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Levels (1 to 6) of every heading in document order, empty ones included, capped
+/// at `MAX_HEADING_LEVELS`. One combined selector keeps the document order.
+fn heading_levels(html: &Html) -> Vec<u8> {
+    html.select(&HEADING_SEL)
+        .filter_map(|e| e.value().name().strip_prefix('h')?.parse::<u8>().ok())
+        .take(MAX_HEADING_LEVELS)
+        .collect()
 }
 
 /// Below this estimated re-minification saving, a page is considered already minified.
@@ -258,13 +288,14 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         }
     }
 
-    let h1s: Vec<String> = html
-        .select(&H1_SEL)
-        .map(|e| e.text().collect::<String>().trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    let h1_count = h1s.len();
-    let h1 = h1s.into_iter().next();
+    let mut h1_values = heading_texts(&html, &H1_SEL);
+    let h1_count = h1_values.len();
+    let h1 = h1_values.first().cloned();
+    h1_values.truncate(MAX_HEADINGS);
+    let mut h2_values = heading_texts(&html, &H2_SEL);
+    let h2_count = h2_values.len();
+    h2_values.truncate(MAX_HEADINGS);
+    let heading_levels = heading_levels(&html);
 
     let canonical_links: Vec<_> = html.select(&CANONICAL_SEL).collect();
     let canonical_count = canonical_links.len();
@@ -358,6 +389,10 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         meta_robots,
         h1,
         h1_count,
+        h1_values,
+        h2_values,
+        h2_count,
+        heading_levels,
         word_count,
         canonical,
         canonical_count,
@@ -446,6 +481,31 @@ mod tests {
         let page = parse("<h1> First </h1><h1>  </h1><h1>Second</h1>");
         assert_eq!(page.h1_count, 2);
         assert_eq!(page.h1.as_deref(), Some("First"));
+    }
+
+    #[test]
+    fn collects_heading_levels_in_document_order() {
+        let page = parse(
+            "<h1>Top</h1><h3>Skip</h3><h2> </h2><div><h2>Real</h2><h6>Deep</h6></div><h1>Again</h1>",
+        );
+        // Empty headings still count for order, but not as H1/H2 values.
+        assert_eq!(page.heading_levels, vec![1, 3, 2, 2, 6, 1]);
+        assert_eq!(page.h1_values, vec!["Top", "Again"]);
+        assert_eq!(page.h2_values, vec!["Real"]);
+        assert_eq!(page.h2_count, 1);
+        assert!(parse("<p>none</p>").heading_levels.is_empty());
+    }
+
+    #[test]
+    fn caps_heading_lists() {
+        let html = "<h1>a</h1><h2>b</h2>".repeat(MAX_HEADING_LEVELS);
+        let page = parse(&html);
+        assert_eq!(page.h1_count, MAX_HEADING_LEVELS);
+        assert_eq!(page.h2_count, MAX_HEADING_LEVELS);
+        assert_eq!(page.h1_values.len(), MAX_HEADINGS);
+        assert_eq!(page.h2_values.len(), MAX_HEADINGS);
+        assert_eq!(page.heading_levels.len(), MAX_HEADING_LEVELS);
+        assert_eq!(page.h1.as_deref(), Some("a"));
     }
 
     #[test]
