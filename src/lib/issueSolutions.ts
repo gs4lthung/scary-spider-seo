@@ -270,4 +270,64 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://web.dev/articles/accessible-tap-targets",
     },
   },
+  urlUppercase: {
+    title: "URL contains uppercase characters",
+    problem:
+      "URL paths are case sensitive, so /Page and /page are two different URLs to Google. Mixed case invites links with the wrong case, which split signals across duplicates or lead to 404s.",
+    fix: "Use lowercase URLs. If the uppercase version is already linked or indexed, 301-redirect it to the lowercase one and update internal links to point at the lowercase URL directly.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlUnderscores: {
+    title: "URL contains underscores",
+    problem:
+      "Google recommends hyphens rather than underscores to separate words in a URL, because hyphens make the individual words easier for people and search engines to identify.",
+    fix: "Use hyphens between words in new URLs (summer-clothing, not summer_clothing). Only rename existing URLs if you can 301-redirect the old ones and update internal links; the gain is small.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlParameters: {
+    title: "URL has query parameters",
+    problem:
+      "Parameters such as sorting, tracking or session IDs can create many URLs for the same content, which wastes crawl budget and splits ranking signals between duplicates.",
+    fix: "Keep parameters out of internal links where they don't change the content (for example tracking tags), point a canonical tag at the clean URL, and prefer readable path segments for content that deserves its own URL.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlOver115: {
+    title: "URL is over 115 characters",
+    problem:
+      "Very long URLs are hard to read, share and remember, and are often a sign of deep nesting or stacked parameters. 115 characters is the threshold Screaming Frog uses; Google sets no hard limit, but recommends simple, descriptive URLs.",
+    fix: "Shorten the URL by removing filler words, redundant folders and unneeded parameters. If you change a live URL, 301-redirect the old one and update internal links.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlNonAscii: {
+    title: "URL contains non-ASCII characters",
+    problem:
+      "Characters outside ASCII must be percent-encoded in the URL. Google accepts UTF-8 URLs, but tools, logs and people sometimes see or copy the encoded form, and links written with the unencoded form can fail when not encoded consistently.",
+    fix: "Make sure every link to this URL uses the same UTF-8 percent-encoding. For sites in Latin-script languages, consider ASCII-only slugs (for example cafe instead of café) to avoid the problem altogether.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlMultipleSlashes: {
+    title: "URL contains multiple consecutive slashes",
+    problem:
+      "A path like /a//b is a different URL from /a/b, but most servers return the same page for both, which creates duplicate content. It is usually caused by a template joining paths incorrectly.",
+    fix: "Fix the link or template that produces the double slash, and 301-redirect URLs with repeated slashes to the single-slash version.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
 };

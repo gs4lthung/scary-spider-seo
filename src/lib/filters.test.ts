@@ -3,11 +3,13 @@ import type { PageResult, ResourceResult } from "../types";
 import { ISSUE_SOLUTIONS } from "./issueSolutions";
 import {
   type FilterContext,
+  type FilterKey,
   ISSUE_DEFS,
   LOW_TEXT_RATIO_THRESHOLD_PCT,
   SLOW_RESPONSE_THRESHOLD_MS,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
+  URL_MAX_LENGTH,
   countIssues,
   createDuplicateTracker,
   emptyFilterContext,
@@ -479,6 +481,99 @@ describe("getResourceIssueKeys", () => {
   });
 });
 
+describe("URL structure issues", () => {
+  const run = (url: string, key: FilterKey, overrides: Partial<PageResult> = {}) =>
+    filterPages([makePage({ url, ...overrides })], key, emptyFilterContext()).length === 1;
+
+  it("urlUppercase flags uppercase in the path", () => {
+    expect(run("https://example.com/About-Us", "urlUppercase")).toBe(true);
+  });
+
+  it("urlUppercase ignores the host and percent-escape hex digits", () => {
+    expect(run("https://Example.COM/about-us", "urlUppercase")).toBe(false);
+    expect(run("https://example.com/caf%C3%A9", "urlUppercase")).toBe(false);
+  });
+
+  it("urlUnderscores flags an underscore in the path or query", () => {
+    expect(run("https://example.com/about_us", "urlUnderscores")).toBe(true);
+    expect(run("https://example.com/about?utm_source=x", "urlUnderscores")).toBe(true);
+  });
+
+  it("urlUnderscores ignores hyphenated URLs and underscores in the host", () => {
+    expect(run("https://my_host.example.com/about-us", "urlUnderscores")).toBe(false);
+  });
+
+  it("urlParameters flags a query string", () => {
+    expect(run("https://example.com/list?page=2", "urlParameters")).toBe(true);
+  });
+
+  it("urlParameters ignores URLs without a query", () => {
+    expect(run("https://example.com/list", "urlParameters")).toBe(false);
+  });
+
+  it("urlParameters ignores a bare trailing question mark", () => {
+    expect(run("https://example.com/list?", "urlParameters")).toBe(false);
+  });
+
+  it("urlOver115 flags a URL one character over the limit, not one at the limit", () => {
+    const base = "https://example.com/";
+    const atLimit = base + "a".repeat(URL_MAX_LENGTH - base.length);
+    expect(atLimit).toHaveLength(URL_MAX_LENGTH);
+    expect(run(atLimit, "urlOver115")).toBe(false);
+    expect(run(atLimit + "a", "urlOver115")).toBe(true);
+  });
+
+  it("urlNonAscii detects percent-encoded UTF-8 path", () => {
+    expect(run("https://example.com/caf%C3%A9", "urlNonAscii")).toBe(true);
+    expect(run("https://example.com/%e6%97%a5%e6%9c%ac", "urlNonAscii")).toBe(true);
+  });
+
+  it("urlNonAscii ignores percent-encoded ASCII such as spaces", () => {
+    expect(run("https://example.com/my%20page", "urlNonAscii")).toBe(false);
+  });
+
+  it("urlNonAscii ignores an internationalised (punycode) host", () => {
+    expect(run("https://xn--caf-dma.example/menu", "urlNonAscii")).toBe(false);
+  });
+
+  it("urlMultipleSlashes flags repeated slashes in the path", () => {
+    expect(run("https://example.com/a//b.html", "urlMultipleSlashes")).toBe(true);
+  });
+
+  it("urlMultipleSlashes ignores the scheme's slashes and slashes in the query", () => {
+    expect(run("https://example.com/a/b.html", "urlMultipleSlashes")).toBe(false);
+    expect(run("https://example.com/go?to=https://other.example/", "urlMultipleSlashes")).toBe(false);
+  });
+
+  it("only flags URLs that answered 2xx or 3xx", () => {
+    const url = `https://example.com/Caf%C3%A9_path//${"x".repeat(URL_MAX_LENGTH)}?y=1`;
+    const urlKeys: FilterKey[] = [
+      "urlUppercase",
+      "urlUnderscores",
+      "urlParameters",
+      "urlOver115",
+      "urlNonAscii",
+      "urlMultipleSlashes",
+    ];
+    for (const key of urlKeys) {
+      expect(run(url, key, { status: 200 }), key).toBe(true);
+      expect(run(url, key, { status: 301 }), key).toBe(true);
+      for (const status of [404, 500, null]) expect(run(url, key, { status }), `${key} ${status}`).toBe(false);
+    }
+  });
+
+  it("reports the URL issues in getPageIssueKeys", () => {
+    const page = makePage({ url: "https://example.com/Caf%C3%A9_menu//x?y=1", hreflangValues: ["en"], discoveredViaSitemap: false });
+    expect(getPageIssueKeys(page, emptyFilterContext())).toEqual([
+      "urlUppercase",
+      "urlUnderscores",
+      "urlParameters",
+      "urlNonAscii",
+      "urlMultipleSlashes",
+    ]);
+  });
+});
+
 describe("issue registry", () => {
   const violation = { id: "x", description: "x", helpUrl: "https://example.com/help", nodeCount: 1 };
 
@@ -514,6 +609,12 @@ describe("issue registry", () => {
       makePage({ url: "http://example.com/plain", canonical: "http://example.com/plain" }),
       at("no-hsts", { hsts: false }),
       at("no-lang", { lang: null }),
+      at("Upper-Case"),
+      at("snake_case"),
+      at("search?q=shoes"),
+      at(`long-${"x".repeat(URL_MAX_LENGTH)}`),
+      at("caf%C3%A9"),
+      at("a//b"),
     ];
     const resources = [
       makeResource(),
