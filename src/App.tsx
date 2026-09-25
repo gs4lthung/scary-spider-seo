@@ -34,13 +34,19 @@ import {
   type FilterContext,
   type FilterKey,
   type IssueKey,
+  META_MAX_PIXELS,
+  META_MIN_PIXELS,
   TITLE_MAX_LENGTH,
+  TITLE_MAX_PIXELS,
   TITLE_MIN_LENGTH,
+  TITLE_MIN_PIXELS,
   createDuplicateTracker,
   filterPages,
   filterResources,
   filterTab,
+  getMetaPixelWidth,
   getPageIssueKeys,
+  getTitlePixelWidth,
   getResourceIssueKeys,
   ingestDuplicateValue,
   searchPages,
@@ -169,6 +175,20 @@ function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
       },
     },
     {
+      id: "titlePixels",
+      header: "Title px",
+      size: 100,
+      meta: {
+        description: `Estimated width of the title in Google results (Arial 20 px). Flagged outside the ${TITLE_MIN_PIXELS}–${TITLE_MAX_PIXELS} px range.`,
+      },
+      accessorFn: (page) => getTitlePixelWidth(page),
+      cell: (c) => {
+        const v = c.getValue() as number;
+        const hasTitle = !!c.row.original.title;
+        return flagCell(hasTitle ? v : "", hasTitle && (v < TITLE_MIN_PIXELS || v > TITLE_MAX_PIXELS));
+      },
+    },
+    {
       accessorKey: "metaDescription",
       header: "Meta Description",
       size: 310,
@@ -183,6 +203,20 @@ function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
       header: "Meta Len",
       size: 100,
       meta: { description: "Character length of the meta description tag." },
+    },
+    {
+      id: "metaPixels",
+      header: "Meta px",
+      size: 100,
+      meta: {
+        description: `Estimated width of the meta description in Google results (Arial 14 px). Flagged outside the ${META_MIN_PIXELS}–${META_MAX_PIXELS} px range.`,
+      },
+      accessorFn: (page) => getMetaPixelWidth(page),
+      cell: (c) => {
+        const v = c.getValue() as number;
+        const hasMeta = !!c.row.original.metaDescription;
+        return flagCell(hasMeta ? v : "", hasMeta && (v < META_MIN_PIXELS || v > META_MAX_PIXELS));
+      },
     },
     {
       accessorKey: "h1",
@@ -971,8 +1005,10 @@ function App() {
             { label: "Redirect URL", value: selectedPage.redirectUrl },
             { label: "Title", value: selectedPage.title },
             { label: "Title Length", value: selectedPage.titleLength },
+            { label: "Title Width (px)", value: selectedPage.title ? getTitlePixelWidth(selectedPage) : null },
             { label: "Meta Description", value: selectedPage.metaDescription },
             { label: "Meta Description Length", value: selectedPage.metaDescriptionLength },
+            { label: "Meta Description Width (px)", value: selectedPage.metaDescription ? getMetaPixelWidth(selectedPage) : null },
             { label: "H1", value: selectedPage.h1 },
             { label: "H1 Count", value: selectedPage.h1Count },
             { label: "Word Count", value: selectedPage.wordCount },

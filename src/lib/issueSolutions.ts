@@ -45,6 +45,36 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/appearance/title-link",
     },
   },
+  titleOverPixels: {
+    title: "Title is over 561 pixels wide",
+    problem:
+      "Google cuts off displayed titles by rendered width, not character count. At the 20 px Arial font used in results, a title wider than about 561 px (Screaming Frog's threshold) is likely to be truncated with an ellipsis, hiding the end of it. Wide letters such as W and M use up the space faster than narrow ones.",
+    fix: "Put the most important words first and trim filler, brand repetition or long separators until the title fits. Check the Title px column; the estimate is close to, but not exactly, what Google renders.",
+    source: {
+      label: "Google Search Central: Influencing title links in Google Search",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
+  titleUnderPixels: {
+    title: "Title is below 200 pixels wide",
+    problem:
+      "A very short title (under about 200 px, Screaming Frog's threshold) leaves space in the result unused and often lacks the descriptive words that help people and Google understand what the page is about, which makes Google more likely to rewrite it.",
+    fix: "Expand the title with a specific, descriptive phrase about the page's main topic, for example the product type or the question the page answers, while keeping it concise.",
+    source: {
+      label: "Google Search Central: Influencing title links in Google Search",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
+  titleSameAsH1: {
+    title: "Title is the same as the H1",
+    problem:
+      "An identical title and H1 is not an error, and Google recommends that the main heading and title agree. It is a missed opportunity, though: the title can target a slightly different phrasing or add context (such as the brand) that the on-page heading does not need.",
+    fix: "Keep both about the same topic, but consider varying the title, for example adding a qualifier, a benefit or the site name, so the page covers more of the ways people search for it.",
+    source: {
+      label: "Google Search Central: Influencing title links in Google Search",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
   duplicateTitles: {
     title: "Duplicate titles across pages",
     problem: "When multiple pages share a title, Google can't use it to tell users (or itself) which page is which, and it undermines the \"unique to the page\" guidance Google gives directly.",
@@ -67,6 +97,16 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
     title: "Missing or multiple H1 headings",
     problem: "This one is genuinely disputed: Google's John Mueller has stated multiple times that Google's systems have no problem with zero, one, or many H1s on a page and it isn't a ranking factor. The stronger reason to care is accessibility and document structure, not SEO. Screen reader users rely on a sensible heading hierarchy to navigate a page, and W3C guidance treats a single top-level heading with nested subheadings as the clean pattern (though it's not a strict WCAG conformance failure either way).",
     fix: "Use one H1 that reflects the page's main topic, then structure the rest of the content with H2/H3 in a logical nesting order. Don't chase this purely for SEO. Do it because it makes the page's outline sensible for a screen reader or a skim-reading human.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
+  h1TooLong: {
+    title: "H1 is over 70 characters",
+    problem:
+      "A long main heading (over 70 characters, Screaming Frog's threshold) is harder to scan and often reads like a paragraph rather than a concise statement of the page's topic, for readers and for screen reader users navigating by headings.",
+    fix: "Shorten the H1 to a clear, concise description of the page's main topic and move supporting detail into the first paragraph or a subheading.",
     source: {
       label: "W3C WAI: Headings tutorial",
       url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
@@ -160,6 +200,46 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
     source: {
       label: "Google Search Central: Tell Google about localized versions of your page",
       url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  metaTooLong: {
+    title: "Meta description is over 155 characters",
+    problem:
+      "Google shortens snippets to fit the device width, so a description longer than about 155 characters (Screaming Frog's threshold) is likely to be cut off in results, and the end of the message is lost.",
+    fix: "Keep the key information in the first 150 or so characters and move secondary details later or remove them. Google has no fixed limit, so this is about what shows, not a penalty.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaTooShort: {
+    title: "Meta description is below 70 characters",
+    problem:
+      "A very short description (under 70 characters, Screaming Frog's threshold) rarely summarizes the page well, so Google is more likely to ignore it and build a snippet from page text instead.",
+    fix: "Write one or two sentences that describe what the page offers and why someone should click, including specific details such as price, author or key facts where they apply.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaOverPixels: {
+    title: "Meta description is over 985 pixels wide",
+    problem:
+      "Snippets are truncated by rendered width. At the 14 px Arial font used for descriptions, text wider than about 985 px (Screaming Frog's threshold, roughly two lines on desktop) is likely to be cut off with an ellipsis.",
+    fix: "Shorten the description or front-load its key message. Check the Meta px column; the estimate is close to, but not exactly, what Google renders.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaUnderPixels: {
+    title: "Meta description is below 400 pixels wide",
+    problem:
+      "A description under about 400 px (Screaming Frog's threshold) uses less than half a line of the snippet space, so it gives searchers little reason to click and Google may replace it with text from the page.",
+    fix: "Expand it into a short, specific summary of the page, using the available space to mention what makes the page useful.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
     },
   },
   duplicateMeta: {
