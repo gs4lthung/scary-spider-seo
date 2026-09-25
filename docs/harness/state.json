@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 1,
     "startedAt": "2026-09-25T18:11:55.142Z",
-    "lastProgressAt": "2026-09-25T18:52:32.072Z"
+    "lastProgressAt": "2026-09-25T19:02:42.661Z"
   },
   "tasks": {
     "T1.1": {
@@ -47,10 +47,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.857Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "2b7efb3",
+      "updatedAt": "2026-09-25T19:02:42.660Z"
     },
     "T1.5": {
       "title": "Sitemap audits",
