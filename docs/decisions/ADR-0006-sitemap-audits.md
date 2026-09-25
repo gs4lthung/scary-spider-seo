@@ -9,9 +9,11 @@ tones and the source of "in the sitemap" open.
 
 ## Decision
 
-- **"In the sitemap" means `discoveredViaSitemap`.** The crawler seeds sitemap URLs into the
-  frontier right after the start URL and sets the flag only on URLs it had not already
-  queued, which in practice is every sitemap URL except the start URL. No new raw field.
+- **"In the sitemap" means `discoveredViaSitemap`.** The crawler reads the sitemap before the
+  crawl loop starts and seeds its URLs into the frontier right after the start URL, setting
+  the flag only on URLs it had not already queued. On a fresh crawl that is every sitemap URL
+  except the start URL, which is already in `visited`. No new raw field. The flag is set on
+  fetched pages and, since the T1.5 review, on robots.txt-blocked pages too.
 - **`sitemapNonIndexable`**: `discoveredViaSitemap && indexability !== "Indexable"`. This
   includes 4xx/5xx, redirected, noindex, canonicalised and robots-blocked URLs, as Screaming
   Frog's "Non-Indexable URLs in Sitemap" does. A 404 sitemap URL therefore also appears under
@@ -21,8 +23,10 @@ tones and the source of "in the sitemap" open.
   `redirectUrl` is what marks a 3xx sitemap entry. A null status (fetch error, robots
   block) counts as non-200.
 - **`notInSitemap`**: `sitemapUsed && !discoveredViaSitemap && depth > 0 && htmlSizeBytes > 0
-  && indexability === "Indexable"`. `depth > 0` excludes the start URL, which is fetched before
-  the sitemap is read and so never carries the flag; the solution text says so.
+  && indexability === "Indexable"`. `depth > 0` excludes the start URL, which is queued before
+  sitemap URLs are seeded and so never carries the flag; the solution text says so.
+  Sitemap-seeded URLs also get depth 0, but they carry the flag and are excluded by
+  `!discoveredViaSitemap` anyway, so `depth > 0` only ever removes the start URL.
 - **`sitemapUsed`** is tracked incrementally in `App.tsx` (a ref set when an ingested page
   has `discoveredViaSitemap`, reset with the other derived trackers). `getSitemapUsed(pages)`
   is the equivalent helper for tests and one-off callers.
@@ -31,7 +35,8 @@ tones and the source of "in the sitemap" open.
 
 ## Consequences
 
-- No Rust or saved-crawl format change.
+- No saved-crawl format change. The only Rust change is copying the sitemap flag onto
+  robots.txt-blocked results, so blocked sitemap URLs reach both sitemap filters.
 - If a crawl uses a sitemap but the sitemap lists only URLs that were already queued (for
   example on a resumed crawl, where `visited` already holds them), `sitemapUsed` stays false
   and `notInSitemap` is silent rather than reporting every page. Conversely, a URL listed in

@@ -605,8 +605,9 @@ export const ISSUE_DEFS = [
     group: "indexing",
     tone: "warn",
     section: "Canonical & Indexing",
-    // The start URL (depth 0) is fetched before the sitemap is read, so it never carries
-    // `discoveredViaSitemap` even when the sitemap lists it; it is skipped.
+    // The start URL is queued before sitemap URLs are seeded, so it never carries
+    // `discoveredViaSitemap` even when the sitemap lists it. Sitemap-seeded URLs also have
+    // depth 0 but always carry the flag, so `depth > 0` only ever drops the start URL.
     test: (p, ctx) =>
       ctx.sitemapUsed && !p.discoveredViaSitemap && p.depth > 0 && hasHtml(p) && p.indexability === "Indexable",
   }),

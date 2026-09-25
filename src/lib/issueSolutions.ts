@@ -417,7 +417,7 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
   notInSitemap: {
     title: "Indexable URL missing from the sitemap",
     problem:
-      "This page is indexable and was found through internal links, but the sitemap does not list it. A sitemap tells Google which URLs you consider important; pages left out may be discovered and recrawled more slowly. Only checked when the crawl used a sitemap. The start URL is never reported, because it is crawled before the sitemap is read.",
+      "This page is indexable and was found through internal links, but the sitemap does not list it. A sitemap tells Google which URLs you consider important; pages left out may be discovered and recrawled more slowly. Only checked when the crawl used a sitemap. The start URL is never reported, because it is queued before the sitemap's URLs are added.",
     fix: "Add the URL to the sitemap if it should appear in search. If it should not, make it non-indexable (noindex or a canonical to the preferred URL) so the sitemap and the page agree.",
     source: {
       label: "Google Search Central: Build and submit a sitemap",
