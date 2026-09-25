@@ -113,6 +113,29 @@ export function ingestDuplicateValue(tracker: DuplicateTracker, value: string | 
   if (count === 2) tracker.duplicates.add(value);
 }
 
+/**
+ * Everything a cross-page issue predicate may need beyond the page itself. Built once per
+ * `pages` change in `App.tsx` and passed down, so every consumer classifies against the
+ * same data.
+ */
+export interface FilterContext {
+  duplicateTitles: Set<string>;
+  duplicateContent: Set<string>;
+  duplicateMeta: Set<string>;
+  canonicalStatusMap: Map<string, number | null>;
+  linkedUrls: Set<string>;
+}
+
+export function emptyFilterContext(): FilterContext {
+  return {
+    duplicateTitles: new Set(),
+    duplicateContent: new Set(),
+    duplicateMeta: new Set(),
+    canonicalStatusMap: new Map(),
+    linkedUrls: new Set(),
+  };
+}
+
 /** Which tab a filter's results live in — null means it doesn't imply a tab (e.g. "all"). */
 export function filterTab(filter: FilterKey): "pages" | "resources" | null {
   return filter === "broken" ? "resources" : filter === "all" ? null : "pages";
