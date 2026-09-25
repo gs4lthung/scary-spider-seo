@@ -32,6 +32,10 @@ csv = "1"
 quick-xml = "0.41"
 headless_chrome = "1"
 
+[dev-dependencies]
+# `test` enables tauri::test::mock_app(), so crawl tests run without a window.
+tauri = { version = "2", features = ["test"] }
+tokio = { version = "1", features = ["net", "io-util"] }
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

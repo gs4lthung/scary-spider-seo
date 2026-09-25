@@ -160,7 +160,10 @@ fn is_same_site(base: &Url, other: &Url) -> bool {
 
 fn has_rel_value(rel_attr: Option<&str>, value: &str) -> bool {
     rel_attr
-        .map(|rel| rel.split_ascii_whitespace().any(|v| v.eq_ignore_ascii_case(value)))
+        .map(|rel| {
+            rel.split_ascii_whitespace()
+                .any(|v| v.eq_ignore_ascii_case(value))
+        })
         .unwrap_or(false)
 }
 
@@ -174,7 +177,11 @@ fn hash_content(text: &str) -> String {
     if text.trim().is_empty() {
         return String::new();
     }
-    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase();
+    let normalized = text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase();
     let mut hasher = DefaultHasher::new();
     normalized.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
@@ -220,7 +227,11 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
     let mut has_twitter_card = false;
     for meta in html.select(&META_SEL) {
         let name = meta.value().attr("name").unwrap_or("").to_ascii_lowercase();
-        let property = meta.value().attr("property").unwrap_or("").to_ascii_lowercase();
+        let property = meta
+            .value()
+            .attr("property")
+            .unwrap_or("")
+            .to_ascii_lowercase();
         if name == "description" {
             meta_description = meta
                 .value()
@@ -368,5 +379,221 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         has_twitter_card,
         structured_data_types,
         structured_data_errors,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base() -> Url {
+        Url::parse("https://example.com/dir/page").unwrap()
+    }
+
+    fn parse(html: &str) -> ParsedPage {
+        parse_page(html, &base())
+    }
+
+    fn strings(urls: &[Url]) -> Vec<String> {
+        urls.iter().map(|u| u.to_string()).collect()
+    }
+
+    #[test]
+    fn title_is_trimmed_and_empty_title_is_none() {
+        assert_eq!(
+            parse("<title>  Hello  </title>").title.as_deref(),
+            Some("Hello")
+        );
+        assert_eq!(parse("<title>   </title>").title, None);
+        assert_eq!(parse("<p>no title</p>").title, None);
+    }
+
+    #[test]
+    fn meta_tags_are_matched_case_insensitively() {
+        let page = parse(
+            r#"<head>
+            <meta name="Description" content=" A description ">
+            <meta name="ROBOTS" content="noindex">
+            <meta name="viewport" content="width=device-width">
+            <meta name="keywords" content="ignored">
+            </head>"#,
+        );
+        assert_eq!(page.meta_description.as_deref(), Some("A description"));
+        assert_eq!(page.meta_robots.as_deref(), Some("noindex"));
+        assert_eq!(page.viewport.as_deref(), Some("width=device-width"));
+    }
+
+    #[test]
+    fn empty_meta_content_is_none() {
+        let page = parse(r#"<meta name="description" content="  ">"#);
+        assert_eq!(page.meta_description, None);
+    }
+
+    #[test]
+    fn detects_open_graph_and_twitter_cards() {
+        let page = parse(
+            r#"<meta property="og:title" content="x"><meta name="twitter:card" content="summary">"#,
+        );
+        assert!(page.has_open_graph);
+        assert!(page.has_twitter_card);
+        let bare = parse("<p>nothing</p>");
+        assert!(!bare.has_open_graph);
+        assert!(!bare.has_twitter_card);
+    }
+
+    #[test]
+    fn h1_count_ignores_empty_headings() {
+        let page = parse("<h1> First </h1><h1>  </h1><h1>Second</h1>");
+        assert_eq!(page.h1_count, 2);
+        assert_eq!(page.h1.as_deref(), Some("First"));
+    }
+
+    #[test]
+    fn canonical_is_resolved_and_counted() {
+        let page =
+            parse(r#"<link rel="canonical" href="../other#frag"><link rel="canonical" href="/x">"#);
+        assert_eq!(page.canonical.as_deref(), Some("https://example.com/other"));
+        assert_eq!(page.canonical_count, 2);
+        assert_eq!(parse("<p></p>").canonical_count, 0);
+    }
+
+    #[test]
+    fn reads_lang_and_hreflang() {
+        let page = parse(
+            r#"<html lang="en-GB"><head>
+            <link rel="alternate" hreflang="en" href="/en">
+            <link rel="alternate" hreflang="x-default" href="/">
+            <link rel="alternate" href="/feed.xml">
+            </head></html>"#,
+        );
+        assert_eq!(page.lang.as_deref(), Some("en-GB"));
+        assert_eq!(page.hreflang_values, vec!["en", "x-default"]);
+        assert_eq!(parse(r#"<html lang=" "></html>"#).lang, None);
+    }
+
+    #[test]
+    fn word_count_excludes_non_visible_content() {
+        let page = parse(
+            r#"<body>one two <script>var a = 1;</script><style>p { x: y }</style>
+            <noscript>hidden words</noscript><template>more hidden</template> three</body>"#,
+        );
+        assert_eq!(page.word_count, 3);
+    }
+
+    #[test]
+    fn link_resolution_skips_non_navigable_hrefs_and_strips_fragments() {
+        let page = parse(
+            r##"<a href="#top">a</a><a href="mailto:x@y.z">b</a><a href="tel:123">c</a>
+            <a href="JavaScript:void(0)">d</a><a href="data:text/plain,hi">e</a><a href="  ">f</a>
+            <a href="sibling#section">g</a><a href="/root">h</a>"##,
+        );
+        assert_eq!(
+            strings(&page.internal_links),
+            vec![
+                "https://example.com/dir/sibling",
+                "https://example.com/root"
+            ]
+        );
+        assert!(page.external_links.is_empty());
+    }
+
+    #[test]
+    fn splits_internal_and_external_links_by_host() {
+        let page = parse(
+            r#"<a href="https://example.com/a">a</a><a href="https://other.com/b">b</a>
+            <a href="https://sub.example.com/c">c</a>"#,
+        );
+        assert_eq!(strings(&page.internal_links), vec!["https://example.com/a"]);
+        assert_eq!(
+            strings(&page.external_links),
+            vec!["https://other.com/b", "https://sub.example.com/c"]
+        );
+    }
+
+    #[test]
+    fn counts_internal_nofollow_links_only() {
+        let page = parse(
+            r#"<a href="/a" rel="noopener NoFollow">a</a><a href="/b" rel="nofollower">b</a>
+            <a href="https://other.com/" rel="nofollow">c</a><a href="/d">d</a>"#,
+        );
+        assert_eq!(page.internal_nofollow_count, 1);
+    }
+
+    #[test]
+    fn empty_alt_is_decorative_and_not_missing() {
+        let page = parse(
+            r#"<img src="/a.png" alt="A"><img src="/b.png" alt=""><img src="/c.png"><img alt="no src">"#,
+        );
+        assert_eq!(page.images.len(), 3);
+        assert_eq!(page.missing_alt_count, 1);
+        assert_eq!(page.images[0].1.as_deref(), Some("A"));
+        assert_eq!(page.images[1].1, None);
+    }
+
+    #[test]
+    fn insecure_links_are_only_counted_on_https_pages() {
+        let html = r#"<a href="http://example.com/a">a</a><a href="http://other.com/">b</a>
+            <img src="http://example.com/i.png" alt=""><a href="https://example.com/ok">c</a>"#;
+        assert_eq!(parse(html).insecure_link_count, 3);
+        let http_base = Url::parse("http://example.com/").unwrap();
+        assert_eq!(parse_page(html, &http_base).insecure_link_count, 0);
+    }
+
+    #[test]
+    fn collects_json_ld_types_from_graphs_arrays_and_type_lists() {
+        let page = parse(
+            r#"<script type="application/ld+json">{"@graph": [{"@type": "Organization"}, {"@type": ["WebPage", "FAQPage"]}]}</script>
+            <script type="application/ld+json">[{"@type": "Product"}, {"@type": "Offer"}]</script>
+            <script type="application/ld+json">   </script>"#,
+        );
+        assert_eq!(
+            page.structured_data_types,
+            vec!["Organization", "WebPage", "FAQPage", "Product", "Offer"]
+        );
+        assert!(page.structured_data_errors.is_empty());
+    }
+
+    #[test]
+    fn invalid_json_ld_is_reported_as_an_error() {
+        let page = parse(r#"<script type="application/ld+json">{"@type": </script>"#);
+        assert!(page.structured_data_types.is_empty());
+        assert_eq!(page.structured_data_errors.len(), 1);
+        assert!(page.structured_data_errors[0].starts_with("Invalid JSON-LD"));
+    }
+
+    #[test]
+    fn content_hash_ignores_whitespace_and_case() {
+        let a = parse("<body><p>Hello   World</p></body>");
+        let b = parse("<body>\n<div>hello world</div>\n</body>");
+        assert!(!a.content_hash.is_empty());
+        assert_eq!(a.content_hash, b.content_hash);
+        assert_ne!(a.content_hash, parse("<body>Goodbye</body>").content_hash);
+        assert_eq!(parse("<body>   </body>").content_hash, "");
+    }
+
+    #[test]
+    fn whitespace_and_comment_heavy_page_is_not_minified() {
+        let padding = " ".repeat(400);
+        let html = format!(
+            "<html>\n<!-- a long comment block -->{padding}<body>\n\n<p>text</p>{padding}</body></html>"
+        );
+        let page = parse(&html);
+        assert!(page.minify_savings_pct > MINIFIED_SAVINGS_THRESHOLD_PCT);
+        assert!(!page.is_minified);
+    }
+
+    #[test]
+    fn dense_page_is_minified() {
+        let html = "<html><head><title>t</title></head><body><p>dense</p></body></html>";
+        let page = parse(html);
+        assert!(page.is_minified);
+        assert_eq!(page.html_size_bytes, html.len());
+    }
+
+    #[test]
+    fn minify_helpers_handle_edge_cases() {
+        assert_eq!(estimate_minify_savings_pct(""), 0.0);
+        assert_eq!(strip_html_comments("a<!-- b -->c<!-- unterminated"), "ac");
+        assert_eq!(collapse_whitespace("  a \n\t b  "), "a b");
     }
 }

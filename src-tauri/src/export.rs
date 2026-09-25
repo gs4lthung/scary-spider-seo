@@ -1,7 +1,10 @@
 use crate::crawler::types::{PageResult, ResourceResult, ResourceType};
 use std::fs::File;
 
-pub fn export_pages_csv(pages: &[PageResult], path: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn export_pages_csv(
+    pages: &[PageResult],
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
 

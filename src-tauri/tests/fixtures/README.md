@@ -1,0 +1,26 @@
+# Crawler fixtures
+
+`site/` is a tiny static website with deliberate SEO defects, served by an
+in-process HTTP server in `src/crawler/fixture_tests.rs`. The test crawls it
+end to end (no network, no Tauri window) and asserts the raw signals each page
+must produce.
+
+| Path | Signal it exists to trigger |
+| --- | --- |
+| `/` | none: the clean baseline (title, meta, one h1, lang, viewport, OG, canonical, JSON-LD) |
+| `/missing-title.html` | no title, no meta description, no h1, no lang |
+| `/dup-a.html`, `/dup-b.html` | duplicate title, meta description and content hash |
+| `/h1-and-images.html` | two h1s, one image without alt, one broken image (`/img/missing.png`) |
+| `/noindex.html` | meta robots noindex |
+| `/canonicalised.html` | canonical pointing elsewhere |
+| `/old-page` | 301 to `/new-page.html` (route in the test server) |
+| `/loop-a` | redirect loop `/loop-a` <-> `/loop-b` (route in the test server) |
+| `/private/secret.html` | disallowed by `robots.txt` |
+| `/gone.html` | 404 (file intentionally absent) |
+| `/bad-jsonld.html` | invalid JSON-LD |
+| `/orphan.html` | not linked; only listed in `sitemap.xml` |
+
+`{{ORIGIN}}` in any served file is replaced with the server's `http://127.0.0.1:<port>`.
+
+Adding a check: add a page here that triggers it, link it from `index.html`,
+add a row above, and assert the new field in `fixture_tests.rs`.

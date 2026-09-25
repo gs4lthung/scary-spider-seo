@@ -1,4 +1,6 @@
 pub mod crawl;
+#[cfg(test)]
+mod fixture_tests;
 pub mod hosting;
 pub mod parse;
 pub mod render;

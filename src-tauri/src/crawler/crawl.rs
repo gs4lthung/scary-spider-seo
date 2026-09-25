@@ -13,7 +13,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use url::Url;
@@ -442,14 +442,28 @@ async fn check_resource(client: &Client, url: &Url) -> (Option<u16>, String, Opt
 /// Shared handles every queued resource check needs. Bundled into one struct — built
 /// once per crawl — so `queue_resource_check` doesn't take a separate parameter for
 /// each of these on top of the ones describing the specific resource being checked.
-#[derive(Clone)]
-struct ResourceCheckCtx {
-    app: AppHandle,
+struct ResourceCheckCtx<R: Runtime> {
+    app: AppHandle<R>,
     client: Client,
     semaphore: Arc<Semaphore>,
     cancel: Arc<AtomicBool>,
     resources: Arc<DashMap<String, ResourceResult>>,
     resources_checked: Arc<AtomicUsize>,
+}
+
+// Hand-written rather than derived: `#[derive(Clone)]` would also demand `R: Clone`,
+// which the runtime type itself doesn't implement (only `AppHandle<R>` does).
+impl<R: Runtime> Clone for ResourceCheckCtx<R> {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+            client: self.client.clone(),
+            semaphore: self.semaphore.clone(),
+            cancel: self.cancel.clone(),
+            resources: self.resources.clone(),
+            resources_checked: self.resources_checked.clone(),
+        }
+    }
 }
 
 /// A single link or image discovered on a page, awaiting a status check.
@@ -462,8 +476,8 @@ struct ResourceCandidate {
     is_insecure: bool,
 }
 
-fn queue_resource_check(
-    ctx: &ResourceCheckCtx,
+fn queue_resource_check<R: Runtime>(
+    ctx: &ResourceCheckCtx<R>,
     tasks: &mut JoinSet<()>,
     candidate: ResourceCandidate,
 ) {
@@ -527,8 +541,10 @@ fn queue_resource_check(
     });
 }
 
-pub async fn run_crawl(
-    app: AppHandle,
+/// Generic over the Tauri runtime so tests can drive a real crawl with
+/// `tauri::test::MockRuntime` (see `fixture_tests.rs`); the app itself uses the default.
+pub async fn run_crawl<R: Runtime>(
+    app: AppHandle<R>,
     config: CrawlConfig,
     state: CrawlState,
     resume: Option<CrawlResumeState>,
