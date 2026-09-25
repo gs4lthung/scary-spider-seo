@@ -424,6 +424,56 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
     },
   },
+  lowWordCount: {
+    title: "Low content page (under 200 words)",
+    problem:
+      "This page returned 200 but has fewer than 200 words of visible text. Thin pages rarely answer a searcher's question well, and Google's guidance favours pages that provide substantial, original content. Some pages are short by design (contact, login), so treat this as a prompt to review, not an automatic error.",
+    fix: "Expand the page with useful, original content that covers its topic properly, merge it into a stronger related page (and 301-redirect the old URL), or noindex it if it has no search value.",
+    source: {
+      label: "Google Search Central: Creating helpful, reliable, people-first content",
+      url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+    },
+  },
+  deepPage: {
+    title: "Deep page (more than 3 clicks from the start URL)",
+    problem:
+      "The crawler needed more than 3 link hops from the start URL to reach this page. Pages buried deep in the site structure are found and recrawled less often and receive less internal link value, so they tend to perform worse in search.",
+    fix: "Link to the page from higher-level pages: category or hub pages, related content, or navigation. Flattening the site structure so important pages sit within a few clicks of the home page helps both users and crawlers.",
+    source: {
+      label: "Google Search Central: SEO Starter Guide, site hierarchy and links",
+      url: "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+    },
+  },
+  largeHtml: {
+    title: "Large HTML document (over 1 MB)",
+    problem:
+      "The HTML of this page is larger than 1 MB. Large documents take longer to download and parse, which delays rendering, and Googlebot only processes the first 15 MB of an HTML file, so very large pages risk being cut off.",
+    fix: "Move inline scripts, styles and data blobs (for example large JSON state) into cached external files, paginate or lazy-load long lists, and remove unused markup.",
+    source: {
+      label: "Google Search Central: Googlebot file size limits",
+      url: "https://developers.google.com/search/docs/crawling-indexing/googlebot",
+    },
+  },
+  internalRedirect: {
+    title: "Internal link to a redirecting URL",
+    problem:
+      "Another page on this site links to this URL, but it redirects. Every visitor and crawler following the link pays for an extra request, and crawl budget is spent on the redirect instead of the destination. The status shown is the final one after the redirect was followed, so these URLs usually read 200.",
+    fix: "Update the internal links to point straight at the final URL shown in the redirect column. Keep the redirect itself in place for external links and bookmarks.",
+    source: {
+      label: "Google Search Central: Redirects and Google Search",
+      url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+    },
+  },
+  redirectToError: {
+    title: "Redirect ending in a non-200 page",
+    problem:
+      "This URL redirects, but the page at the end of the redirect chain does not answer 200 OK (for example a 404, a 5xx, or a redirect loop). Visitors and crawlers following it end up on an error instead of content, and any link value passed through the redirect is lost.",
+    fix: "Point the redirect at a live, relevant page that returns 200, or restore the missing destination. If there is no suitable replacement, remove the redirect and let the original URL return 404 or 410, and update any links to it.",
+    source: {
+      label: "Google Search Central: Redirects and Google Search",
+      url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+    },
+  },
   structuredDataErrors: {
     title: "Structured data (JSON-LD) parse/validation errors",
     problem: "A syntax error (mismatched brackets, a trailing comma, an unescaped quote) makes the entire JSON-LD block unparseable, and a missing required property (e.g. no image/author/datePublished for Article) makes an otherwise-valid block ineligible for rich results. Either way, Google gets nothing usable from it.",

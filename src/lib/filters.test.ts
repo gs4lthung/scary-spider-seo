@@ -5,8 +5,11 @@ import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 import {
   type FilterContext,
   type FilterKey,
+  DEEP_PAGE_DEPTH,
   H1_MAX_LENGTH,
   ISSUE_DEFS,
+  LARGE_HTML_BYTES,
+  LOW_WORD_COUNT,
   LOW_TEXT_RATIO_THRESHOLD_PCT,
   META_MAX_LENGTH,
   META_MAX_PIXELS,
@@ -774,6 +777,19 @@ describe("issue registry", () => {
       at("moved", { redirectUrl: "https://example.com/clean", indexability: "Redirected" }),
       at("canonical-to-moved", { canonical: "https://example.com/moved" }),
       at("linked-only", { discoveredViaSitemap: false, depth: 1 }),
+      at("few-words", { wordCount: LOW_WORD_COUNT - 1 }),
+      at("deep", { depth: DEEP_PAGE_DEPTH + 1 }),
+      at("huge", { htmlSizeBytes: LARGE_HTML_BYTES + 1 }),
+      at("linked-redirect", {
+        redirectChain: ["https://example.com/linked-redirect"],
+        redirectUrl: "https://example.com/clean",
+        indexability: "Redirected",
+      }),
+      at("redirect-to-404", {
+        status: 404,
+        redirectChain: ["https://example.com/redirect-to-404"],
+        redirectUrl: "https://example.com/gone",
+      }),
     ];
     const resources = [
       makeResource(),
@@ -786,7 +802,7 @@ describe("issue registry", () => {
       duplicateContent: getDuplicateContentSet(pages),
       duplicateMeta: getDuplicateMetaSet(pages),
       canonicalStatusMap: getCanonicalStatusMap(pages),
-      linkedUrls: new Set(["https://example.com/clean"]),
+      linkedUrls: new Set(["https://example.com/clean", "https://example.com/linked-redirect"]),
       pageByUrl: getPageByUrlMap(pages),
       sitemapUsed: getSitemapUsed(pages),
     };
@@ -996,5 +1012,67 @@ describe("sitemap issues", () => {
     expect(keys).toContain("sitemapNonIndexable");
     expect(keys).toContain("sitemapNon200");
     expect(getPageIssueKeys(makePage({ discoveredViaSitemap: false, depth: 2 }), sitemapCtx)).toContain("notInSitemap");
+  });
+});
+
+describe("content, depth, size and redirect target issues", () => {
+  const run = (key: FilterKey, overrides: Partial<PageResult>, ctx: FilterContext = emptyFilterContext()) =>
+    filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("lowWordCount flags 2xx HTML pages under the word threshold", () => {
+    expect(run("lowWordCount", { wordCount: LOW_WORD_COUNT - 1 })).toBe(true);
+    expect(run("lowWordCount", { wordCount: LOW_WORD_COUNT })).toBe(false);
+    expect(run("lowWordCount", { wordCount: 0, status: 404 })).toBe(false);
+    expect(run("lowWordCount", { wordCount: 0, htmlSizeBytes: 0, contentType: "application/pdf" })).toBe(false);
+  });
+
+  it("deepPage flags HTML pages deeper than the depth threshold", () => {
+    expect(run("deepPage", { depth: DEEP_PAGE_DEPTH + 1 })).toBe(true);
+    expect(run("deepPage", { depth: DEEP_PAGE_DEPTH })).toBe(false);
+    expect(run("deepPage", { depth: DEEP_PAGE_DEPTH + 1, htmlSizeBytes: 0 })).toBe(false);
+  });
+
+  it("largeHtml flags HTML over 1 MB", () => {
+    expect(run("largeHtml", { htmlSizeBytes: LARGE_HTML_BYTES + 1 })).toBe(true);
+    expect(run("largeHtml", { htmlSizeBytes: LARGE_HTML_BYTES })).toBe(false);
+  });
+
+  it("internalRedirect flags internally linked URLs that redirected", () => {
+    const url = "https://example.com/old";
+    const linked: FilterContext = { ...emptyFilterContext(), linkedUrls: new Set([url]) };
+    const redirected = { url, redirectChain: [url], redirectUrl: "https://example.com/new", indexability: "Redirected" };
+    expect(run("internalRedirect", redirected, linked)).toBe(true);
+    expect(run("internalRedirect", redirected)).toBe(false);
+    expect(run("internalRedirect", { url }, linked)).toBe(false);
+  });
+
+  it("redirectToError flags redirects whose final status is not 200", () => {
+    const chain = { redirectChain: ["https://example.com/old"], redirectUrl: "https://example.com/gone" };
+    expect(run("redirectToError", { ...chain, status: 404 })).toBe(true);
+    expect(run("redirectToError", { ...chain, status: 500 })).toBe(true);
+    expect(run("redirectToError", { ...chain, status: 301, statusText: "301 (redirect loop or too many hops)" })).toBe(
+      true,
+    );
+    expect(run("redirectToError", { ...chain, status: 200 })).toBe(false);
+    expect(run("redirectToError", { status: 404 })).toBe(false);
+  });
+
+  it("the new issues appear in getPageIssueKeys", () => {
+    const url = "https://example.com/deep";
+    const ctx: FilterContext = { ...emptyFilterContext(), linkedUrls: new Set([url]) };
+    const page = makePage({
+      url,
+      depth: DEEP_PAGE_DEPTH + 1,
+      wordCount: 10,
+      htmlSizeBytes: LARGE_HTML_BYTES + 1,
+      redirectChain: [url],
+      status: 200,
+    });
+    const keys = getPageIssueKeys(page, ctx);
+    for (const key of ["lowWordCount", "deepPage", "largeHtml", "internalRedirect"] as const) {
+      expect(keys).toContain(key);
+    }
+    expect(keys).not.toContain("redirectToError");
+    expect(getPageIssueKeys(makePage({ redirectChain: [url], status: 404 }), ctx)).toContain("redirectToError");
   });
 });

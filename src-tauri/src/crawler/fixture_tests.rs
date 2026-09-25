@@ -83,6 +83,7 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
         |to: &str| http_response("301 Moved Permanently", &[("Location", to)], b"", head);
     match path {
         "/old-page" => return redirect("/new-page.html"),
+        "/redirect-to-gone" => return redirect("/gone.html"),
         "/loop-a" => return redirect("/loop-b"),
         "/loop-b" => return redirect("/loop-a"),
         "/img/ok.png" | "/img/decorative.png" => {
@@ -205,6 +206,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/noindex.html",
         "/old-page",
         "/private/secret.html",
+        "/redirect-to-gone",
         "/title-equals-h1.html",
     ]
     .iter()
@@ -235,7 +237,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 17);
+    assert_eq!(home.internal_link_count, 18);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -369,6 +371,25 @@ async fn follows_and_reports_redirects() {
         looped.status_text.contains("redirect loop"),
         "status text was {:?}",
         looped.status_text
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn redirect_to_gone_reports_final_404() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signals for the frontend's redirectToError and internalRedirect checks: the
+    // requested URL carries the final status and the hops that led there.
+    let page = out.page(&site.url("/redirect-to-gone"));
+    assert_eq!(page.status, Some(404));
+    assert_eq!(page.redirect_chain, vec![site.url("/redirect-to-gone")]);
+    assert!(
+        page.redirect_url
+            .as_deref()
+            .is_some_and(|u| u.ends_with("/gone.html")),
+        "redirect_url was {:?}",
+        page.redirect_url
     );
 }
 

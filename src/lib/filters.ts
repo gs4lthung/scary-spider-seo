@@ -18,6 +18,12 @@ export const META_MAX_PIXELS = 985;
 export const META_MIN_PIXELS = 400;
 /** Screaming Frog's H1 "Over 70 Characters" threshold. */
 export const H1_MAX_LENGTH = 70;
+/** A 2xx HTML page with fewer words than this is "low content" (Screaming Frog's default). */
+export const LOW_WORD_COUNT = 200;
+/** Pages more clicks than this from the start URL are "deep". */
+export const DEEP_PAGE_DEPTH = 3;
+/** HTML documents larger than this (1 MiB) are "large HTML". */
+export const LARGE_HTML_BYTES = 1_048_576;
 
 export function getDuplicateTitleSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
@@ -454,6 +460,14 @@ export const ISSUE_DEFS = [
     test: (p) => hasHtml(p) && p.textRatioPct < LOW_TEXT_RATIO_THRESHOLD_PCT,
   }),
   pageIssue({
+    key: "lowWordCount",
+    label: `Low content (<${LOW_WORD_COUNT} words)`,
+    group: "content",
+    tone: "warn",
+    section: "Content",
+    test: (p) => is2xx(p) && hasHtml(p) && p.wordCount < LOW_WORD_COUNT,
+  }),
+  pageIssue({
     key: "missingAlt",
     label: "Missing alt text",
     group: "accessibility",
@@ -575,12 +589,40 @@ export const ISSUE_DEFS = [
     test: (p) => p.redirectChain.length > 1,
   }),
   pageIssue({
+    key: "internalRedirect",
+    label: "Internal redirects",
+    group: "response",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    // The crawler follows redirects and stores the final status on the requested URL, so an
+    // internally linked redirect usually shows 200; a non-empty chain is what marks it.
+    test: (p, ctx) => p.redirectChain.length > 0 && ctx.linkedUrls.has(p.url),
+  }),
+  pageIssue({
+    key: "redirectToError",
+    label: "Redirects to a non-200 page",
+    group: "response",
+    tone: "bad",
+    section: "Canonical & Indexing",
+    // `status` is the final response status after following the chain (a capped loop keeps
+    // its last 3xx, which also never resolves to a 200).
+    test: (p) => p.redirectChain.length > 0 && p.status !== 200,
+  }),
+  pageIssue({
     key: "orphanPage",
     label: "Orphan pages (sitemap only)",
     group: "links",
     tone: "warn",
     section: "Canonical & Indexing",
     test: (p, ctx) => p.discoveredViaSitemap && !ctx.linkedUrls.has(p.url),
+  }),
+  pageIssue({
+    key: "deepPage",
+    label: `Deep pages (depth >${DEEP_PAGE_DEPTH})`,
+    group: "links",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => hasHtml(p) && p.depth > DEEP_PAGE_DEPTH,
   }),
   pageIssue({
     key: "sitemapNonIndexable",
@@ -618,6 +660,14 @@ export const ISSUE_DEFS = [
     tone: "warn",
     section: "Performance",
     test: (p) => p.responseTimeMs > SLOW_RESPONSE_THRESHOLD_MS,
+  }),
+  pageIssue({
+    key: "largeHtml",
+    label: "Large HTML (>1 MB)",
+    group: "technical",
+    tone: "warn",
+    section: "Performance",
+    test: (p) => p.htmlSizeBytes > LARGE_HTML_BYTES,
   }),
   pageIssue({
     key: "missingSocialTags",
