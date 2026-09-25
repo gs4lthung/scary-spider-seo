@@ -33,6 +33,7 @@ import {
 import {
   type FilterContext,
   type FilterKey,
+  type IssueKey,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
   createDuplicateTracker,
@@ -88,8 +89,8 @@ function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
   // again for visible rows — without this cache that's getPageIssueKeys' 26 sub-filters
   // computed twice per row per update. Scoped to this ctx (rebuilt whenever ctx's deps
   // change), keyed by page object identity so unrelated pages never invalidate each other.
-  const issueCache = new WeakMap<PageResult, FilterKey[]>();
-  function issuesFor(page: PageResult): FilterKey[] {
+  const issueCache = new WeakMap<PageResult, IssueKey[]>();
+  function issuesFor(page: PageResult): IssueKey[] {
     let keys = issueCache.get(page);
     if (!keys) {
       keys = getPageIssueKeys(page, ctx);
@@ -121,7 +122,7 @@ function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
         const count = c.getValue() as number;
         if (count === 0) return <span className="text-muted-foreground">—</span>;
         const keys = issuesFor(c.row.original);
-        const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean);
+        const titles = keys.map((k) => ISSUE_SOLUTIONS[k].title);
         return (
           <span title={titles.join("\n")} className="inline-flex items-center gap-1 font-medium text-destructive">
             <TriangleAlert className="size-3.5" />
@@ -787,15 +788,13 @@ function App() {
   const selectedPageIssues = useMemo(() => {
     if (!selectedPage) return [];
     return getPageIssueKeys(selectedPage, filterContext)
-      .map((key) => ISSUE_SOLUTIONS[key])
-      .filter((s) => s !== undefined);
+      .map((key) => ISSUE_SOLUTIONS[key]);
   }, [selectedPage, filterContext]);
 
   const selectedResourceIssues = useMemo(() => {
     if (!selectedResource) return [];
     return getResourceIssueKeys(selectedResource, filterContext)
-      .map((key) => ISSUE_SOLUTIONS[key])
-      .filter((s) => s !== undefined);
+      .map((key) => ISSUE_SOLUTIONS[key]);
   }, [selectedResource, filterContext]);
 
   const handleSelectFilter = useCallback((next: FilterKey) => {

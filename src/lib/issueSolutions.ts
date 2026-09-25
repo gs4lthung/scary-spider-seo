@@ -1,4 +1,4 @@
-import type { FilterKey } from "./filters";
+import type { IssueKey } from "./filters";
 
 export interface IssueSolution {
   title: string;
@@ -7,7 +7,7 @@ export interface IssueSolution {
   source: { label: string; url: string };
 }
 
-export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
+export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
   "4xx5xx": {
     title: "Pages returning 4xx/5xx errors",
     problem:
