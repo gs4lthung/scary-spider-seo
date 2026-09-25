@@ -20,6 +20,10 @@ pub fn export_pages_csv(
         "Meta Description Length",
         "H1",
         "H1 Count",
+        "H1 Values",
+        "H2 Values",
+        "H2 Count",
+        "Heading Levels",
         "Word Count",
         "Canonical",
         "Meta Robots",
@@ -68,6 +72,14 @@ pub fn export_pages_csv(
             p.meta_description_length.to_string(),
             p.h1.clone().unwrap_or_default(),
             p.h1_count.to_string(),
+            p.h1_values.join(" | "),
+            p.h2_values.join(" | "),
+            p.h2_count.to_string(),
+            p.heading_levels
+                .iter()
+                .map(|l| format!("H{l}"))
+                .collect::<Vec<_>>()
+                .join(" > "),
             p.word_count.to_string(),
             p.canonical.clone().unwrap_or_default(),
             p.meta_robots.clone().unwrap_or_default(),

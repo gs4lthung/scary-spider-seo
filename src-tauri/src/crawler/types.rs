@@ -87,6 +87,19 @@ pub struct PageResult {
     pub h1: Option<String>,
     #[serde(default)]
     pub h1_count: usize,
+    /// Text of each non-empty H1 in document order, capped at `parse::MAX_HEADINGS`.
+    #[serde(default)]
+    pub h1_values: Vec<String>,
+    /// Text of each non-empty H2 in document order, capped at `parse::MAX_HEADINGS`.
+    #[serde(default)]
+    pub h2_values: Vec<String>,
+    /// Number of non-empty H2s (uncapped).
+    #[serde(default)]
+    pub h2_count: usize,
+    /// Level of every heading (1 to 6) in document order, empty ones included,
+    /// capped at `parse::MAX_HEADING_LEVELS`.
+    #[serde(default)]
+    pub heading_levels: Vec<u8>,
     #[serde(default)]
     pub word_count: usize,
     #[serde(default)]
@@ -245,4 +258,26 @@ pub struct CrawlSnapshot {
     pub saved_at_unix_ms: u64,
     pub pages: Vec<PageResult>,
     pub resources: Vec<ResourceResult>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A crawl saved before the heading outline fields (T2.1) existed must still load.
+    #[test]
+    fn legacy_snapshot_still_deserializes() {
+        let json = include_str!("../../tests/fixtures/legacy-snapshot.json");
+        let snapshot: CrawlSnapshot =
+            serde_json::from_str(json).expect("legacy snapshot deserializes");
+        assert_eq!(snapshot.pages.len(), 2);
+        assert_eq!(snapshot.resources.len(), 1);
+        let home = &snapshot.pages[0];
+        assert_eq!(home.h1.as_deref(), Some("Legacy home"));
+        assert_eq!(home.h1_count, 1);
+        assert!(home.h1_values.is_empty());
+        assert!(home.h2_values.is_empty());
+        assert_eq!(home.h2_count, 0);
+        assert!(home.heading_levels.is_empty());
+    }
 }
