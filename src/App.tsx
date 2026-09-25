@@ -528,6 +528,7 @@ function App() {
   const metaTrackerRef = useRef(createDuplicateTracker());
   const canonicalStatusRef = useRef(new Map<string, number | null>());
   const pageByUrlRef = useRef(new Map<string, PageResult>());
+  const sitemapUsedRef = useRef(false);
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -536,6 +537,7 @@ function App() {
     metaTrackerRef.current = createDuplicateTracker();
     canonicalStatusRef.current = new Map();
     pageByUrlRef.current = new Map();
+    sitemapUsedRef.current = false;
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -774,7 +776,7 @@ function App() {
   // page crawled so far on every ~150ms UI flush, which is what made this cost trend toward
   // O(n²) over a long crawl. Still produces fresh Set/Map instances each time so downstream
   // useMemo/props comparisons below see them exactly as before.
-  const { duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, pageByUrl } = useMemo(() => {
+  const { duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, pageByUrl, sitemapUsed } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
       // handleStart/handleOpenCrawl already call resetDerivedTrackers() explicitly).
@@ -787,6 +789,7 @@ function App() {
       ingestDuplicateValue(metaTrackerRef.current, p.metaDescription);
       canonicalStatusRef.current.set(p.url, p.status);
       pageByUrlRef.current.set(p.url, p);
+      if (p.discoveredViaSitemap) sitemapUsedRef.current = true;
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -796,6 +799,7 @@ function App() {
       duplicateMetaSet: new Set(metaTrackerRef.current.duplicates),
       canonicalStatusMap: new Map(canonicalStatusRef.current),
       pageByUrl: new Map(pageByUrlRef.current),
+      sitemapUsed: sitemapUsedRef.current,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -810,8 +814,9 @@ function App() {
       canonicalStatusMap,
       linkedUrls: linkedUrlSet,
       pageByUrl,
+      sitemapUsed,
     }),
-    [duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet, pageByUrl],
+    [duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet, pageByUrl, sitemapUsed],
   );
   const filteredPages = useMemo(
     () => searchPages(filterPages(pages, filter, filterContext), search),

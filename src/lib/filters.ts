@@ -71,6 +71,11 @@ export function getPageByUrlMap(pages: PageResult[]): Map<string, PageResult> {
   return map;
 }
 
+/** Whether any page was discovered through the sitemap (`FilterContext.sitemapUsed`). */
+export function getSitemapUsed(pages: PageResult[]): boolean {
+  return pages.some((p) => p.discoveredViaSitemap);
+}
+
 /** Robots directives that take a value after a colon (`max-snippet: 20`). A token starting with
  * one of these is a directive, not a `botname: directive` prefix. */
 const VALUED_ROBOTS_DIRECTIVES = new Set(["max-snippet", "max-image-preview", "max-video-preview", "unavailable_after"]);
@@ -155,6 +160,9 @@ export interface FilterContext {
   linkedUrls: Set<string>;
   /** Every crawled page by URL (see `getPageByUrlMap`). */
   pageByUrl: Map<string, PageResult>;
+  /** True when the crawl read a sitemap, i.e. at least one page has `discoveredViaSitemap`
+   * (see `getSitemapUsed`). `notInSitemap` stays silent otherwise. */
+  sitemapUsed: boolean;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -165,6 +173,7 @@ export function emptyFilterContext(): FilterContext {
     canonicalStatusMap: new Map(),
     linkedUrls: new Set(),
     pageByUrl: new Map(),
+    sitemapUsed: false,
   };
 }
 
@@ -572,6 +581,34 @@ export const ISSUE_DEFS = [
     tone: "warn",
     section: "Canonical & Indexing",
     test: (p, ctx) => p.discoveredViaSitemap && !ctx.linkedUrls.has(p.url),
+  }),
+  pageIssue({
+    key: "sitemapNonIndexable",
+    label: "Non-indexable URLs in sitemap",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => p.discoveredViaSitemap && p.indexability !== "Indexable",
+  }),
+  pageIssue({
+    key: "sitemapNon200",
+    label: "Non-200 URLs in sitemap",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    // A redirected URL is stored with its destination's status, so `redirectUrl` marks a 3xx.
+    test: (p) => p.discoveredViaSitemap && (p.status !== 200 || !!p.redirectUrl),
+  }),
+  pageIssue({
+    key: "notInSitemap",
+    label: "Indexable URLs not in sitemap",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    // The start URL (depth 0) is fetched before the sitemap is read, so it never carries
+    // `discoveredViaSitemap` even when the sitemap lists it; it is skipped.
+    test: (p, ctx) =>
+      ctx.sitemapUsed && !p.discoveredViaSitemap && p.depth > 0 && hasHtml(p) && p.indexability === "Indexable",
   }),
   pageIssue({
     key: "slowResponse",
