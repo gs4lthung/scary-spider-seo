@@ -1,0 +1,322 @@
+{
+  "run": {
+    "active": false
+  },
+  "tasks": {
+    "T1.1": {
+      "title": "Single issue registry for filters and Overview counts",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.856Z"
+    },
+    "T1.2": {
+      "title": "URL structure audits",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.857Z"
+    },
+    "T1.3": {
+      "title": "Title and meta description length, pixel width and duplication with H1",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.857Z"
+    },
+    "T1.4": {
+      "title": "Directive and canonical audits",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.857Z"
+    },
+    "T1.5": {
+      "title": "Sitemap audits",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.857Z"
+    },
+    "T1.6": {
+      "title": "Content, depth, size and redirect target audits",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.857Z"
+    },
+    "T1.7": {
+      "title": "Bulk issues export",
+      "milestone": 1,
+      "plan": "docs/plan/M1-derived-audits.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.857Z"
+    },
+    "T2.1": {
+      "title": "Heading outline: H2s, H1 values and heading order",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.2": {
+      "title": "Multiple titles, multiple meta descriptions, meta refresh and pagination links",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.3": {
+      "title": "Internal outlinks with anchor text and rel attributes",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.4": {
+      "title": "Link analysis: inlinks, link score, anchor audits",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T2.3"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.5": {
+      "title": "Security headers and mixed content",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.6": {
+      "title": "Hreflang pairs and return-link validation",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.7": {
+      "title": "Image size and missing dimensions",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T2.8": {
+      "title": "Near-duplicate content via simhash",
+      "milestone": 2,
+      "plan": "docs/plan/M2-new-signals.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:06.940Z"
+    },
+    "T3.1": {
+      "title": "Include and exclude URL patterns",
+      "milestone": 3,
+      "plan": "docs/plan/M3-workflows.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.015Z"
+    },
+    "T3.2": {
+      "title": "List mode: crawl a pasted list of URLs",
+      "milestone": 3,
+      "plan": "docs/plan/M3-workflows.md",
+      "deps": [
+        "T3.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.016Z"
+    },
+    "T3.3": {
+      "title": "Custom search",
+      "milestone": 3,
+      "plan": "docs/plan/M3-workflows.md",
+      "deps": [
+        "T1.1",
+        "T3.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.016Z"
+    },
+    "T3.4": {
+      "title": "Custom extraction with CSS selectors",
+      "milestone": 3,
+      "plan": "docs/plan/M3-workflows.md",
+      "deps": [
+        "T3.3"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.016Z"
+    },
+    "T3.5": {
+      "title": "Crawl comparison between two saved crawls",
+      "milestone": 3,
+      "plan": "docs/plan/M3-workflows.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.016Z"
+    },
+    "T3.6": {
+      "title": "Raw HTML vs rendered HTML comparison",
+      "milestone": 3,
+      "plan": "docs/plan/M3-workflows.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.016Z"
+    },
+    "T4.1": {
+      "title": "Split App.tsx into columns, event hook and session hook",
+      "milestone": 4,
+      "plan": "docs/plan/M4-optimization.md",
+      "deps": [
+        "T1.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.105Z"
+    },
+    "T4.2": {
+      "title": "Incremental derived state and Overview counts",
+      "milestone": 4,
+      "plan": "docs/plan/M4-optimization.md",
+      "deps": [
+        "T4.1"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.106Z"
+    },
+    "T4.3": {
+      "title": "Throttle crawl progress events",
+      "milestone": 4,
+      "plan": "docs/plan/M4-optimization.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.106Z"
+    },
+    "T4.4": {
+      "title": "Stream saved crawls instead of cloning and pretty-printing",
+      "milestone": 4,
+      "plan": "docs/plan/M4-optimization.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.106Z"
+    },
+    "T4.5": {
+      "title": "Synthetic large-site fixture and crawl throughput budget",
+      "milestone": 4,
+      "plan": "docs/plan/M4-optimization.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.106Z"
+    },
+    "T4.6": {
+      "title": "Reuse the start page response for site info",
+      "milestone": 4,
+      "plan": "docs/plan/M4-optimization.md",
+      "deps": [
+        "T4.5"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-09-25T18:11:07.106Z"
+    }
+  }
+}

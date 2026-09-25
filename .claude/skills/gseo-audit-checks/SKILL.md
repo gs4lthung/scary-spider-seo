@@ -7,6 +7,8 @@ description: How to add or change an SEO/accessibility audit check (an "issue" o
 
 A check is a `FilterKey`. Its logic lives once, in `filterPages` (`src/lib/filters.ts`); everything else reuses it.
 
+Once task T1.1 has merged (an `ISSUE_DEFS` registry exists in `filters.ts`), a check is one `ISSUE_DEFS` entry (key, label, group, tone, predicate) plus its `ISSUE_SOLUTIONS` entry; Overview counts and page issue keys come from the registry, so skip steps 2 and 4 below except where they still apply.
+
 ## Steps
 
 1. **Decide where the signal comes from.** If it can be derived from fields already on `PageResult`/`ResourceResult` (see `src/types.ts`), it's frontend-only. Otherwise add a raw field first with the `gseo-crawler` skill.
