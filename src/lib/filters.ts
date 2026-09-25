@@ -18,6 +18,8 @@ export const META_MAX_PIXELS = 985;
 export const META_MIN_PIXELS = 400;
 /** Screaming Frog's H1 "Over 70 Characters" threshold. */
 export const H1_MAX_LENGTH = 70;
+/** Screaming Frog's H2 "Over 70 Characters" threshold. */
+export const H2_MAX_LENGTH = 70;
 /** A 2xx HTML page with fewer words than this is "low content" (Screaming Frog's default). */
 export const LOW_WORD_COUNT = 200;
 /** Pages more clicks than this from the start URL are "deep". */
@@ -59,6 +61,26 @@ export function getDuplicateMetaSet(pages: PageResult[]): Set<string> {
     if (count > 1) duplicates.add(desc);
   }
   return duplicates;
+}
+
+/** The heading a page is compared on for duplicate H1s: its first H1, like Screaming Frog. */
+export const firstH1 = (p: PageResult): string | null => p.h1;
+
+/** The heading a page is compared on for duplicate H2s: its first H2, like Screaming Frog. */
+export const firstH2 = (p: PageResult): string | null => p.h2Values[0] ?? null;
+
+function getDuplicateSet(pages: PageResult[], value: (p: PageResult) => string | null): Set<string> {
+  const tracker = createDuplicateTracker();
+  for (const p of pages) ingestDuplicateValue(tracker, value(p));
+  return tracker.duplicates;
+}
+
+export function getDuplicateH1Set(pages: PageResult[]): Set<string> {
+  return getDuplicateSet(pages, firstH1);
+}
+
+export function getDuplicateH2Set(pages: PageResult[]): Set<string> {
+  return getDuplicateSet(pages, firstH2);
 }
 
 /** URL -> status of every crawled page, so a page's canonical target can be
@@ -162,6 +184,10 @@ export interface FilterContext {
   duplicateTitles: Set<string>;
   duplicateContent: Set<string>;
   duplicateMeta: Set<string>;
+  /** First-H1 texts shared by more than one page (see `getDuplicateH1Set`). */
+  duplicateH1s: Set<string>;
+  /** First-H2 texts shared by more than one page (see `getDuplicateH2Set`). */
+  duplicateH2s: Set<string>;
   canonicalStatusMap: Map<string, number | null>;
   linkedUrls: Set<string>;
   /** Every crawled page by URL (see `getPageByUrlMap`). */
@@ -176,6 +202,8 @@ export function emptyFilterContext(): FilterContext {
     duplicateTitles: new Set(),
     duplicateContent: new Set(),
     duplicateMeta: new Set(),
+    duplicateH1s: new Set(),
+    duplicateH2s: new Set(),
     canonicalStatusMap: new Map(),
     linkedUrls: new Set(),
     pageByUrl: new Map(),
@@ -304,8 +332,24 @@ function normalizeHeadingText(text: string): string {
   return text.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-/** Number of characters (code points, like the crawler's lengths) in the first H1. */
-const h1Length = (p: PageResult) => (p.h1 ? Array.from(p.h1.trim()).length : 0);
+/** Number of characters (code points, like the crawler's lengths) in a heading. */
+const headingLength = (text: string) => Array.from(text.trim()).length;
+
+/** Whether any H1 on the page (the first, plus every collected value) is over the limit. */
+const anyH1TooLong = (p: PageResult) =>
+  (p.h1 !== null && headingLength(p.h1) > H1_MAX_LENGTH) || p.h1Values.some((v) => headingLength(v) > H1_MAX_LENGTH);
+
+/** False for pages from a crawl saved before heading levels were collected: such a page has an
+ * H1 but no recorded levels, so its zero H2 count is unknown rather than real. */
+const hasHeadingOutline = (p: PageResult) => p.headingLevels.length > 0 || p.h1Count === 0;
+
+/** Whether a heading level ever increases by more than one step (H1 then H3, H2 then H4). */
+export function hasHeadingLevelSkip(levels: readonly number[]): boolean {
+  for (let i = 1; i < levels.length; i++) {
+    if (levels[i] - levels[i - 1] > 1) return true;
+  }
+  return false;
+}
 
 /** The crawled page a page's canonical points at, or undefined when the canonical is missing,
  * self-referencing, or its target was not crawled. */
@@ -442,7 +486,55 @@ export const ISSUE_DEFS = [
     label: `H1 over ${H1_MAX_LENGTH} chars`,
     group: "content",
     section: "Content",
-    test: (p) => h1Length(p) > H1_MAX_LENGTH,
+    test: anyH1TooLong,
+  }),
+  pageIssue({
+    key: "duplicateH1",
+    label: "Duplicate H1",
+    group: "content",
+    section: "Content",
+    test: (p, ctx) => {
+      const h1 = firstH1(p);
+      return !!h1 && ctx.duplicateH1s.has(h1);
+    },
+  }),
+  pageIssue({
+    key: "missingH2",
+    label: "Missing H2",
+    group: "content",
+    section: "Content",
+    test: (p) => hasHtml(p) && is2xx(p) && p.h2Count === 0 && hasHeadingOutline(p),
+  }),
+  pageIssue({
+    key: "multipleH2",
+    label: "Multiple H2",
+    group: "content",
+    section: "Content",
+    test: (p) => p.h2Count > 1,
+  }),
+  pageIssue({
+    key: "duplicateH2",
+    label: "Duplicate H2",
+    group: "content",
+    section: "Content",
+    test: (p, ctx) => {
+      const h2 = firstH2(p);
+      return !!h2 && ctx.duplicateH2s.has(h2);
+    },
+  }),
+  pageIssue({
+    key: "h2TooLong",
+    label: `H2 over ${H2_MAX_LENGTH} chars`,
+    group: "content",
+    section: "Content",
+    test: (p) => p.h2Values.some((v) => headingLength(v) > H2_MAX_LENGTH),
+  }),
+  pageIssue({
+    key: "nonSequentialHeadings",
+    label: "Non-sequential headings",
+    group: "accessibility",
+    section: "Content",
+    test: (p) => hasHeadingLevelSkip(p.headingLevels),
   }),
   pageIssue({
     key: "duplicateContent",

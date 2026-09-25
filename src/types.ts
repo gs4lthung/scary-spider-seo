@@ -29,6 +29,14 @@ export interface PageResult {
   metaDescriptionLength: number;
   h1: string | null;
   h1Count: number;
+  /** Every non-empty H1 in document order (capped at 20 by the crawler). */
+  h1Values: string[];
+  /** Every non-empty H2 in document order (capped at 20 by the crawler). */
+  h2Values: string[];
+  /** Number of non-empty H2s (uncapped). */
+  h2Count: number;
+  /** Level (1 to 6) of every heading in document order, empty ones included (capped at 200). */
+  headingLevels: number[];
   wordCount: number;
   canonical: string | null;
   metaRobots: string | null;

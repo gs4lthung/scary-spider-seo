@@ -47,6 +47,8 @@ import {
   TITLE_MIN_LENGTH,
   TITLE_MIN_PIXELS,
   createDuplicateTracker,
+  firstH1,
+  firstH2,
   filterPages,
   filterResources,
   filterTab,
@@ -533,6 +535,8 @@ function App() {
   const titleTrackerRef = useRef(createDuplicateTracker());
   const contentTrackerRef = useRef(createDuplicateTracker());
   const metaTrackerRef = useRef(createDuplicateTracker());
+  const h1TrackerRef = useRef(createDuplicateTracker());
+  const h2TrackerRef = useRef(createDuplicateTracker());
   const canonicalStatusRef = useRef(new Map<string, number | null>());
   const pageByUrlRef = useRef(new Map<string, PageResult>());
   const sitemapUsedRef = useRef(false);
@@ -542,6 +546,8 @@ function App() {
     titleTrackerRef.current = createDuplicateTracker();
     contentTrackerRef.current = createDuplicateTracker();
     metaTrackerRef.current = createDuplicateTracker();
+    h1TrackerRef.current = createDuplicateTracker();
+    h2TrackerRef.current = createDuplicateTracker();
     canonicalStatusRef.current = new Map();
     pageByUrlRef.current = new Map();
     sitemapUsedRef.current = false;
@@ -783,7 +789,16 @@ function App() {
   // page crawled so far on every ~150ms UI flush, which is what made this cost trend toward
   // O(n²) over a long crawl. Still produces fresh Set/Map instances each time so downstream
   // useMemo/props comparisons below see them exactly as before.
-  const { duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, pageByUrl, sitemapUsed } = useMemo(() => {
+  const {
+    duplicateTitleSet,
+    duplicateContentSet,
+    duplicateMetaSet,
+    duplicateH1Set,
+    duplicateH2Set,
+    canonicalStatusMap,
+    pageByUrl,
+    sitemapUsed,
+  } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
       // handleStart/handleOpenCrawl already call resetDerivedTrackers() explicitly).
@@ -794,6 +809,8 @@ function App() {
       ingestDuplicateValue(titleTrackerRef.current, p.title);
       ingestDuplicateValue(contentTrackerRef.current, p.contentHash);
       ingestDuplicateValue(metaTrackerRef.current, p.metaDescription);
+      ingestDuplicateValue(h1TrackerRef.current, firstH1(p));
+      ingestDuplicateValue(h2TrackerRef.current, firstH2(p));
       canonicalStatusRef.current.set(p.url, p.status);
       pageByUrlRef.current.set(p.url, p);
       if (p.discoveredViaSitemap) sitemapUsedRef.current = true;
@@ -804,6 +821,8 @@ function App() {
       duplicateTitleSet: new Set(titleTrackerRef.current.duplicates),
       duplicateContentSet: new Set(contentTrackerRef.current.duplicates),
       duplicateMetaSet: new Set(metaTrackerRef.current.duplicates),
+      duplicateH1Set: new Set(h1TrackerRef.current.duplicates),
+      duplicateH2Set: new Set(h2TrackerRef.current.duplicates),
       canonicalStatusMap: new Map(canonicalStatusRef.current),
       pageByUrl: new Map(pageByUrlRef.current),
       sitemapUsed: sitemapUsedRef.current,
@@ -818,12 +837,24 @@ function App() {
       duplicateTitles: duplicateTitleSet,
       duplicateContent: duplicateContentSet,
       duplicateMeta: duplicateMetaSet,
+      duplicateH1s: duplicateH1Set,
+      duplicateH2s: duplicateH2Set,
       canonicalStatusMap,
       linkedUrls: linkedUrlSet,
       pageByUrl,
       sitemapUsed,
     }),
-    [duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet, pageByUrl, sitemapUsed],
+    [
+      duplicateTitleSet,
+      duplicateContentSet,
+      duplicateMetaSet,
+      duplicateH1Set,
+      duplicateH2Set,
+      canonicalStatusMap,
+      linkedUrlSet,
+      pageByUrl,
+      sitemapUsed,
+    ],
   );
   const filteredPages = useMemo(
     () => searchPages(filterPages(pages, filter, filterContext), search),
