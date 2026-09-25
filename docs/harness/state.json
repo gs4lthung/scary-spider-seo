@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 1,
     "startedAt": "2026-09-25T18:11:55.142Z",
-    "lastProgressAt": "2026-09-25T18:38:36.651Z"
+    "lastProgressAt": "2026-09-25T18:52:32.072Z"
   },
   "tasks": {
     "T1.1": {
@@ -35,10 +35,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.857Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "d65d7b5",
+      "updatedAt": "2026-09-25T18:52:32.070Z"
     },
     "T1.4": {
       "title": "Directive and canonical audits",
