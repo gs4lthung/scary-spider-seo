@@ -1,4 +1,5 @@
-use scraper::{Html, Selector};
+use crate::crawler::types::{LinkRef, MAX_OUTLINKS_PER_PAGE};
+use scraper::{ElementRef, Html, Selector};
 use serde_json::Value;
 use std::sync::LazyLock;
 use url::Url;
@@ -23,6 +24,7 @@ static HREFLANG_SEL: LazyLock<Selector> =
 static BODY_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("body").unwrap());
 static A_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("a[href]").unwrap());
 static IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img[src]").unwrap());
+static ANY_IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img").unwrap());
 static HEAD_LINK_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("head link[href]").unwrap());
 
@@ -35,6 +37,8 @@ const HTML_NS: &str = "http://www.w3.org/1999/xhtml";
 pub const MAX_HEADINGS: usize = 20;
 /// Most heading levels stored per page for the heading-order check.
 pub const MAX_HEADING_LEVELS: usize = 200;
+/// Longest anchor text stored per outlink, in characters.
+pub const MAX_ANCHOR_CHARS: usize = 200;
 
 pub struct ParsedPage {
     pub title: Option<String>,
@@ -60,6 +64,9 @@ pub struct ParsedPage {
     pub canonical: Option<String>,
     pub canonical_count: usize,
     pub internal_links: Vec<Url>,
+    /// Internal links with anchor text and rel flags, in document order, capped
+    /// at `MAX_OUTLINKS_PER_PAGE`.
+    pub internal_outlinks: Vec<LinkRef>,
     pub external_links: Vec<Url>,
     pub images: Vec<(Url, Option<String>)>,
     pub html_size_bytes: usize,
@@ -211,6 +218,29 @@ fn has_rel_value(rel_attr: Option<&str>, value: &str) -> bool {
                 .any(|v| v.eq_ignore_ascii_case(value))
         })
         .unwrap_or(false)
+}
+
+/// Builds the outlink record for an internal `<a>`: its whitespace-collapsed
+/// text, or the alt text of a wrapped image when the link has no text.
+fn link_ref(a: ElementRef, target: &Url) -> LinkRef {
+    let text = collapse_whitespace(&a.text().collect::<String>());
+    let (anchor, is_image_link) = if text.is_empty() {
+        match a.select(&ANY_IMG_SEL).next() {
+            Some(img) => (
+                collapse_whitespace(img.value().attr("alt").unwrap_or("")),
+                true,
+            ),
+            None => (text, false),
+        }
+    } else {
+        (text, false)
+    };
+    LinkRef {
+        url: target.to_string(),
+        anchor: anchor.chars().take(MAX_ANCHOR_CHARS).collect(),
+        nofollow: has_rel_value(a.value().attr("rel"), "nofollow"),
+        is_image_link,
+    }
 }
 
 /// A stable hash of normalized visible text, used to spot duplicate/near-duplicate
@@ -381,6 +411,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
     let content_hash = hash_content(&body_text);
 
     let mut internal_links = Vec::new();
+    let mut internal_outlinks = Vec::new();
     let mut external_links = Vec::new();
     let mut internal_nofollow_count = 0;
     for a in html.select(&A_SEL) {
@@ -389,6 +420,9 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
                 if is_same_site(base, &joined) {
                     if has_rel_value(a.value().attr("rel"), "nofollow") {
                         internal_nofollow_count += 1;
+                    }
+                    if internal_outlinks.len() < MAX_OUTLINKS_PER_PAGE {
+                        internal_outlinks.push(link_ref(a, &joined));
                     }
                     internal_links.push(joined);
                 } else {
@@ -456,6 +490,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         canonical,
         canonical_count,
         internal_links,
+        internal_outlinks,
         external_links,
         images,
         html_size_bytes,
@@ -703,6 +738,70 @@ mod tests {
             <a href="https://other.com/" rel="nofollow">c</a><a href="/d">d</a>"#,
         );
         assert_eq!(page.internal_nofollow_count, 1);
+    }
+
+    #[test]
+    fn outlink_anchor_is_collapsed_text() {
+        let long = "x".repeat(MAX_ANCHOR_CHARS + 50);
+        let page = parse(&format!(
+            r#"<a href="/a">  Read
+            the <b>guide</b>  </a><a href="/a">Other anchor</a><a href="/b">{long}</a>
+            <a href="https://other.com/">external</a>"#
+        ));
+        let anchors: Vec<_> = page
+            .internal_outlinks
+            .iter()
+            .map(|l| l.anchor.as_str())
+            .collect();
+        assert_eq!(anchors[..2], ["Read the guide", "Other anchor"]);
+        assert_eq!(anchors[2].chars().count(), MAX_ANCHOR_CHARS);
+        // Duplicates are kept, external links are not outlinks.
+        assert_eq!(page.internal_outlinks.len(), 3);
+        assert_eq!(page.internal_outlinks[0].url, "https://example.com/a");
+        assert_eq!(page.internal_outlinks[1].url, "https://example.com/a");
+        assert!(!page.internal_outlinks[0].is_image_link);
+    }
+
+    #[test]
+    fn image_link_uses_alt_as_anchor() {
+        let page = parse(
+            r#"<a href="/a"><img src="/i.png" alt=" Company   logo "></a>
+            <a href="/b"><img src="/j.png"></a>
+            <a href="/c"><img src="/k.png" alt="ignored"> Caption</a>
+            <a href="/d"> </a>"#,
+        );
+        let got: Vec<_> = page
+            .internal_outlinks
+            .iter()
+            .map(|l| (l.anchor.as_str(), l.is_image_link))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Company logo", true),
+                ("", true),
+                ("Caption", false),
+                ("", false)
+            ]
+        );
+    }
+
+    #[test]
+    fn nofollow_detected_among_multiple_rel_values() {
+        let page = parse(
+            r#"<a href="/a" rel="ugc NoFollow sponsored">a</a><a href="/b" rel="nofollower">b</a>
+            <a href="/c">c</a>"#,
+        );
+        let flags: Vec<_> = page.internal_outlinks.iter().map(|l| l.nofollow).collect();
+        assert_eq!(flags, vec![true, false, false]);
+    }
+
+    #[test]
+    fn outlinks_are_capped() {
+        let html = r#"<a href="/x">x</a>"#.repeat(MAX_OUTLINKS_PER_PAGE + 5);
+        let page = parse(&html);
+        assert_eq!(page.internal_outlinks.len(), MAX_OUTLINKS_PER_PAGE);
+        assert_eq!(page.internal_links.len(), MAX_OUTLINKS_PER_PAGE + 5);
     }
 
     #[test]

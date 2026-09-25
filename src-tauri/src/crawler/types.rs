@@ -155,6 +155,10 @@ pub struct PageResult {
     pub hreflang_values: Vec<String>,
     #[serde(default)]
     pub internal_nofollow_count: usize,
+    /// Every internal `<a href>` on the page in document order, duplicates kept,
+    /// capped at `MAX_OUTLINKS_PER_PAGE`. `internal_link_count` stays uncapped.
+    #[serde(default)]
+    pub outlinks: Vec<LinkRef>,
     #[serde(default)]
     pub text_ratio_pct: f64,
     #[serde(default)]
@@ -183,6 +187,28 @@ pub struct PageResult {
     pub mobile_usability_violations: Vec<MobileUsabilityViolation>,
     #[serde(default)]
     pub error: Option<String>,
+}
+
+/// Most internal outlinks stored per page, so a page with a huge link list cannot
+/// bloat the crawl event or the saved file.
+pub const MAX_OUTLINKS_PER_PAGE: usize = 1000;
+
+/// One internal link found on a page.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkRef {
+    /// Absolute target URL, fragment stripped.
+    pub url: String,
+    /// Whitespace-collapsed link text (at most 200 chars), or the alt text of a
+    /// wrapped image when the link has no text.
+    #[serde(default)]
+    pub anchor: String,
+    /// `rel` contains `nofollow` (case-insensitive, among other values).
+    #[serde(default)]
+    pub nofollow: bool,
+    /// The link has no text and wraps an `<img>`.
+    #[serde(default)]
+    pub is_image_link: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -299,5 +325,6 @@ mod tests {
         assert_eq!(home.meta_refresh, None);
         assert_eq!(home.pagination_next, None);
         assert_eq!(home.pagination_prev, None);
+        assert!(home.outlinks.is_empty());
     }
 }
