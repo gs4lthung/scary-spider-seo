@@ -31,7 +31,9 @@ import {
   type SiteInfo,
 } from "./types";
 import {
+  type FilterContext,
   type FilterKey,
+  type IssueKey,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
   createDuplicateTracker,
@@ -80,33 +82,18 @@ function linkCell(value: string | null | undefined) {
   return <LinkCell value={value} className="block w-full truncate" />;
 }
 
-interface PageColumnsContext {
-  duplicateTitles: Set<string>;
-  duplicateContent: Set<string>;
-  duplicateMeta: Set<string>;
-  canonicalStatusMap: Map<string, number | null>;
-  linkedUrls: Set<string>;
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
-function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[] {
+function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
   // The Issues column's accessorFn runs for every row on every table rebuild (react-table
   // builds the full row model regardless of virtualization), and its cell renderer runs
   // again for visible rows — without this cache that's getPageIssueKeys' 26 sub-filters
   // computed twice per row per update. Scoped to this ctx (rebuilt whenever ctx's deps
   // change), keyed by page object identity so unrelated pages never invalidate each other.
-  const issueCache = new WeakMap<PageResult, FilterKey[]>();
-  function issuesFor(page: PageResult): FilterKey[] {
+  const issueCache = new WeakMap<PageResult, IssueKey[]>();
+  function issuesFor(page: PageResult): IssueKey[] {
     let keys = issueCache.get(page);
     if (!keys) {
-      keys = getPageIssueKeys(
-        page,
-        ctx.duplicateTitles,
-        ctx.duplicateContent,
-        ctx.duplicateMeta,
-        ctx.canonicalStatusMap,
-        ctx.linkedUrls,
-      );
+      keys = getPageIssueKeys(page, ctx);
       issueCache.set(page, keys);
     }
     return keys;
@@ -135,7 +122,7 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
         const count = c.getValue() as number;
         if (count === 0) return <span className="text-muted-foreground">—</span>;
         const keys = issuesFor(c.row.original);
-        const titles = keys.map((k) => ISSUE_SOLUTIONS[k]?.title).filter(Boolean);
+        const titles = keys.map((k) => ISSUE_SOLUTIONS[k].title);
         return (
           <span title={titles.join("\n")} className="inline-flex items-center gap-1 font-medium text-destructive">
             <TriangleAlert className="size-3.5" />
@@ -775,44 +762,40 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
   const linkedUrlSet = useMemo(() => new Set(linkedUrls), [linkedUrls]);
-  const filteredPages = useMemo(
-    () =>
-      searchPages(
-        filterPages(pages, filter, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet),
-        search,
-      ),
-    [pages, filter, search, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet],
-  );
-  const filteredResources = useMemo(
-    () => searchResources(filterResources(resources, filter), search),
-    [resources, filter, search],
-  );
-
-  const pageColumns = useMemo(
-    () =>
-      buildPageColumns({
-        duplicateTitles: duplicateTitleSet,
-        duplicateContent: duplicateContentSet,
-        duplicateMeta: duplicateMetaSet,
-        canonicalStatusMap,
-        linkedUrls: linkedUrlSet,
-      }),
+  // The one context every issue predicate classifies against (filters, Overview counts,
+  // Issues column, site tree, detail modal).
+  const filterContext = useMemo<FilterContext>(
+    () => ({
+      duplicateTitles: duplicateTitleSet,
+      duplicateContent: duplicateContentSet,
+      duplicateMeta: duplicateMetaSet,
+      canonicalStatusMap,
+      linkedUrls: linkedUrlSet,
+    }),
     [duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet],
   );
+  const filteredPages = useMemo(
+    () => searchPages(filterPages(pages, filter, filterContext), search),
+    [pages, filter, search, filterContext],
+  );
+  const filteredResources = useMemo(
+    () => searchResources(filterResources(resources, filter, filterContext), search),
+    [resources, filter, search, filterContext],
+  );
+
+  const pageColumns = useMemo(() => buildPageColumns(filterContext), [filterContext]);
 
   const selectedPageIssues = useMemo(() => {
     if (!selectedPage) return [];
-    return getPageIssueKeys(selectedPage, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet)
-      .map((key) => ISSUE_SOLUTIONS[key])
-      .filter((s) => s !== undefined);
-  }, [selectedPage, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap, linkedUrlSet]);
+    return getPageIssueKeys(selectedPage, filterContext)
+      .map((key) => ISSUE_SOLUTIONS[key]);
+  }, [selectedPage, filterContext]);
 
   const selectedResourceIssues = useMemo(() => {
     if (!selectedResource) return [];
-    return getResourceIssueKeys(selectedResource)
-      .map((key) => ISSUE_SOLUTIONS[key])
-      .filter((s) => s !== undefined);
-  }, [selectedResource]);
+    return getResourceIssueKeys(selectedResource, filterContext)
+      .map((key) => ISSUE_SOLUTIONS[key]);
+  }, [selectedResource, filterContext]);
 
   const handleSelectFilter = useCallback((next: FilterKey) => {
     setFilter((prev) => {
@@ -935,11 +918,7 @@ function App() {
           <Overview
             pages={pages}
             resources={resources}
-            linkedUrls={linkedUrlSet}
-            duplicateTitles={duplicateTitleSet}
-            duplicateContent={duplicateContentSet}
-            duplicateMeta={duplicateMetaSet}
-            canonicalStatusMap={canonicalStatusMap}
+            filterContext={filterContext}
             progress={progress}
             running={running}
             paused={paused}
@@ -971,11 +950,7 @@ function App() {
         <TabsContent value="sitemap" className="min-h-0 flex-1">
           <SiteTree
             pages={pages}
-            duplicateTitles={duplicateTitleSet}
-            duplicateContent={duplicateContentSet}
-            duplicateMeta={duplicateMetaSet}
-            canonicalStatusMap={canonicalStatusMap}
-            linkedUrls={linkedUrlSet}
+            filterContext={filterContext}
             onSelectPage={setSelectedPage}
             onViewInPages={handleViewInPages}
           />

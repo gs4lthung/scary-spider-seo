@@ -1,39 +1,5 @@
 import type { PageResult, ResourceResult } from "../types";
 
-export type FilterKey =
-  | "all"
-  | "2xx"
-  | "3xx"
-  | "4xx5xx"
-  | "missingTitle"
-  | "duplicateTitles"
-  | "missingMeta"
-  | "h1Issues"
-  | "unminified"
-  | "broken"
-  | "missingAlt"
-  | "insecureLinks"
-  | "missingHsts"
-  | "titleTooShort"
-  | "titleTooLong"
-  | "missingLang"
-  | "missingHreflang"
-  | "duplicateContent"
-  | "lowTextRatio"
-  | "nofollowLinks"
-  | "duplicateMeta"
-  | "multipleCanonical"
-  | "brokenCanonicalTarget"
-  | "slowResponse"
-  | "missingViewport"
-  | "missingSocialTags"
-  | "redirectChainTooLong"
-  | "orphanPage"
-  | "structuredDataErrors"
-  | "missingStructuredData"
-  | "accessibilityIssues"
-  | "mobileUsabilityIssues";
-
 export const TITLE_MIN_LENGTH = 30;
 export const TITLE_MAX_LENGTH = 60;
 export const LOW_TEXT_RATIO_THRESHOLD_PCT = 10;
@@ -113,96 +79,378 @@ export function ingestDuplicateValue(tracker: DuplicateTracker, value: string | 
   if (count === 2) tracker.duplicates.add(value);
 }
 
+/**
+ * Everything a cross-page issue predicate may need beyond the page itself. Built once per
+ * `pages` change in `App.tsx` and passed down, so every consumer classifies against the
+ * same data.
+ */
+export interface FilterContext {
+  duplicateTitles: Set<string>;
+  duplicateContent: Set<string>;
+  duplicateMeta: Set<string>;
+  canonicalStatusMap: Map<string, number | null>;
+  linkedUrls: Set<string>;
+}
+
+export function emptyFilterContext(): FilterContext {
+  return {
+    duplicateTitles: new Set(),
+    duplicateContent: new Set(),
+    duplicateMeta: new Set(),
+    canonicalStatusMap: new Map(),
+    linkedUrls: new Set(),
+  };
+}
+
+export type IssueGroup = "response" | "content" | "links" | "indexing" | "technical" | "accessibility";
+
+/** Overview accordion section an issue is listed under. An issue without one (the 4xx/5xx
+ * status bucket) is shown as a top-level tile instead. Sections appear on screen in the
+ * order they first occur in `ISSUE_DEFS`. */
+export type OverviewSection =
+  | "Titles"
+  | "Content"
+  | "Canonical & Indexing"
+  | "Performance"
+  | "Meta & Social"
+  | "Mobile Usability"
+  | "Structured Data"
+  | "Accessibility"
+  | "Security"
+  | "International";
+
+interface IssueDefBase<K extends string> {
+  key: K;
+  /** Short label shown on the Overview tile. */
+  label: string;
+  group: IssueGroup;
+  /** Overview colour: `bad` for things that break indexing or users, `warn` otherwise;
+   * absent for neutral, informational counts. */
+  tone?: "warn" | "bad";
+  section?: OverviewSection;
+}
+
+export interface PageIssueDef<K extends string = string> extends IssueDefBase<K> {
+  scope: "page";
+  test: (page: PageResult, ctx: FilterContext) => boolean;
+  /** Optional per-resource signal for the same issue. Only used to list the issue on a
+   * resource's detail view (`getResourceIssueKeys`); it does not filter the Resources table. */
+  resourceTest?: (resource: ResourceResult) => boolean;
+}
+
+export interface ResourceIssueDef<K extends string = string> extends IssueDefBase<K> {
+  scope: "resource";
+  test: (resource: ResourceResult, ctx: FilterContext) => boolean;
+}
+
+export type IssueDef<K extends string = string> = PageIssueDef<K> | ResourceIssueDef<K>;
+
+function pageIssue<K extends string>(def: Omit<PageIssueDef<K>, "scope">): PageIssueDef<K> {
+  return { ...def, scope: "page" };
+}
+
+function resourceIssue<K extends string>(def: Omit<ResourceIssueDef<K>, "scope">): ResourceIssueDef<K> {
+  return { ...def, scope: "resource" };
+}
+
+const hasHtml = (p: PageResult) => p.htmlSizeBytes > 0;
+
+/**
+ * The single source of truth for every audit issue: its predicate, Overview label, tone and
+ * placement. Adding an issue means one entry here plus its solution in `issueSolutions.ts`
+ * (a missing solution is a type error). Entries are in Overview visual order, which is also
+ * the order `getPageIssueKeys` reports keys in.
+ */
+export const ISSUE_DEFS = [
+  pageIssue({
+    key: "4xx5xx",
+    label: "4xx/5xx/Error",
+    group: "response",
+    tone: "bad",
+    test: (p) => p.status === null || p.status >= 400,
+  }),
+  pageIssue({
+    key: "missingTitle",
+    label: "Missing title",
+    group: "content",
+    section: "Titles",
+    test: (p) => !p.title,
+  }),
+  pageIssue({
+    key: "duplicateTitles",
+    label: "Duplicate titles",
+    group: "content",
+    section: "Titles",
+    test: (p, ctx) => !!p.title && ctx.duplicateTitles.has(p.title),
+  }),
+  pageIssue({
+    key: "titleTooShort",
+    label: "Title too short",
+    group: "content",
+    section: "Titles",
+    test: (p) => !!p.title && p.titleLength < TITLE_MIN_LENGTH,
+  }),
+  pageIssue({
+    key: "titleTooLong",
+    label: "Title too long",
+    group: "content",
+    section: "Titles",
+    test: (p) => p.titleLength > TITLE_MAX_LENGTH,
+  }),
+  pageIssue({
+    key: "missingMeta",
+    label: "Missing meta desc.",
+    group: "content",
+    section: "Content",
+    test: (p) => !p.metaDescription,
+  }),
+  pageIssue({
+    key: "duplicateMeta",
+    label: "Duplicate meta desc.",
+    group: "content",
+    section: "Content",
+    test: (p, ctx) => !!p.metaDescription && ctx.duplicateMeta.has(p.metaDescription),
+  }),
+  pageIssue({
+    key: "h1Issues",
+    label: "H1 issues",
+    group: "content",
+    section: "Content",
+    // Missing (0) and multiple (>1) H1s in one issue.
+    test: (p) => p.h1Count !== 1,
+  }),
+  pageIssue({
+    key: "duplicateContent",
+    label: "Duplicate content",
+    group: "content",
+    section: "Content",
+    test: (p, ctx) => !!p.contentHash && ctx.duplicateContent.has(p.contentHash),
+  }),
+  pageIssue({
+    key: "lowTextRatio",
+    label: "Low text/HTML ratio",
+    group: "content",
+    tone: "warn",
+    section: "Content",
+    test: (p) => hasHtml(p) && p.textRatioPct < LOW_TEXT_RATIO_THRESHOLD_PCT,
+  }),
+  pageIssue({
+    key: "missingAlt",
+    label: "Missing alt text",
+    group: "accessibility",
+    tone: "warn",
+    section: "Content",
+    test: (p) => p.missingAltCount > 0,
+  }),
+  pageIssue({
+    key: "nofollowLinks",
+    label: "Nofollow links",
+    group: "links",
+    section: "Content",
+    test: (p) => p.internalNofollowCount > 0,
+  }),
+  pageIssue({
+    key: "unminified",
+    label: "Unminified pages",
+    group: "technical",
+    tone: "warn",
+    section: "Content",
+    test: (p) => hasHtml(p) && !p.isMinified,
+  }),
+  pageIssue({
+    key: "multipleCanonical",
+    label: "Multiple canonical tags",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => p.canonicalCount > 1,
+  }),
+  pageIssue({
+    key: "brokenCanonicalTarget",
+    label: "Canonical points to broken page",
+    group: "indexing",
+    tone: "bad",
+    section: "Canonical & Indexing",
+    test: (p, ctx) => {
+      if (!p.canonical || p.canonical === p.url) return false;
+      if (!ctx.canonicalStatusMap.has(p.canonical)) return false;
+      const targetStatus = ctx.canonicalStatusMap.get(p.canonical);
+      return targetStatus === null || targetStatus === undefined || targetStatus >= 400;
+    },
+  }),
+  pageIssue({
+    key: "redirectChainTooLong",
+    label: "Long redirect chains",
+    group: "response",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => p.redirectChain.length > 1,
+  }),
+  pageIssue({
+    key: "orphanPage",
+    label: "Orphan pages (sitemap only)",
+    group: "links",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p, ctx) => p.discoveredViaSitemap && !ctx.linkedUrls.has(p.url),
+  }),
+  pageIssue({
+    key: "slowResponse",
+    label: `Slow response (>${SLOW_RESPONSE_THRESHOLD_MS}ms)`,
+    group: "response",
+    tone: "warn",
+    section: "Performance",
+    test: (p) => p.responseTimeMs > SLOW_RESPONSE_THRESHOLD_MS,
+  }),
+  pageIssue({
+    key: "missingSocialTags",
+    label: "Missing OG/Twitter tags",
+    group: "content",
+    section: "Meta & Social",
+    test: (p) => hasHtml(p) && !p.hasOpenGraph && !p.hasTwitterCard,
+  }),
+  pageIssue({
+    key: "missingViewport",
+    label: "Missing viewport tag",
+    group: "technical",
+    tone: "warn",
+    section: "Mobile Usability",
+    test: (p) => hasHtml(p) && !p.viewport,
+  }),
+  pageIssue({
+    key: "mobileUsabilityIssues",
+    label: "Mobile usability issues",
+    group: "accessibility",
+    tone: "bad",
+    section: "Mobile Usability",
+    test: (p) => p.mobileUsabilityViolations.length > 0,
+  }),
+  pageIssue({
+    key: "structuredDataErrors",
+    label: "Invalid structured data",
+    group: "technical",
+    tone: "bad",
+    section: "Structured Data",
+    test: (p) => p.structuredDataErrors.length > 0,
+  }),
+  pageIssue({
+    key: "missingStructuredData",
+    label: "No structured data",
+    group: "technical",
+    section: "Structured Data",
+    test: (p) => hasHtml(p) && p.structuredDataTypes.length === 0,
+  }),
+  pageIssue({
+    key: "accessibilityIssues",
+    label: "Accessibility violations",
+    group: "accessibility",
+    tone: "bad",
+    section: "Accessibility",
+    test: (p) => p.accessibilityViolations.length > 0,
+  }),
+  resourceIssue({
+    key: "broken",
+    label: "Broken links/images",
+    group: "links",
+    tone: "bad",
+    section: "Security",
+    test: (r) => (r.status !== null && r.status >= 400) || !!r.error,
+  }),
+  pageIssue({
+    key: "insecureLinks",
+    label: "Insecure links",
+    group: "technical",
+    tone: "bad",
+    section: "Security",
+    test: (p) => p.insecureLinkCount > 0,
+    resourceTest: (r) => !!r.isInsecure,
+  }),
+  pageIssue({
+    key: "missingHsts",
+    label: "Missing HSTS",
+    group: "technical",
+    tone: "warn",
+    section: "Security",
+    test: (p) => p.url.startsWith("https:") && !p.hsts,
+  }),
+  pageIssue({
+    key: "missingLang",
+    label: "Missing lang attr.",
+    group: "indexing",
+    section: "International",
+    test: (p) => hasHtml(p) && !p.lang,
+  }),
+  pageIssue({
+    key: "missingHreflang",
+    label: "Missing hreflang",
+    group: "indexing",
+    section: "International",
+    test: (p) => hasHtml(p) && p.hreflangValues.length === 0,
+  }),
+] as const;
+
+export type IssueKey = (typeof ISSUE_DEFS)[number]["key"];
+
+/** Status buckets plus every registry issue. */
+export type FilterKey = "all" | "2xx" | "3xx" | IssueKey;
+
+const ALL_ISSUE_DEFS: readonly IssueDef<IssueKey>[] = ISSUE_DEFS;
+const ISSUE_DEF_BY_KEY: ReadonlyMap<string, IssueDef<IssueKey>> = new Map(ALL_ISSUE_DEFS.map((d) => [d.key, d]));
+const PAGE_ISSUE_DEFS = ALL_ISSUE_DEFS.filter((d): d is PageIssueDef<IssueKey> => d.scope === "page");
+const RESOURCE_ISSUE_DEFS = ALL_ISSUE_DEFS.filter((d): d is ResourceIssueDef<IssueKey> => d.scope === "resource");
+
+/** The registry entry for a filter key, or undefined for "all" and the status buckets. */
+export function getIssueDef(key: FilterKey): IssueDef<IssueKey> | undefined {
+  return ISSUE_DEF_BY_KEY.get(key);
+}
+
 /** Which tab a filter's results live in — null means it doesn't imply a tab (e.g. "all"). */
 export function filterTab(filter: FilterKey): "pages" | "resources" | null {
-  return filter === "broken" ? "resources" : filter === "all" ? null : "pages";
+  if (filter === "all") return null;
+  return getIssueDef(filter)?.scope === "resource" ? "resources" : "pages";
 }
 
-export function filterPages(
-  pages: PageResult[],
+function statusClass(status: number | null): number | null {
+  return status === null ? null : Math.floor(status / 100);
+}
+
+/** Pages matching `filter`. Resource-scope issues and "all" leave the page list unfiltered. */
+export function filterPages(pages: PageResult[], filter: FilterKey, ctx: FilterContext): PageResult[] {
+  if (filter === "2xx") return pages.filter((p) => statusClass(p.status) === 2);
+  if (filter === "3xx") return pages.filter((p) => statusClass(p.status) === 3);
+  const def = getIssueDef(filter);
+  if (def?.scope !== "page") return pages;
+  return pages.filter((p) => def.test(p, ctx));
+}
+
+/** Resources matching `filter`. Page-scope issues and "all" leave the resource list unfiltered. */
+export function filterResources(
+  resources: ResourceResult[],
   filter: FilterKey,
-  duplicateTitles: Set<string>,
-  duplicateContent: Set<string>,
-  duplicateMeta: Set<string> = new Set(),
-  canonicalStatusMap: Map<string, number | null> = new Map(),
-  linkedUrls: Set<string> = new Set(),
-): PageResult[] {
-  switch (filter) {
-    case "2xx":
-      return pages.filter((p) => p.status !== null && Math.floor(p.status / 100) === 2);
-    case "3xx":
-      return pages.filter((p) => p.status !== null && Math.floor(p.status / 100) === 3);
-    case "4xx5xx":
-      return pages.filter((p) => p.status === null || p.status >= 400);
-    case "missingTitle":
-      return pages.filter((p) => !p.title);
-    case "duplicateTitles":
-      return pages.filter((p) => p.title && duplicateTitles.has(p.title));
-    case "missingMeta":
-      return pages.filter((p) => !p.metaDescription);
-    case "h1Issues":
-      return pages.filter((p) => p.h1Count !== 1);
-    case "unminified":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && !p.isMinified);
-    case "missingAlt":
-      return pages.filter((p) => p.missingAltCount > 0);
-    case "insecureLinks":
-      return pages.filter((p) => p.insecureLinkCount > 0);
-    case "missingHsts":
-      return pages.filter((p) => p.url.startsWith("https:") && !p.hsts);
-    case "titleTooShort":
-      return pages.filter((p) => p.title && p.titleLength < TITLE_MIN_LENGTH);
-    case "titleTooLong":
-      return pages.filter((p) => p.titleLength > TITLE_MAX_LENGTH);
-    case "missingLang":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && !p.lang);
-    case "missingHreflang":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && p.hreflangValues.length === 0);
-    case "duplicateContent":
-      return pages.filter((p) => p.contentHash && duplicateContent.has(p.contentHash));
-    case "lowTextRatio":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && p.textRatioPct < LOW_TEXT_RATIO_THRESHOLD_PCT);
-    case "nofollowLinks":
-      return pages.filter((p) => p.internalNofollowCount > 0);
-    case "duplicateMeta":
-      return pages.filter((p) => p.metaDescription && duplicateMeta.has(p.metaDescription));
-    case "multipleCanonical":
-      return pages.filter((p) => p.canonicalCount > 1);
-    case "brokenCanonicalTarget":
-      return pages.filter((p) => {
-        if (!p.canonical || p.canonical === p.url) return false;
-        if (!canonicalStatusMap.has(p.canonical)) return false;
-        const targetStatus = canonicalStatusMap.get(p.canonical);
-        return targetStatus === null || targetStatus === undefined || targetStatus >= 400;
-      });
-    case "slowResponse":
-      return pages.filter((p) => p.responseTimeMs > SLOW_RESPONSE_THRESHOLD_MS);
-    case "missingViewport":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && !p.viewport);
-    case "missingSocialTags":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && !p.hasOpenGraph && !p.hasTwitterCard);
-    case "redirectChainTooLong":
-      return pages.filter((p) => p.redirectChain.length > 1);
-    case "orphanPage":
-      return pages.filter((p) => p.discoveredViaSitemap && !linkedUrls.has(p.url));
-    case "structuredDataErrors":
-      return pages.filter((p) => p.structuredDataErrors.length > 0);
-    case "missingStructuredData":
-      return pages.filter((p) => p.htmlSizeBytes > 0 && p.structuredDataTypes.length === 0);
-    case "accessibilityIssues":
-      return pages.filter((p) => p.accessibilityViolations.length > 0);
-    case "mobileUsabilityIssues":
-      return pages.filter((p) => p.mobileUsabilityViolations.length > 0);
-    default:
-      return pages;
-  }
+  ctx: FilterContext = emptyFilterContext(),
+): ResourceResult[] {
+  const def = getIssueDef(filter);
+  if (def?.scope !== "resource") return resources;
+  return resources.filter((r) => def.test(r, ctx));
 }
 
-export function filterResources(resources: ResourceResult[], filter: FilterKey): ResourceResult[] {
-  if (filter === "broken") {
-    return resources.filter((r) => (r.status !== null && r.status >= 400) || !!r.error);
+/** Number of pages (page-scope issues) or resources (resource-scope issues) affected by every
+ * issue in the registry. Always equals the length of `filterPages` / `filterResources` for
+ * the same key. */
+export function countIssues(
+  pages: PageResult[],
+  resources: ResourceResult[],
+  ctx: FilterContext,
+): Record<IssueKey, number> {
+  const counts = {} as Record<IssueKey, number>;
+  for (const def of ALL_ISSUE_DEFS) counts[def.key] = 0;
+  for (const p of pages) {
+    for (const def of PAGE_ISSUE_DEFS) if (def.test(p, ctx)) counts[def.key]++;
   }
-  return resources;
+  for (const r of resources) {
+    for (const def of RESOURCE_ISSUE_DEFS) if (def.test(r, ctx)) counts[def.key]++;
+  }
+  return counts;
 }
 
 /** Free-text search across a page's URL, title, meta description and H1 — case-insensitive substring match. */
@@ -230,57 +478,21 @@ export function searchResources(resources: ResourceResult[], query: string): Res
   );
 }
 
-const ALL_PAGE_ISSUE_KEYS: FilterKey[] = [
-  "4xx5xx",
-  "missingTitle",
-  "titleTooShort",
-  "titleTooLong",
-  "duplicateTitles",
-  "missingMeta",
-  "duplicateMeta",
-  "h1Issues",
-  "duplicateContent",
-  "lowTextRatio",
-  "missingAlt",
-  "nofollowLinks",
-  "unminified",
-  "insecureLinks",
-  "missingHsts",
-  "missingLang",
-  "missingHreflang",
-  "multipleCanonical",
-  "brokenCanonicalTarget",
-  "slowResponse",
-  "missingViewport",
-  "missingSocialTags",
-  "redirectChainTooLong",
-  "orphanPage",
-  "structuredDataErrors",
-  "missingStructuredData",
-  "accessibilityIssues",
-  "mobileUsabilityIssues",
-];
-
-/** Which issue keys apply to a single page — reuses `filterPages` against a
- * one-item array so the "what counts as an issue" logic has one source of truth. */
-export function getPageIssueKeys(
-  page: PageResult,
-  duplicateTitles: Set<string>,
-  duplicateContent: Set<string>,
-  duplicateMeta: Set<string> = new Set(),
-  canonicalStatusMap: Map<string, number | null> = new Map(),
-  linkedUrls: Set<string> = new Set(),
-): FilterKey[] {
-  return ALL_PAGE_ISSUE_KEYS.filter(
-    (key) =>
-      filterPages([page], key, duplicateTitles, duplicateContent, duplicateMeta, canonicalStatusMap, linkedUrls)
-        .length > 0,
-  );
+/** Which page-scope issue keys apply to a single page, in registry order. */
+export function getPageIssueKeys(page: PageResult, ctx: FilterContext): IssueKey[] {
+  return PAGE_ISSUE_DEFS.filter((def) => def.test(page, ctx)).map((def) => def.key);
 }
 
-export function getResourceIssueKeys(resource: ResourceResult): FilterKey[] {
-  const keys: FilterKey[] = [];
-  if (filterResources([resource], "broken").length > 0) keys.push("broken");
-  if (resource.isInsecure) keys.push("insecureLinks");
+/** Which issue keys apply to a single resource: resource-scope issues plus page-scope issues
+ * that declare a `resourceTest`, in registry order. */
+export function getResourceIssueKeys(
+  resource: ResourceResult,
+  ctx: FilterContext = emptyFilterContext(),
+): IssueKey[] {
+  const keys: IssueKey[] = [];
+  for (const def of ALL_ISSUE_DEFS) {
+    const applies = def.scope === "resource" ? def.test(resource, ctx) : (def.resourceTest?.(resource) ?? false);
+    if (applies) keys.push(def.key);
+  }
   return keys;
 }

@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { PageResult, ResourceResult } from "../types";
+import { ISSUE_SOLUTIONS } from "./issueSolutions";
 import {
+  type FilterContext,
+  ISSUE_DEFS,
   LOW_TEXT_RATIO_THRESHOLD_PCT,
   SLOW_RESPONSE_THRESHOLD_MS,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
+  countIssues,
   createDuplicateTracker,
+  emptyFilterContext,
   filterPages,
   filterResources,
   filterTab,
@@ -174,24 +179,8 @@ describe("filterTab", () => {
 });
 
 describe("filterPages", () => {
-  const emptySets = {
-    duplicateTitles: new Set<string>(),
-    duplicateContent: new Set<string>(),
-    duplicateMeta: new Set<string>(),
-    canonicalStatusMap: new Map<string, number | null>(),
-    linkedUrls: new Set<string>(),
-  };
-
   function run(pages: PageResult[], filter: Parameters<typeof filterPages>[1]) {
-    return filterPages(
-      pages,
-      filter,
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    return filterPages(pages, filter, emptyFilterContext());
   }
 
   it("returns everything for 'all'", () => {
@@ -213,15 +202,7 @@ describe("filterPages", () => {
 
   it("flags duplicate titles using the provided set", () => {
     const pages = [makePage({ title: "Dup" }), makePage({ title: "Solo" })];
-    const result = filterPages(
-      pages,
-      "duplicateTitles",
-      new Set(["Dup"]),
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "duplicateTitles", { ...emptyFilterContext(), duplicateTitles: new Set(["Dup"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -290,15 +271,7 @@ describe("filterPages", () => {
 
   it("flags duplicate content using the provided set", () => {
     const pages = [makePage({ contentHash: "dup" }), makePage({ contentHash: "solo" })];
-    const result = filterPages(
-      pages,
-      "duplicateContent",
-      emptySets.duplicateTitles,
-      new Set(["dup"]),
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "duplicateContent", { ...emptyFilterContext(), duplicateContent: new Set(["dup"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -318,15 +291,7 @@ describe("filterPages", () => {
 
   it("flags duplicate meta descriptions using the provided set", () => {
     const pages = [makePage({ metaDescription: "dup" }), makePage({ metaDescription: "solo" })];
-    const result = filterPages(
-      pages,
-      "duplicateMeta",
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      new Set(["dup"]),
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "duplicateMeta", { ...emptyFilterContext(), duplicateMeta: new Set(["dup"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -348,15 +313,7 @@ describe("filterPages", () => {
       // canonical target that was never crawled is not flagged (we can't know its status)
       makePage({ url: "https://example.com/d", canonical: "https://example.com/never-crawled" }),
     ];
-    const result = filterPages(
-      pages,
-      "brokenCanonicalTarget",
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "brokenCanonicalTarget", { ...emptyFilterContext(), canonicalStatusMap });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -390,15 +347,7 @@ describe("filterPages", () => {
       makePage({ url: "https://example.com/linked", discoveredViaSitemap: true }),
       makePage({ url: "https://example.com/not-in-sitemap", discoveredViaSitemap: false }),
     ];
-    const result = filterPages(
-      pages,
-      "orphanPage",
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      new Set(["https://example.com/linked"]),
-    );
+    const result = filterPages(pages, "orphanPage", { ...emptyFilterContext(), linkedUrls: new Set(["https://example.com/linked"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -452,13 +401,13 @@ describe("getPageIssueKeys", () => {
     // hreflangValues/discoveredViaSitemap need explicit non-default values here since makePage()'s
     // defaults (empty hreflang, discovered via sitemap) are themselves flagged issues otherwise.
     const page = makePage({ hreflangValues: ["en"], discoveredViaSitemap: false });
-    const keys = getPageIssueKeys(page, new Set(), new Set(), new Set(), new Map(), new Set());
+    const keys = getPageIssueKeys(page, emptyFilterContext());
     expect(keys).toEqual([]);
   });
 
   it("returns every applicable issue key for a page with many problems", () => {
     const page = makePage({ status: 404, title: null, metaDescription: null, h1Count: 0 });
-    const keys = getPageIssueKeys(page, new Set(), new Set(), new Set(), new Map(), new Set());
+    const keys = getPageIssueKeys(page, emptyFilterContext());
     expect(keys).toEqual(expect.arrayContaining(["4xx5xx", "missingTitle", "missingMeta", "h1Issues"]));
   });
 
@@ -467,9 +416,9 @@ describe("getPageIssueKeys", () => {
     // re-deriving the "what counts as an issue" rules a second time in this test.
     const pages = [makePage(), makePage({ status: 404, title: null, canonicalCount: 2, insecureLinkCount: 1 })];
     for (const page of pages) {
-      const keys = getPageIssueKeys(page, new Set(), new Set(), new Set(), new Map(), new Set());
+      const keys = getPageIssueKeys(page, emptyFilterContext());
       for (const key of keys) {
-        expect(filterPages([page], key, new Set(), new Set(), new Set(), new Map(), new Set())).toHaveLength(1);
+        expect(filterPages([page], key, emptyFilterContext())).toHaveLength(1);
       }
     }
   });
@@ -527,5 +476,91 @@ describe("getResourceIssueKeys", () => {
     expect(getResourceIssueKeys(makeResource({ isInsecure: true }))).toEqual(["insecureLinks"]);
     expect(getResourceIssueKeys(makeResource({ status: 404, isInsecure: true }))).toEqual(["broken", "insecureLinks"]);
     expect(getResourceIssueKeys(makeResource())).toEqual([]);
+  });
+});
+
+describe("issue registry", () => {
+  const violation = { id: "x", description: "x", helpUrl: "https://example.com/help", nodeCount: 1 };
+
+  // One page per issue (plus shared defaults that trigger the cross-page issues), so every
+  // registry key is hit at least once.
+  function mixedCrawl() {
+    const at = (path: string, overrides: Partial<PageResult> = {}) =>
+      makePage({ url: `https://example.com/${path}`, canonical: `https://example.com/${path}`, ...overrides });
+    const pages = [
+      at("clean", { hreflangValues: ["en"], discoveredViaSitemap: false, contentHash: "unique", title: "Unique" }),
+      at("gone", { status: 404 }),
+      at("no-title", { title: null, titleLength: 0 }),
+      at("short-title", { title: "Short", titleLength: 5 }),
+      at("long-title", { titleLength: TITLE_MAX_LENGTH + 20 }),
+      at("no-meta", { metaDescription: null }),
+      at("no-h1", { h1Count: 0 }),
+      at("two-h1", { h1Count: 2 }),
+      at("thin", { textRatioPct: LOW_TEXT_RATIO_THRESHOLD_PCT - 1 }),
+      at("no-alt", { missingAltCount: 2 }),
+      at("nofollow", { internalNofollowCount: 1 }),
+      at("unminified", { isMinified: false }),
+      at("two-canonicals", { canonicalCount: 2 }),
+      at("canonical-to-404", { canonical: "https://example.com/gone" }),
+      at("chain", { redirectChain: ["https://example.com/a", "https://example.com/b"] }),
+      at("slow", { responseTimeMs: SLOW_RESPONSE_THRESHOLD_MS + 1 }),
+      at("no-social", { hasOpenGraph: false, hasTwitterCard: false }),
+      at("no-viewport", { viewport: null }),
+      at("mobile", { mobileUsabilityViolations: [violation] }),
+      at("bad-schema", { structuredDataErrors: ["missing name"] }),
+      at("no-schema", { structuredDataTypes: [] }),
+      at("a11y", { accessibilityViolations: [{ ...violation, impact: "serious" }] }),
+      at("insecure", { insecureLinkCount: 1 }),
+      makePage({ url: "http://example.com/plain", canonical: "http://example.com/plain" }),
+      at("no-hsts", { hsts: false }),
+      at("no-lang", { lang: null }),
+    ];
+    const resources = [
+      makeResource(),
+      makeResource({ url: "https://example.com/missing.png", status: 404 }),
+      makeResource({ url: "https://example.com/timeout.png", status: null, error: "timeout" }),
+      makeResource({ url: "http://example.com/insecure.png", isInsecure: true }),
+    ];
+    const ctx: FilterContext = {
+      duplicateTitles: getDuplicateTitleSet(pages),
+      duplicateContent: getDuplicateContentSet(pages),
+      duplicateMeta: getDuplicateMetaSet(pages),
+      canonicalStatusMap: getCanonicalStatusMap(pages),
+      linkedUrls: new Set(["https://example.com/clean"]),
+    };
+    return { pages, resources, ctx };
+  }
+
+  it("every registry key has a solution", () => {
+    for (const def of ISSUE_DEFS) {
+      const solution = ISSUE_SOLUTIONS[def.key];
+      expect(solution, def.key).toBeDefined();
+      expect(solution.title.length, def.key).toBeGreaterThan(0);
+    }
+  });
+
+  it("every registry key has a unique label", () => {
+    const keys = ISSUE_DEFS.map((d) => d.key);
+    const labels = ISSUE_DEFS.map((d) => d.label);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("countIssues matches filterPages length for every key", () => {
+    const { pages, resources, ctx } = mixedCrawl();
+    const counts = countIssues(pages, resources, ctx);
+    for (const def of ISSUE_DEFS) {
+      const expected =
+        def.scope === "page" ? filterPages(pages, def.key, ctx).length : filterResources(resources, def.key, ctx).length;
+      expect(counts[def.key], def.key).toBe(expected);
+      expect(counts[def.key], `${def.key} is triggered by the mixed crawl`).toBeGreaterThan(0);
+    }
+    expect(Object.keys(counts).sort()).toEqual(ISSUE_DEFS.map((d) => d.key).sort());
+  });
+
+  it("filterTab sends resource-scope issues to the Resources tab and page-scope issues to Pages", () => {
+    for (const def of ISSUE_DEFS) {
+      expect(filterTab(def.key), def.key).toBe(def.scope === "resource" ? "resources" : "pages");
+    }
   });
 });
