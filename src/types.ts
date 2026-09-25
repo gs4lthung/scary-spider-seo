@@ -37,6 +37,16 @@ export interface PageResult {
   h2Count: number;
   /** Level (1 to 6) of every heading in document order, empty ones included (capped at 200). */
   headingLevels: number[];
+  /** Number of HTML `<title>` elements in the head and body (0 in crawls saved before T2.2). */
+  titleCount: number;
+  /** Number of `<meta name="description">` tags, empty ones included. */
+  metaDescriptionCount: number;
+  /** Trimmed `content` of the first `<meta http-equiv="refresh">`. */
+  metaRefresh: string | null;
+  /** Absolute URL of the first `<link rel="next">` in the head. */
+  paginationNext: string | null;
+  /** Absolute URL of the first `<link rel="prev">` in the head. */
+  paginationPrev: string | null;
   wordCount: number;
   canonical: string | null;
   metaRobots: string | null;

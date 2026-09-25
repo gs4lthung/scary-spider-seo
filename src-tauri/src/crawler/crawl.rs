@@ -364,6 +364,15 @@ async fn fetch_and_parse(
         .map(|s| s.chars().count())
         .unwrap_or(0);
 
+    // Pagination targets are queued like internal links (same host only) so a broken
+    // rel=next/prev target is crawled and reported even when no anchor links to it.
+    let pagination_links: Vec<Url> = [&parsed.pagination_next, &parsed.pagination_prev]
+        .into_iter()
+        .flatten()
+        .filter(|u| u.host_str() == final_url.host_str())
+        .cloned()
+        .collect();
+
     let result = PageResult {
         url: url.to_string(),
         depth,
@@ -380,6 +389,11 @@ async fn fetch_and_parse(
         h2_values: parsed.h2_values,
         h2_count: parsed.h2_count,
         heading_levels: parsed.heading_levels,
+        title_count: parsed.title_count,
+        meta_description_count: parsed.meta_description_count,
+        meta_refresh: parsed.meta_refresh,
+        pagination_next: parsed.pagination_next.as_ref().map(Url::to_string),
+        pagination_prev: parsed.pagination_prev.as_ref().map(Url::to_string),
         word_count: parsed.word_count,
         canonical: parsed.canonical,
         meta_robots: parsed.meta_robots,
@@ -417,7 +431,11 @@ async fn fetch_and_parse(
 
     PageFetchOutcome {
         result,
-        discovered_internal: parsed.internal_links,
+        discovered_internal: parsed
+            .internal_links
+            .into_iter()
+            .chain(pagination_links)
+            .collect(),
         discovered_external: parsed.external_links,
         discovered_images: parsed.images,
     }

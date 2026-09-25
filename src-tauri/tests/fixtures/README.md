@@ -26,6 +26,8 @@ must produce.
 | `/canonical-to-noindex.html` | canonical pointing at `/noindex.html` (a non-indexable page) |
 | `/canonical-to-redirect.html` | canonical pointing at `/old-page` (a redirect) |
 | `/headings.html` | an H1 then an H3 with no H2 (missing H2, non-sequential heading order) |
+| `/multi-meta.html` | two `<title>` elements, two meta descriptions and a meta refresh |
+| `/paged-1.html` | `rel="next"` to `/paged-2.html` (file intentionally absent, only reachable through the pagination link, so it answers 404) and `rel="prev"` to `/` |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
 | `/noindex-in-sitemap.html` | not linked; listed in `sitemap.xml` and noindex (non-indexable URL in the sitemap) |
 | `/gone-in-sitemap.html` | not linked; listed in `sitemap.xml`, file intentionally absent so it answers 404 |

@@ -132,6 +132,46 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
     },
   },
+  multipleTitles: {
+    title: "Multiple title elements",
+    problem:
+      "The page has more than one <title> element. HTML allows only one per document, so browsers and search engines keep just one of them (usually the first) and the other is ignored, which often means the title you meant to show is not the one used in search results.",
+    fix: "Make the template output exactly one <title> in the <head>. Duplicates usually come from a theme and an SEO plugin both writing a title, or from a title tag pasted into the page body; remove the extra one and keep the title you want shown.",
+    source: {
+      label: "Google Search Central: Influencing your title links",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
+  multipleMetaDescriptions: {
+    title: "Multiple meta descriptions",
+    problem:
+      "The page has more than one <meta name=\"description\"> tag. Search engines may pick either one, or neither, when building the snippet, so you lose control over what searchers read under the title.",
+    fix: "Emit a single meta description per page. Check whether the theme, an SEO plugin and a hardcoded template tag are each adding one, and keep only the one with the description you want.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaRefresh: {
+    title: "Meta refresh redirect",
+    problem:
+      "The page uses <meta http-equiv=\"refresh\"> to reload itself or send visitors to another URL after a delay. Google treats an instant meta refresh as a redirect but a delayed one as a weaker signal, and the automatic change of page is confusing and an accessibility failure for people who cannot read or act fast enough.",
+    fix: "Replace the meta refresh with a server-side 301 (permanent) or 302 (temporary) redirect. If the page only needs to update its content, load the new data with JavaScript instead of reloading the whole page.",
+    source: {
+      label: "Google Search Central: Redirects and Google Search",
+      url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+    },
+  },
+  paginationTargetError: {
+    title: "Pagination link to a non-200 or uncrawled URL",
+    problem:
+      "A <link rel=\"next\"> or <link rel=\"prev\"> on this page points to a URL that did not answer 200 OK (it is broken or redirects), or that was not crawled at all (another host, or beyond the crawl's depth or page limit). Pagination links that lead nowhere waste crawl budget and point crawlers at pages that do not exist.",
+    fix: "Point rel=\"next\" and rel=\"prev\" at the real, live URLs of the neighbouring pages in the series, and drop rel=\"next\" from the last page and rel=\"prev\" from the first. Make sure each page in the series is also reachable through a normal link, since Google no longer uses these hints for indexing.",
+    source: {
+      label: "Google Search Central: Pagination best practices",
+      url: "https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading",
+    },
+  },
   multipleH2: {
     title: "Multiple H2s",
     problem:

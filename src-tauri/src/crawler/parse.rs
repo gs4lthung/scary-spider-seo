@@ -23,6 +23,12 @@ static HREFLANG_SEL: LazyLock<Selector> =
 static BODY_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("body").unwrap());
 static A_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("a[href]").unwrap());
 static IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img[src]").unwrap());
+static HEAD_LINK_SEL: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("head link[href]").unwrap());
+
+/// Namespace of HTML elements; `<title>` inside inline SVG is in the SVG namespace and is
+/// an accessible name for the graphic, not a page title.
+const HTML_NS: &str = "http://www.w3.org/1999/xhtml";
 
 /// Most H1/H2 texts stored per page, so one pathological page cannot bloat the
 /// crawl event or the saved file. Counts (`h1_count`, `h2_count`) stay exact.
@@ -40,6 +46,16 @@ pub struct ParsedPage {
     pub h2_values: Vec<String>,
     pub h2_count: usize,
     pub heading_levels: Vec<u8>,
+    /// Number of HTML `<title>` elements in the head and body.
+    pub title_count: usize,
+    /// Number of `<meta name="description">` tags, empty ones included.
+    pub meta_description_count: usize,
+    /// Trimmed `content` of the first `<meta http-equiv="refresh">`.
+    pub meta_refresh: Option<String>,
+    /// First `<link rel="next">` in the head, resolved against the page URL.
+    pub pagination_next: Option<Url>,
+    /// First `<link rel="prev">` in the head, resolved against the page URL.
+    pub pagination_prev: Option<Url>,
     pub word_count: usize,
     pub canonical: Option<String>,
     pub canonical_count: usize,
@@ -244,13 +260,19 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         }
     }
 
-    let title = html
+    let html_titles: Vec<_> = html
         .select(&TITLE_SEL)
-        .next()
+        .filter(|e| &*e.value().name.ns == HTML_NS)
+        .collect();
+    let title_count = html_titles.len();
+    let title = html_titles
+        .first()
         .map(|e| e.text().collect::<String>().trim().to_string())
         .filter(|s| !s.is_empty());
 
     let mut meta_description = None;
+    let mut meta_description_count = 0;
+    let mut meta_refresh = None;
     let mut meta_robots = None;
     let mut viewport = None;
     let mut has_open_graph = false;
@@ -262,7 +284,20 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
             .attr("property")
             .unwrap_or("")
             .to_ascii_lowercase();
+        if meta_refresh.is_none()
+            && meta
+                .value()
+                .attr("http-equiv")
+                .is_some_and(|v| v.trim().eq_ignore_ascii_case("refresh"))
+        {
+            meta_refresh = meta
+                .value()
+                .attr("content")
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+        }
         if name == "description" {
+            meta_description_count += 1;
             meta_description = meta
                 .value()
                 .attr("content")
@@ -304,6 +339,25 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         .and_then(|e| e.value().attr("href"))
         .and_then(|href| resolve_url(base, href))
         .map(|u| u.to_string());
+
+    let mut pagination_next = None;
+    let mut pagination_prev = None;
+    for link in html.select(&HEAD_LINK_SEL) {
+        let rel = link.value().attr("rel");
+        let slot = if has_rel_value(rel, "next") {
+            &mut pagination_next
+        } else if has_rel_value(rel, "prev") {
+            &mut pagination_prev
+        } else {
+            continue;
+        };
+        if slot.is_none() {
+            *slot = link
+                .value()
+                .attr("href")
+                .and_then(|href| resolve_url(base, href));
+        }
+    }
 
     let lang = html
         .select(&HTML_TAG_SEL)
@@ -393,6 +447,11 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         h2_values,
         h2_count,
         heading_levels,
+        title_count,
+        meta_description_count,
+        meta_refresh,
+        pagination_next,
+        pagination_prev,
         word_count,
         canonical,
         canonical_count,
@@ -431,6 +490,73 @@ mod tests {
 
     fn strings(urls: &[Url]) -> Vec<String> {
         urls.iter().map(|u| u.to_string()).collect()
+    }
+
+    #[test]
+    fn counts_multiple_titles_and_descriptions() {
+        let page = parse(
+            r#"<html><head><title>First</title><title>Second</title>
+            <meta name="description" content="One">
+            <meta name="Description" content="Two">
+            <meta name="description" content="">
+            </head><body><title>In body</title>
+            <svg><title>Icon label</title></svg></body></html>"#,
+        );
+        assert_eq!(page.title_count, 3);
+        assert_eq!(page.title.as_deref(), Some("First"));
+        assert_eq!(page.meta_description_count, 3);
+
+        let single = parse(
+            r#"<head><title>Only</title><meta name="description" content="x"></head>
+            <body><svg><title>Icon</title></svg></body>"#,
+        );
+        assert_eq!(single.title_count, 1);
+        assert_eq!(single.meta_description_count, 1);
+
+        let none = parse("<p>nothing</p>");
+        assert_eq!(none.title_count, 0);
+        assert_eq!(none.meta_description_count, 0);
+    }
+
+    #[test]
+    fn extracts_meta_refresh_case_insensitively() {
+        let page = parse(r#"<head><meta HTTP-EQUIV="Refresh" content=" 5; url=/next "></head>"#);
+        assert_eq!(page.meta_refresh.as_deref(), Some("5; url=/next"));
+        let first_wins = parse(
+            r#"<head><meta http-equiv="refresh" content="0"><meta http-equiv="REFRESH" content="9"></head>"#,
+        );
+        assert_eq!(first_wins.meta_refresh.as_deref(), Some("0"));
+        assert_eq!(
+            parse(r#"<meta http-equiv="content-type" content="text/html">"#).meta_refresh,
+            None
+        );
+        assert_eq!(
+            parse(r#"<meta http-equiv="refresh" content="  ">"#).meta_refresh,
+            None
+        );
+    }
+
+    #[test]
+    fn resolves_pagination_links() {
+        let page = parse(
+            r#"<html><head>
+            <link rel="prev" href="/list?page=1#top">
+            <link rel="NEXT" href="page3">
+            <link rel="next" href="/ignored-second">
+            </head><body><a rel="next" href="/anchor-next">n</a></body></html>"#,
+        );
+        assert_eq!(
+            page.pagination_next.map(|u| u.to_string()).as_deref(),
+            Some("https://example.com/dir/page3")
+        );
+        assert_eq!(
+            page.pagination_prev.map(|u| u.to_string()).as_deref(),
+            Some("https://example.com/list?page=1")
+        );
+
+        let body_only = parse(r#"<body><p>x</p><link rel="next" href="/late"></body>"#);
+        assert!(body_only.pagination_next.is_none());
+        assert!(body_only.pagination_prev.is_none());
     }
 
     #[test]

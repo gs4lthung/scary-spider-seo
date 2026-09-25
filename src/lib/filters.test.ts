@@ -64,6 +64,11 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     h2Values: ["Subheading"],
     h2Count: 1,
     headingLevels: [1, 2],
+    titleCount: 1,
+    metaDescriptionCount: 1,
+    metaRefresh: null,
+    paginationNext: null,
+    paginationPrev: null,
     wordCount: 500,
     canonical: "https://example.com/",
     metaRobots: null,
@@ -792,6 +797,10 @@ describe("issue registry", () => {
       at("two-h2", { h2Values: ["One", "Two"], h2Count: 2, headingLevels: [1, 2, 2] }),
       at("long-h2", { h2Values: ["h".repeat(H2_MAX_LENGTH + 1)] }),
       at("skipped-level", { headingLevels: [1, 3] }),
+      at("two-titles", { titleCount: 2 }),
+      at("two-metas", { metaDescriptionCount: 2 }),
+      at("refresh", { metaRefresh: "0; url=/clean" }),
+      at("paged", { paginationNext: "https://example.com/gone" }),
       at("linked-redirect", {
         redirectChain: ["https://example.com/linked-redirect"],
         redirectUrl: "https://example.com/clean",
@@ -1195,5 +1204,71 @@ describe("heading outline issues", () => {
       emptyFilterContext(),
     );
     expect(missing).toEqual(expect.arrayContaining(["missingH2", "h2TooLong"]));
+  });
+});
+
+describe("multiple titles, meta descriptions, meta refresh and pagination issues", () => {
+  const run = (key: FilterKey, overrides: Partial<PageResult>, ctx: FilterContext = emptyFilterContext()) =>
+    filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("multipleTitles flags two or more title elements, not one or none", () => {
+    expect(run("multipleTitles", { titleCount: 2 })).toBe(true);
+    expect(run("multipleTitles", { titleCount: 1 })).toBe(false);
+    // A crawl saved before T2.2 has no count at all.
+    expect(run("multipleTitles", { titleCount: 0 })).toBe(false);
+  });
+
+  it("multipleMetaDescriptions flags two or more description tags, not one or none", () => {
+    expect(run("multipleMetaDescriptions", { metaDescriptionCount: 2 })).toBe(true);
+    expect(run("multipleMetaDescriptions", { metaDescriptionCount: 1 })).toBe(false);
+    expect(run("multipleMetaDescriptions", { metaDescriptionCount: 0, metaDescription: null })).toBe(false);
+  });
+
+  it("metaRefresh flags any meta refresh content, not its absence", () => {
+    expect(run("metaRefresh", { metaRefresh: "0; url=https://example.com/new" })).toBe(true);
+    expect(run("metaRefresh", { metaRefresh: "30" })).toBe(true);
+    expect(run("metaRefresh", { metaRefresh: null })).toBe(false);
+    expect(run("metaRefresh", { metaRefresh: "" })).toBe(false);
+  });
+
+  describe("paginationTargetError", () => {
+    const at = (path: string, overrides: Partial<PageResult> = {}) =>
+      makePage({ url: `https://example.com/${path}`, ...overrides });
+    const ok = at("page-2");
+    const gone = at("page-404", { status: 404 });
+    const moved = at("page-moved", { redirectChain: ["https://example.com/page-moved"] });
+    const ctx: FilterContext = { ...emptyFilterContext(), pageByUrl: getPageByUrlMap([ok, gone, moved]) };
+
+    it("flags a rel=next or rel=prev target that is non-200, redirected or not crawled", () => {
+      expect(run("paginationTargetError", { paginationNext: gone.url }, ctx)).toBe(true);
+      expect(run("paginationTargetError", { paginationPrev: gone.url }, ctx)).toBe(true);
+      expect(run("paginationTargetError", { paginationNext: moved.url }, ctx)).toBe(true);
+      expect(run("paginationTargetError", { paginationNext: "https://example.com/never-crawled" }, ctx)).toBe(true);
+      expect(run("paginationTargetError", { paginationNext: ok.url, paginationPrev: gone.url }, ctx)).toBe(true);
+    });
+
+    it("does not flag crawled 200 targets or pages without pagination", () => {
+      expect(run("paginationTargetError", { paginationNext: ok.url, paginationPrev: ok.url }, ctx)).toBe(false);
+      expect(run("paginationTargetError", { paginationNext: null, paginationPrev: null }, ctx)).toBe(false);
+    });
+  });
+
+  it("the new issues appear in getPageIssueKeys", () => {
+    const keys = getPageIssueKeys(
+      makePage({
+        titleCount: 2,
+        metaDescriptionCount: 3,
+        metaRefresh: "5",
+        paginationNext: "https://example.com/missing",
+      }),
+      emptyFilterContext(),
+    );
+    expect(keys).toEqual(
+      expect.arrayContaining(["multipleTitles", "multipleMetaDescriptions", "metaRefresh", "paginationTargetError"]),
+    );
+    const clean = getPageIssueKeys(makePage(), emptyFilterContext());
+    for (const key of ["multipleTitles", "multipleMetaDescriptions", "metaRefresh", "paginationTargetError"] as const) {
+      expect(clean).not.toContain(key);
+    }
   });
 });

@@ -358,6 +358,22 @@ function canonicalTarget(p: PageResult, ctx: FilterContext): PageResult | undefi
   return ctx.pageByUrl.get(p.canonical);
 }
 
+/** The page's rel="next" and rel="prev" targets that are set. */
+function paginationTargets(p: PageResult): string[] {
+  const targets: string[] = [];
+  if (p.paginationNext) targets.push(p.paginationNext);
+  if (p.paginationPrev) targets.push(p.paginationPrev);
+  return targets;
+}
+
+/** A pagination target is in error when it was never crawled (outside the crawl's host,
+ * depth or page limits) or did not answer a plain 200: an error status, or a redirect
+ * (the crawler stores the final status on a redirected URL, so the chain marks it). */
+function isPaginationTargetError(url: string, ctx: FilterContext): boolean {
+  const target = ctx.pageByUrl.get(url);
+  return target === undefined || target.status !== 200 || target.redirectChain.length > 0;
+}
+
 const is2xx = (p: PageResult) => p.status !== null && p.status >= 200 && p.status < 300;
 
 const PERCENT_ESCAPE = /%[0-9A-Fa-f]{2}/g;
@@ -432,6 +448,14 @@ export const ISSUE_DEFS = [
     },
   }),
   pageIssue({
+    key: "multipleTitles",
+    label: "Multiple titles",
+    group: "content",
+    tone: "warn",
+    section: "Titles",
+    test: (p) => p.titleCount > 1,
+  }),
+  pageIssue({
     key: "missingMeta",
     label: "Missing meta desc.",
     group: "content",
@@ -472,6 +496,14 @@ export const ISSUE_DEFS = [
     group: "content",
     section: "Content",
     test: (p) => !!p.metaDescription && getMetaPixelWidth(p) < META_MIN_PIXELS,
+  }),
+  pageIssue({
+    key: "multipleMetaDescriptions",
+    label: "Multiple meta desc.",
+    group: "content",
+    tone: "warn",
+    section: "Content",
+    test: (p) => p.metaDescriptionCount > 1,
   }),
   pageIssue({
     key: "h1Issues",
@@ -699,6 +731,22 @@ export const ISSUE_DEFS = [
     // `status` is the final response status after following the chain (a capped loop keeps
     // its last 3xx, which also never resolves to a 200).
     test: (p) => p.redirectChain.length > 0 && p.status !== 200,
+  }),
+  pageIssue({
+    key: "metaRefresh",
+    label: "Meta refresh",
+    group: "indexing",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => !!p.metaRefresh,
+  }),
+  pageIssue({
+    key: "paginationTargetError",
+    label: "Pagination to non-200 or uncrawled URL",
+    group: "links",
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p, ctx) => paginationTargets(p).some((url) => isPaginationTargetError(url, ctx)),
   }),
   pageIssue({
     key: "orphanPage",
