@@ -6,6 +6,7 @@ import {
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
   createDuplicateTracker,
+  emptyFilterContext,
   filterPages,
   filterResources,
   filterTab,
@@ -174,24 +175,8 @@ describe("filterTab", () => {
 });
 
 describe("filterPages", () => {
-  const emptySets = {
-    duplicateTitles: new Set<string>(),
-    duplicateContent: new Set<string>(),
-    duplicateMeta: new Set<string>(),
-    canonicalStatusMap: new Map<string, number | null>(),
-    linkedUrls: new Set<string>(),
-  };
-
   function run(pages: PageResult[], filter: Parameters<typeof filterPages>[1]) {
-    return filterPages(
-      pages,
-      filter,
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    return filterPages(pages, filter, emptyFilterContext());
   }
 
   it("returns everything for 'all'", () => {
@@ -213,15 +198,7 @@ describe("filterPages", () => {
 
   it("flags duplicate titles using the provided set", () => {
     const pages = [makePage({ title: "Dup" }), makePage({ title: "Solo" })];
-    const result = filterPages(
-      pages,
-      "duplicateTitles",
-      new Set(["Dup"]),
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "duplicateTitles", { ...emptyFilterContext(), duplicateTitles: new Set(["Dup"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -290,15 +267,7 @@ describe("filterPages", () => {
 
   it("flags duplicate content using the provided set", () => {
     const pages = [makePage({ contentHash: "dup" }), makePage({ contentHash: "solo" })];
-    const result = filterPages(
-      pages,
-      "duplicateContent",
-      emptySets.duplicateTitles,
-      new Set(["dup"]),
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "duplicateContent", { ...emptyFilterContext(), duplicateContent: new Set(["dup"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -318,15 +287,7 @@ describe("filterPages", () => {
 
   it("flags duplicate meta descriptions using the provided set", () => {
     const pages = [makePage({ metaDescription: "dup" }), makePage({ metaDescription: "solo" })];
-    const result = filterPages(
-      pages,
-      "duplicateMeta",
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      new Set(["dup"]),
-      emptySets.canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "duplicateMeta", { ...emptyFilterContext(), duplicateMeta: new Set(["dup"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -348,15 +309,7 @@ describe("filterPages", () => {
       // canonical target that was never crawled is not flagged (we can't know its status)
       makePage({ url: "https://example.com/d", canonical: "https://example.com/never-crawled" }),
     ];
-    const result = filterPages(
-      pages,
-      "brokenCanonicalTarget",
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      canonicalStatusMap,
-      emptySets.linkedUrls,
-    );
+    const result = filterPages(pages, "brokenCanonicalTarget", { ...emptyFilterContext(), canonicalStatusMap });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -390,15 +343,7 @@ describe("filterPages", () => {
       makePage({ url: "https://example.com/linked", discoveredViaSitemap: true }),
       makePage({ url: "https://example.com/not-in-sitemap", discoveredViaSitemap: false }),
     ];
-    const result = filterPages(
-      pages,
-      "orphanPage",
-      emptySets.duplicateTitles,
-      emptySets.duplicateContent,
-      emptySets.duplicateMeta,
-      emptySets.canonicalStatusMap,
-      new Set(["https://example.com/linked"]),
-    );
+    const result = filterPages(pages, "orphanPage", { ...emptyFilterContext(), linkedUrls: new Set(["https://example.com/linked"]) });
     expect(result).toEqual([pages[0]]);
   });
 
@@ -452,13 +397,13 @@ describe("getPageIssueKeys", () => {
     // hreflangValues/discoveredViaSitemap need explicit non-default values here since makePage()'s
     // defaults (empty hreflang, discovered via sitemap) are themselves flagged issues otherwise.
     const page = makePage({ hreflangValues: ["en"], discoveredViaSitemap: false });
-    const keys = getPageIssueKeys(page, new Set(), new Set(), new Set(), new Map(), new Set());
+    const keys = getPageIssueKeys(page, emptyFilterContext());
     expect(keys).toEqual([]);
   });
 
   it("returns every applicable issue key for a page with many problems", () => {
     const page = makePage({ status: 404, title: null, metaDescription: null, h1Count: 0 });
-    const keys = getPageIssueKeys(page, new Set(), new Set(), new Set(), new Map(), new Set());
+    const keys = getPageIssueKeys(page, emptyFilterContext());
     expect(keys).toEqual(expect.arrayContaining(["4xx5xx", "missingTitle", "missingMeta", "h1Issues"]));
   });
 
@@ -467,9 +412,9 @@ describe("getPageIssueKeys", () => {
     // re-deriving the "what counts as an issue" rules a second time in this test.
     const pages = [makePage(), makePage({ status: 404, title: null, canonicalCount: 2, insecureLinkCount: 1 })];
     for (const page of pages) {
-      const keys = getPageIssueKeys(page, new Set(), new Set(), new Set(), new Map(), new Set());
+      const keys = getPageIssueKeys(page, emptyFilterContext());
       for (const key of keys) {
-        expect(filterPages([page], key, new Set(), new Set(), new Set(), new Map(), new Set())).toHaveLength(1);
+        expect(filterPages([page], key, emptyFilterContext())).toHaveLength(1);
       }
     }
   });
