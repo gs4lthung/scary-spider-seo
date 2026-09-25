@@ -88,6 +88,7 @@ interface PageColumnsContext {
   linkedUrls: Set<string>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
 function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[] {
   // The Issues column's accessorFn runs for every row on every table rebuild (react-table
   // builds the full row model regardless of virtualization), and its cell renderer runs
@@ -410,6 +411,7 @@ function buildPageColumns(ctx: PageColumnsContext): ColumnDef<PageResult, any>[]
   ];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
 const resourceColumns: ColumnDef<ResourceResult, any>[] = [
   {
     accessorKey: "url",
