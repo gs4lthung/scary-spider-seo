@@ -100,6 +100,21 @@ pub struct PageResult {
     /// capped at `parse::MAX_HEADING_LEVELS`.
     #[serde(default)]
     pub heading_levels: Vec<u8>,
+    /// Number of HTML `<title>` elements in the head and body.
+    #[serde(default)]
+    pub title_count: usize,
+    /// Number of `<meta name="description">` tags, empty ones included.
+    #[serde(default)]
+    pub meta_description_count: usize,
+    /// Trimmed `content` of the first `<meta http-equiv="refresh">`.
+    #[serde(default)]
+    pub meta_refresh: Option<String>,
+    /// Absolute URL of the first `<link rel="next">` in the head.
+    #[serde(default)]
+    pub pagination_next: Option<String>,
+    /// Absolute URL of the first `<link rel="prev">` in the head.
+    #[serde(default)]
+    pub pagination_prev: Option<String>,
     #[serde(default)]
     pub word_count: usize,
     #[serde(default)]
@@ -279,5 +294,10 @@ mod tests {
         assert!(home.h2_values.is_empty());
         assert_eq!(home.h2_count, 0);
         assert!(home.heading_levels.is_empty());
+        assert_eq!(home.title_count, 0);
+        assert_eq!(home.meta_description_count, 0);
+        assert_eq!(home.meta_refresh, None);
+        assert_eq!(home.pagination_next, None);
+        assert_eq!(home.pagination_prev, None);
     }
 }

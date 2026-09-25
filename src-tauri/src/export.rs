@@ -24,6 +24,11 @@ pub fn export_pages_csv(
         "H2 Values",
         "H2 Count",
         "Heading Levels",
+        "Title Count",
+        "Meta Description Count",
+        "Meta Refresh",
+        "Pagination Next",
+        "Pagination Prev",
         "Word Count",
         "Canonical",
         "Meta Robots",
@@ -80,6 +85,11 @@ pub fn export_pages_csv(
                 .map(|l| format!("H{l}"))
                 .collect::<Vec<_>>()
                 .join(" > "),
+            p.title_count.to_string(),
+            p.meta_description_count.to_string(),
+            p.meta_refresh.clone().unwrap_or_default(),
+            p.pagination_next.clone().unwrap_or_default(),
+            p.pagination_prev.clone().unwrap_or_default(),
             p.word_count.to_string(),
             p.canonical.clone().unwrap_or_default(),
             p.meta_robots.clone().unwrap_or_default(),

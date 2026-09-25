@@ -203,9 +203,12 @@ async fn crawls_every_linked_page_exactly_once() {
         "/headings.html",
         "/loop-a",
         "/missing-title.html",
+        "/multi-meta.html",
         "/nofollow.html",
         "/noindex.html",
         "/old-page",
+        "/paged-1.html",
+        "/paged-2.html",
         "/private/secret.html",
         "/redirect-to-gone",
         "/title-equals-h1.html",
@@ -238,7 +241,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 19);
+    assert_eq!(home.internal_link_count, 21);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -315,6 +318,47 @@ async fn headings_fixture() {
 
     let images = out.page(&site.url("/h1-and-images.html"));
     assert_eq!(images.h1_values.len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn multi_meta_fixture() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signals for the frontend's multipleTitles, multipleMetaDescriptions and
+    // metaRefresh checks.
+    let page = out.page(&site.url("/multi-meta.html"));
+    assert_eq!(page.status, Some(200));
+    assert_eq!(page.title_count, 2);
+    assert_eq!(page.title.as_deref(), Some("Multiple Meta Fixture"));
+    assert_eq!(page.meta_description_count, 2);
+    assert_eq!(page.meta_refresh.as_deref(), Some("30; url=/"));
+
+    let home = out.page(&site.url("/"));
+    assert_eq!(home.title_count, 1);
+    assert_eq!(home.meta_description_count, 1);
+    assert_eq!(home.meta_refresh, None);
+    assert_eq!(home.pagination_next, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pagination_target_is_crawled() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signals for the frontend's paginationTargetError check: the rel=next target is
+    // linked from no anchor, so it is only crawled because pagination links are queued.
+    let paged = out.page(&site.url("/paged-1.html"));
+    assert_eq!(
+        paged.pagination_next.as_deref(),
+        Some(site.url("/paged-2.html").as_str())
+    );
+    assert_eq!(
+        paged.pagination_prev.as_deref(),
+        Some(site.url("/").as_str())
+    );
+    assert_eq!(paged.internal_link_count, 0);
+    assert_eq!(out.page(&site.url("/paged-2.html")).status, Some(404));
 }
 
 #[tokio::test(flavor = "multi_thread")]
