@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 2,
     "startedAt": "2026-09-25T19:43:46.001Z",
-    "lastProgressAt": "2026-09-25T20:00:01.383Z"
+    "lastProgressAt": "2026-09-25T20:16:21.471Z"
   },
   "tasks": {
     "T1.1": {
@@ -107,10 +107,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.940Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "ebbce9a",
+      "updatedAt": "2026-09-25T20:16:21.470Z"
     },
     "T2.3": {
       "title": "Internal outlinks with anchor text and rel attributes",
