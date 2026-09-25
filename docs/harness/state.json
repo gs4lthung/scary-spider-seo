@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 1,
     "startedAt": "2026-09-25T18:11:55.142Z",
-    "lastProgressAt": "2026-09-25T19:19:30.116Z"
+    "lastProgressAt": "2026-09-25T19:28:26.406Z"
   },
   "tasks": {
     "T1.1": {
@@ -71,10 +71,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.857Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "49e84d5",
+      "updatedAt": "2026-09-25T19:28:26.405Z"
     },
     "T1.7": {
       "title": "Bulk issues export",
