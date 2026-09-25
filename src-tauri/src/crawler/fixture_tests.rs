@@ -192,6 +192,8 @@ async fn crawls_every_linked_page_exactly_once() {
         "/URL_Page.html?ref=nav",
         "/a//b.html",
         "/bad-jsonld.html",
+        "/canonical-to-noindex.html",
+        "/canonical-to-redirect.html",
         "/canonicalised.html",
         "/dup-a.html",
         "/dup-b.html",
@@ -199,6 +201,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/h1-and-images.html",
         "/loop-a",
         "/missing-title.html",
+        "/nofollow.html",
         "/noindex.html",
         "/old-page",
         "/private/secret.html",
@@ -232,7 +235,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 14);
+    assert_eq!(home.internal_link_count, 17);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -292,6 +295,35 @@ async fn title_equals_h1_fixture() {
         "{}",
         page.meta_description_length
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn directive_and_canonical_fixtures() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signals for the frontend's directive and canonical checks.
+    let nofollow = out.page(&site.url("/nofollow.html"));
+    assert_eq!(nofollow.meta_robots.as_deref(), Some("nofollow"));
+    assert_eq!(nofollow.indexability, "Indexable");
+
+    let to_noindex = out.page(&site.url("/canonical-to-noindex.html"));
+    assert_eq!(
+        to_noindex.canonical.as_deref(),
+        Some(site.url("/noindex.html").as_str())
+    );
+    assert_eq!(to_noindex.indexability, "Canonicalised");
+    assert_eq!(
+        out.page(&site.url("/noindex.html")).indexability,
+        "Non-Indexable (noindex)"
+    );
+
+    let to_redirect = out.page(&site.url("/canonical-to-redirect.html"));
+    assert_eq!(
+        to_redirect.canonical.as_deref(),
+        Some(site.url("/old-page").as_str())
+    );
+    assert!(out.page(&site.url("/old-page")).redirect_url.is_some());
 }
 
 #[tokio::test(flavor = "multi_thread")]
