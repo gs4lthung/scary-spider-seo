@@ -33,11 +33,13 @@ import {
   type CrawlProgress,
   type CrawlSnapshot,
   type CrawlSummary,
+  type CustomSearchRule,
   type PageResult,
   type ResourceResult,
   type SiteInfo,
 } from "./types";
 import {
+  type CustomSearchStat,
   type FilterContext,
   type FilterKey,
   type IssueKey,
@@ -47,16 +49,19 @@ import {
   TITLE_MAX_PIXELS,
   TITLE_MIN_LENGTH,
   TITLE_MIN_PIXELS,
+  createCustomSearchTracker,
   createDuplicateTracker,
   firstH1,
   firstH2,
   filterPages,
   filterResources,
   filterTab,
+  getCustomSearchStats,
   getMetaPixelWidth,
   getPageIssueKeys,
   getTitlePixelWidth,
   getResourceIssueKeys,
+  ingestCustomSearchPage,
   ingestDuplicateValue,
   ingestNon200LinkSources,
   createHreflangTracker,
@@ -79,6 +84,7 @@ import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
 import { MAX_LIST_URLS, parseUrlList, withScheme } from "./lib/url";
+import { activeCustomSearches } from "./lib/customSearch";
 
 type Tab = "overview" | "pages" | "resources" | "sitemap";
 
@@ -142,8 +148,18 @@ function linkCell(value: string | null | undefined) {
   return <LinkCell value={value} className="block w-full truncate" />;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
-function buildPageColumns(ctx: FilterContext, linkScores: Map<string, number>): ColumnDef<PageResult, any>[] {
+/** A custom search rule shown as a Pages table column (see `customSearchColumns` in `App`). */
+interface CustomSearchColumn {
+  id: string;
+  label: string;
+}
+
+function buildPageColumns(
+  ctx: FilterContext,
+  linkScores: Map<string, number>,
+  customSearches: readonly CustomSearchColumn[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
+): ColumnDef<PageResult, any>[] {
   // The Issues column's accessorFn runs for every row on every table rebuild (react-table
   // builds the full row model regardless of virtualization), and its cell renderer runs
   // again for visible rows — without this cache that's getPageIssueKeys' 26 sub-filters
@@ -507,6 +523,17 @@ function buildPageColumns(ctx: FilterContext, linkScores: Map<string, number>): 
       meta: { description: "Number of mobile usability violations (content width, font size, tap targets) detected on the page." },
       cell: (c) => flagCell((c.getValue() as unknown[]).length, (c.getValue() as unknown[]).length > 0),
     },
+    // One column per custom search rule: its match count, blank where the rule never ran
+    // (non-HTML or blocked URLs, pages crawled before the rule existed).
+    ...customSearches.map(
+      ({ id, label }): ColumnDef<PageResult, number | null> => ({
+        id: `custom:${id}`,
+        header: label,
+        size: 140,
+        meta: { description: `Custom search "${label}": number of matches on the page.` },
+        accessorFn: (page) => page.customSearchCounts[id] ?? null,
+      }),
+    ),
   ];
 }
 
@@ -582,6 +609,8 @@ const resourceColumns: ColumnDef<ResourceResult, any>[] = [
 interface CrawlSource {
   startUrl: string;
   listMode: boolean;
+  /** Custom search rules the crawl ran with; empty for a loaded saved crawl, which does not store them. */
+  customSearches: CustomSearchRule[];
 }
 
 function App() {
@@ -610,7 +639,11 @@ function App() {
   // Where the results on screen came from: the start URL they are saved under (the first
   // listed URL in list mode) and whether they are a list crawl. Kept apart from `config`
   // so a list crawl never overwrites the Spider start URL box.
-  const [shownSource, setShownSource] = useState<CrawlSource>({ startUrl: "", listMode: false });
+  const [shownSource, setShownSource] = useState<CrawlSource>({
+    startUrl: "",
+    listMode: false,
+    customSearches: [],
+  });
   const pagesBufRef = useRef<PageResult[]>([]);
   const resourcesBufRef = useRef<ResourceResult[]>([]);
   // Backs the duplicate-title/meta/content and canonical-status derivations below with
@@ -629,6 +662,7 @@ function App() {
   const non200LinkSourcesRef = useRef(new Set<string>());
   const hreflangTrackerRef = useRef(createHreflangTracker());
   const nearDuplicateTrackerRef = useRef(createNearDuplicateTracker());
+  const customSearchTrackerRef = useRef(createCustomSearchTracker());
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -644,6 +678,7 @@ function App() {
     non200LinkSourcesRef.current = new Set();
     hreflangTrackerRef.current = createHreflangTracker();
     nearDuplicateTrackerRef.current = createNearDuplicateTracker();
+    customSearchTrackerRef.current = createCustomSearchTracker();
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -794,7 +829,8 @@ function App() {
     // mode the first listed URL stands in as the start URL (site info, saved crawls).
     const startUrl = listMode ? listUrls[0] : withScheme(config.startUrl, preferHttps);
     // Only sent to the backend: `config` keeps the Spider box's URL and no list.
-    const nextConfig = { ...config, startUrl, listUrls };
+    const customSearches = activeCustomSearches(config.customSearches);
+    const nextConfig = { ...config, startUrl, listUrls, customSearches };
 
     // Continuing a crawl stopped with URLs still queued (the backend kept its frontier
     // for this exact start URL — see AppState.resume_state): keep the results gathered
@@ -808,7 +844,7 @@ function App() {
     // arrive before it does; restored below if the backend rejects the start.
     const previous = shownCrawlRef.current;
     const previousSource = shownSource;
-    setShownSource({ startUrl, listMode });
+    setShownSource({ startUrl, listMode, customSearches });
     if (!continuing) {
       setPages([]);
       setResources([]);
@@ -914,7 +950,7 @@ function App() {
       setFilter("all");
       setConfig((prev) => ({ ...prev, startUrl: snapshot.startUrl }));
       // Saved crawls don't record their mode; they are classified as spider crawls.
-      setShownSource({ startUrl: snapshot.startUrl, listMode: false });
+      setShownSource({ startUrl: snapshot.startUrl, listMode: false, customSearches: [] });
     } catch (err) {
       toast.error(String(err));
     }
@@ -939,6 +975,7 @@ function App() {
     hreflangMissingReturn,
     hreflangTargetError,
     nearDuplicates,
+    customSearchTracker,
   } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
@@ -959,6 +996,7 @@ function App() {
       ingestNon200LinkSources(non200LinkSourcesRef.current, linkGraphRef.current, pageByUrlRef.current, p);
       ingestHreflangPage(hreflangTrackerRef.current, pageByUrlRef.current, p);
       ingestNearDuplicatePage(nearDuplicateTrackerRef.current, p);
+      ingestCustomSearchPage(customSearchTrackerRef.current, p);
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -979,6 +1017,10 @@ function App() {
       hreflangTargetError: new Set(hreflangTrackerRef.current.targetError),
       // O(pages) snapshot of the incrementally built clusters; no pairwise rescan.
       nearDuplicates: getNearDuplicateClusters(nearDuplicateTrackerRef.current),
+      // At most one entry per rule (10), so a copy per flush is cheap.
+      customSearchTracker: {
+        counts: new Map([...customSearchTrackerRef.current.counts].map(([id, c]) => [id, { ...c }])),
+      },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -1056,7 +1098,23 @@ function App() {
     [pages, resources, filterContext],
   );
 
-  const pageColumns = useMemo(() => buildPageColumns(filterContext, linkScores), [filterContext, linkScores]);
+  // Rules of the crawl on screen, plus rule ids only found on its pages (a loaded crawl),
+  // labelled from the options sheet when it still has a rule with that id.
+  const customSearchStats = useMemo<CustomSearchStat[]>(
+    () => getCustomSearchStats(customSearchTracker, shownSource.customSearches, config.customSearches),
+    [customSearchTracker, shownSource.customSearches, config.customSearches],
+  );
+  // Keyed on ids and labels only, so the columns are not rebuilt on every count change.
+  const customSearchColumnsKey = JSON.stringify(customSearchStats.map((s) => [s.id, s.label]));
+  const customSearchColumns = useMemo<CustomSearchColumn[]>(
+    () => customSearchStats.map(({ id, label }) => ({ id, label })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputed only when ids or labels change
+    [customSearchColumnsKey],
+  );
+  const pageColumns = useMemo(
+    () => buildPageColumns(filterContext, linkScores, customSearchColumns),
+    [filterContext, linkScores, customSearchColumns],
+  );
 
   const selectedPageLinks = useMemo(
     () =>
@@ -1227,6 +1285,7 @@ function App() {
             paused={paused}
             activeFilter={filter}
             onSelectFilter={handleSelectFilter}
+            customSearches={customSearchStats}
           />
         </TabsContent>
 
@@ -1282,6 +1341,10 @@ function App() {
             { label: "H1", value: selectedPage.h1 },
             { label: "H1 Count", value: selectedPage.h1Count },
             { label: "Word Count", value: selectedPage.wordCount },
+            ...customSearchColumns.map(({ id, label }) => ({
+              label: `Custom search: ${label}`,
+              value: selectedPage.customSearchCounts[id] ?? null,
+            })),
             { label: "Canonical", value: selectedPage.canonical },
             { label: "Meta Robots", value: selectedPage.metaRobots },
             { label: "Content Type", value: selectedPage.contentType },

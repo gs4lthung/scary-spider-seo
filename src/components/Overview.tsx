@@ -4,12 +4,15 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { cn } from "@/lib/utils";
 import type { CrawlProgress, PageResult, ResourceResult } from "../types";
 import {
+  type CustomSearchStat,
   type FilterContext,
   type FilterKey,
   type IssueKey,
   type OverviewSection,
   ISSUE_DEFS,
   countIssues,
+  customSearchFilterKey,
+  parseCustomSearchFilter,
 } from "../lib/filters";
 
 interface OverviewProps {
@@ -23,7 +26,12 @@ interface OverviewProps {
   paused: boolean;
   activeFilter: FilterKey;
   onSelectFilter: (filter: FilterKey) => void;
+  /** Custom search rules of the results on screen with their page counts, from App's
+   * incremental tracker (no per-render rescan of every page). */
+  customSearches?: CustomSearchStat[];
 }
+
+const CUSTOM_SEARCH_GROUP = "Custom search";
 
 interface StatDef {
   key: IssueKey;
@@ -89,6 +97,7 @@ export function Overview({
   paused,
   activeFilter,
   onSelectFilter,
+  customSearches = [],
 }: OverviewProps) {
   const byStatus = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -104,7 +113,10 @@ export function Overview({
   const totalIssues = SECTIONS.flatMap((g) => g.items).reduce((sum, i) => sum + issueCounts[i.key], 0);
 
   const activeGroupTitle = useMemo(
-    () => SECTIONS.find((g) => g.items.some((i) => i.key === activeFilter))?.title,
+    () =>
+      parseCustomSearchFilter(activeFilter)
+        ? CUSTOM_SEARCH_GROUP
+        : SECTIONS.find((g) => g.items.some((i) => i.key === activeFilter))?.title,
     [activeFilter],
   );
 
@@ -184,6 +196,37 @@ export function Overview({
             </AccordionItem>
           );
         })}
+        {customSearches.length > 0 && (
+          // Informational, not issues: these counts are not added to the issue total.
+          <AccordionItem value={CUSTOM_SEARCH_GROUP}>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                {CUSTOM_SEARCH_GROUP}
+                <Badge variant="outline" className="h-auto min-w-9 justify-center py-0 tabular-nums">
+                  {customSearches.length}
+                </Badge>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="flex flex-wrap gap-2">
+                {customSearches.flatMap((rule) =>
+                  (["contains", "missing"] as const).map((mode) => {
+                    const key = customSearchFilterKey(rule.id, mode);
+                    return (
+                      <StatTile
+                        key={key}
+                        active={activeFilter === key}
+                        value={mode === "contains" ? rule.contains : rule.missing}
+                        label={`${rule.label}: ${mode === "contains" ? "contains" : "does not contain"}`}
+                        onClick={() => onSelectFilter(key)}
+                      />
+                    );
+                  }),
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
       </Accordion>
     </div>
   );
