@@ -35,12 +35,24 @@ dependency), falling back to the UI thread only when a worker cannot be created.
 incrementally, from the existing one-shot helpers. A saved crawl classifies as a spider crawl
 (`listMode: false`, as `handleOpenCrawl` already does), and a URL counts as linked when any crawled
 page's `outlinks` points at it. Both crawls use the same builder, so their counts are comparable.
-Crawls saved before a signal existed count zero for issues built on it; the delta then reflects
-the new build's extra coverage, which is accurate for the files as saved.
+Crawls saved before a signal existed load
+with its default (empty, 0 or false), which would inflate or hide counts: no `outlinks` makes
+every sitemap page an orphan, no heading outline hides H2 issues. `SIGNAL_FAMILIES` in
+`compareCrawls.ts` groups the M2 signals (heading outline, title/meta counts and pagination,
+outlinks, security headers and mixed content, hreflang links, image dimensions and sizes, content
+simhash) with a per-crawl "captured" test (some page shows the signal, or nothing in the crawl
+could have produced it) and the issue keys that depend on each. When either crawl lacks a
+family, its issue deltas carry `comparable: false`: the view shows the change as "n/a" and
+leaves them out of "Issue counts changed". The heuristics are conservative: a current crawl that
+genuinely has none of a signal where the site had the precondition may also read as n/a.
 
 **Host mapping.** The mapping is applied to both crawls (and to canonical URLs) so it works
 whichever crawl is staging. Inputs accept a bare host, a host with port, or a full URL; each is
 reduced to the `URL.host` form, lowercase. An empty or identical pair means no mapping.
+
+**Collisions.** When two pages of one crawl normalize to the same URL (fragment variants, or a
+mapped host that the crawl also contains), the first is kept and the rest are counted in
+`collisions`, which the view reports under the summary.
 
 **Changes.** Text fields compare after treating empty and missing as the same, so an absent value
 in an older crawl is not a change. Word count changes when `|after - before| > 0.2 * before`
@@ -49,7 +61,11 @@ changed URLs are shown one row per changed field. Issue deltas list every regist
 order; the view shows only changed ones by default with a toggle for all.
 
 **View.** The Compare tab is force-mounted so chosen files and results survive tab switches; it
-keeps its own state and never calls `load_crawl` or touches `App.tsx` crawl state. Tables reuse the
+keeps its own state and never calls `load_crawl` or touches `App.tsx` crawl state. It keeps only
+each file's pages, resources, start URL and save time, and Clear drops both. Each result is tagged
+with the ids of the two picks and the host mapping it was computed from and is shown only while
+they match; picking, swapping or clearing also drops any comparison still running, and the
+pickers are disabled while one runs. Tables reuse the
 virtualized `DataTable`, and crawled values render as React text only.
 
 ## Consequences
