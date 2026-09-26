@@ -47,6 +47,9 @@ import {
   isNonDescriptiveAnchor,
   ingestDuplicateValue,
   ingestNon200LinkSources,
+  createHreflangTracker,
+  getHreflangTracker,
+  ingestHreflangPage,
   parseRobotsDirectives,
   searchPages,
   searchResources,
@@ -99,6 +102,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     missingAltCount: 0,
     lang: "en",
     hreflangValues: [],
+    hreflangLinks: [],
     internalNofollowCount: 0,
     outlinks: [],
     textRatioPct: 20,
@@ -819,6 +823,15 @@ describe("issue registry", () => {
     const pages = [
       at("clean", { hreflangValues: ["en"], discoveredViaSitemap: false, contentHash: "unique", title: "Unique" }),
       at("gone", { status: 404 }),
+      at("hreflang-en", {
+        hreflangLinks: [
+          { lang: "en", href: "https://example.com/hreflang-en" },
+          { lang: "fr", href: "https://example.com/hreflang-fr" },
+          { lang: "de", href: "https://example.com/clean" },
+          { lang: "it", href: "https://example.com/gone" },
+        ],
+      }),
+      at("hreflang-fr", { hreflangLinks: [{ lang: "fr-XX", href: "https://example.com/hreflang-en" }] }),
       at("no-title", { title: null, titleLength: 0 }),
       at("short-title", { title: "Short", titleLength: 5 }),
       at("long-title", { titleLength: TITLE_MAX_LENGTH + 20 }),
@@ -907,6 +920,7 @@ describe("issue registry", () => {
       makeResource({ url: "https://example.com/timeout.png", status: null, error: "timeout" }),
       makeResource({ url: "http://example.com/insecure.png", isInsecure: true }),
     ];
+    const hreflang = getHreflangTracker(pages);
     const ctx: FilterContext = {
       duplicateTitles: getDuplicateTitleSet(pages),
       duplicateContent: getDuplicateContentSet(pages),
@@ -919,6 +933,8 @@ describe("issue registry", () => {
       sitemapUsed: getSitemapUsed(pages),
       linkGraph: buildLinkGraph(pages),
       non200LinkSources: getNon200LinkSourceSet(pages),
+      hreflangMissingReturn: hreflang.missingReturn,
+      hreflangTargetError: hreflang.targetError,
     };
     return { pages, resources, ctx };
   }
@@ -1501,5 +1517,129 @@ describe("link analysis issues", () => {
     for (const key of ["nonDescriptiveAnchors", "emptyAnchors", "singleInlink", "linksToErrorPages"] as const) {
       expect(clean).not.toContain(key);
     }
+  });
+});
+
+describe("hreflang issues", () => {
+  const url = (path: string) => `https://example.com/${path}`;
+  const link = (lang: string, path: string) => ({ lang, href: url(path) });
+  const page = (path: string, overrides: Partial<PageResult> = {}) => makePage({ url: url(path), ...overrides });
+  const ctxFor = (pages: PageResult[]): FilterContext => {
+    const tracker = getHreflangTracker(pages);
+    return {
+      ...emptyFilterContext(),
+      hreflangMissingReturn: tracker.missingReturn,
+      hreflangTargetError: tracker.targetError,
+    };
+  };
+  const flagged = (pages: PageResult[], key: FilterKey) => filterPages(pages, key, ctxFor(pages)).map((p) => p.url);
+
+  it("hreflangMissingReturn flags a page whose crawled target does not annotate it back", () => {
+    const en = page("en", { hreflangLinks: [link("en", "en"), link("fr", "fr")] });
+    const fr = page("fr", { hreflangLinks: [link("fr", "fr")] });
+    expect(flagged([en, fr], "hreflangMissingReturn")).toEqual([url("en")]);
+
+    const frBack = page("fr", { hreflangLinks: [link("fr", "fr"), link("en", "en")] });
+    expect(flagged([en, frBack], "hreflangMissingReturn")).toEqual([]);
+  });
+
+  it("hreflangMissingReturn only checks targets that were crawled", () => {
+    const en = page("en", { hreflangLinks: [link("en", "en"), { lang: "fr", href: "https://example.fr/" }] });
+    expect(flagged([en], "hreflangMissingReturn")).toEqual([]);
+  });
+
+  it("skips a redirected page as a hreflang source", () => {
+    // Stored under the requested URL, while its hrefs resolve against the page it landed on.
+    const redirected = page("old-en", {
+      redirectChain: [url("old-en")],
+      hreflangLinks: [link("en", "en"), link("fr", "fr")],
+    });
+    const fr = page("fr", { hreflangLinks: [link("fr", "fr")] });
+    for (const key of [
+      "hreflangMissingSelf",
+      "hreflangMissingReturn",
+      "hreflangMissingXDefault",
+      "hreflangTargetError",
+    ] as const) {
+      expect(flagged([redirected, fr], key), key).not.toContain(url("old-en"));
+    }
+  });
+
+  it("does not park off-host hreflang targets", () => {
+    const tracker = createHreflangTracker();
+    const en = page("en", { hreflangLinks: [link("en", "en"), { lang: "fr", href: "https://example.fr/" }, link("de", "de")] });
+    ingestHreflangPage(tracker, new Map([[en.url, en]]), en);
+    expect([...tracker.waiting.keys()]).toEqual([url("de")]);
+  });
+
+  it("the hreflang tracker gives the same result whichever page arrives first", () => {
+    const en = page("en", { hreflangLinks: [link("en", "en"), link("fr", "fr"), link("de", "de")] });
+    const fr = page("fr", { hreflangLinks: [link("fr", "fr")] });
+    const de = page("de", { status: 404 });
+    for (const order of [
+      [en, fr, de],
+      [fr, de, en],
+      [de, en, fr],
+    ]) {
+      const tracker = createHreflangTracker();
+      const pageByUrl = new Map<string, PageResult>();
+      for (const p of order) {
+        pageByUrl.set(p.url, p);
+        ingestHreflangPage(tracker, pageByUrl, p);
+      }
+      expect([...tracker.missingReturn]).toEqual([url("en")]);
+      expect([...tracker.targetError]).toEqual([url("en")]);
+      expect(tracker.waiting.size).toBe(0);
+    }
+  });
+
+  it("hreflangMissingSelf flags a set that does not include the page itself", () => {
+    expect(flagged([page("en", { hreflangLinks: [link("fr", "fr")] })], "hreflangMissingSelf")).toEqual([url("en")]);
+    expect(flagged([page("en", { hreflangLinks: [link("en", "en"), link("fr", "fr")] })], "hreflangMissingSelf")).toEqual([]);
+    expect(flagged([page("en")], "hreflangMissingSelf")).toEqual([]);
+  });
+
+  it("hreflangMissingXDefault flags a set without x-default in any case", () => {
+    expect(flagged([page("en", { hreflangLinks: [link("en", "en")] })], "hreflangMissingXDefault")).toEqual([url("en")]);
+    expect(
+      flagged([page("en", { hreflangLinks: [link("en", "en"), link("X-Default", "")] })], "hreflangMissingXDefault"),
+    ).toEqual([]);
+    // Crawls saved before hreflang links were collected have only hreflangValues.
+    expect(flagged([page("en", { hreflangValues: ["en"] })], "hreflangMissingXDefault")).toEqual([]);
+  });
+
+  it("hreflangInvalidCode flags any unknown language or region code", () => {
+    expect(flagged([page("en", { hreflangLinks: [link("en", "en"), link("fr-XX", "fr")] })], "hreflangInvalidCode")).toEqual([
+      url("en"),
+    ]);
+    expect(flagged([page("en", { hreflangLinks: [link("en-GB", "en"), link("x-default", "")] })], "hreflangInvalidCode")).toEqual(
+      [],
+    );
+  });
+
+  it("hreflangTargetError flags non-200, redirected and non-indexable targets but not robots-blocked ones", () => {
+    const source = (target: string) => page("en", { hreflangLinks: [link("en", "en"), link("xx", target)] });
+    const cases: [PageResult, boolean][] = [
+      [page("t", { status: 404 }), true],
+      [page("t", { redirectChain: [url("t")] }), true],
+      [page("t", { indexability: "Non-Indexable (noindex)" }), true],
+      [page("t", { status: null, error: null, indexability: "Non-Indexable (robots.txt)", htmlSizeBytes: 0 }), false],
+      [page("t", { hreflangLinks: [link("en", "en")] }), false],
+    ];
+    for (const [target, expected] of cases) {
+      expect(flagged([source("t"), target], "hreflangTargetError"), JSON.stringify(target.indexability)).toEqual(
+        expected ? [url("en")] : [],
+      );
+    }
+  });
+
+  it("reports the hreflang keys in getPageIssueKeys", () => {
+    const en = page("en", { hreflangLinks: [link("en-XX", "fr"), link("fr", "fr")] });
+    const fr = page("fr", { status: 500 });
+    const keys = getPageIssueKeys(en, ctxFor([en, fr]));
+    expect(keys).toEqual(
+      expect.arrayContaining(["hreflangMissingSelf", "hreflangMissingXDefault", "hreflangInvalidCode", "hreflangTargetError"]),
+    );
+    expect(keys).not.toContain("hreflangMissingReturn");
   });
 });

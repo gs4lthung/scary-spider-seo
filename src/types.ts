@@ -26,6 +26,14 @@ export interface LinkRef {
   isImageLink: boolean;
 }
 
+/** One `<link rel="alternate" hreflang>` annotation. */
+export interface HreflangLink {
+  /** Language/region code as written (`en`, `en-GB`, `x-default`). */
+  lang: string;
+  /** Absolute target URL, fragment stripped. */
+  href: string;
+}
+
 export interface PageResult {
   url: string;
   depth: number;
@@ -83,6 +91,8 @@ export interface PageResult {
   missingAltCount: number;
   lang: string | null;
   hreflangValues: string[];
+  /** Hreflang annotations with resolvable hrefs, in document order, capped at 300. Empty for crawls saved before T2.6. */
+  hreflangLinks: HreflangLink[];
   internalNofollowCount: number;
   /** Internal `<a href>` links in document order, duplicates kept, capped at 1000 per page. Empty for crawls saved before T2.3. */
   outlinks: LinkRef[];

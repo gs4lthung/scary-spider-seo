@@ -30,6 +30,8 @@ must produce.
 | `/paged-1.html` | `rel="next"` to `/paged-2.html` (file intentionally absent, only reachable through the pagination link, so it answers 404) and `rel="prev"` to `/` |
 | `/anchors.html` | internal outlinks: collapsed text anchor, image-only anchor (alt `/img/logo.png`), empty anchor, "click here", `rel="nofollow ugc"`, a duplicate target |
 | `/secure-headers.html` | served with `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options` and `Referrer-Policy` (headers added by the test server); `/` sends none of them |
+| `/en.html` | hreflang `en` (self), `fr` and `x-default` (`/`) |
+| `/fr.html` | not linked; reached only through the hreflang annotation on `/en.html`. Annotates `fr` (self) and an invalid `fr-XX`, with no return link to `/en.html` |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
 | `/noindex-in-sitemap.html` | not linked; listed in `sitemap.xml` and noindex (non-indexable URL in the sitemap) |
 | `/gone-in-sitemap.html` | not linked; listed in `sitemap.xml`, file intentionally absent so it answers 404 |

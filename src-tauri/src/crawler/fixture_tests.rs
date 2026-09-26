@@ -209,6 +209,8 @@ async fn crawls_every_linked_page_exactly_once() {
         "/canonicalised.html",
         "/dup-a.html",
         "/dup-b.html",
+        "/en.html",
+        "/fr.html",
         "/gone.html",
         "/h1-and-images.html",
         "/headings.html",
@@ -253,7 +255,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 23);
+    assert_eq!(home.internal_link_count, 24);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -408,6 +410,42 @@ async fn pagination_target_is_crawled() {
     );
     assert_eq!(paged.internal_link_count, 0);
     assert_eq!(out.page(&site.url("/paged-2.html")).status, Some(404));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn hreflang_fixtures() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    let pairs = |page: &PageResult| -> Vec<(String, String)> {
+        page.hreflang_links
+            .iter()
+            .map(|l| (l.lang.clone(), l.href.clone()))
+            .collect()
+    };
+    let en = out.page(&site.url("/en.html"));
+    assert_eq!(
+        pairs(en),
+        vec![
+            ("en".to_string(), site.url("/en.html")),
+            ("fr".to_string(), site.url("/fr.html")),
+            ("x-default".to_string(), site.url("/")),
+        ]
+    );
+    assert_eq!(en.hreflang_values, vec!["en", "fr", "x-default"]);
+
+    // /fr.html is linked from no anchor: it is crawled only because hreflang
+    // targets are queued like internal links.
+    let fr = out.page(&site.url("/fr.html"));
+    assert_eq!(fr.status, Some(200));
+    assert_eq!(fr.internal_link_count, 0);
+    assert_eq!(
+        pairs(fr),
+        vec![
+            ("fr".to_string(), site.url("/fr.html")),
+            ("fr-XX".to_string(), site.url("/fr.html")),
+        ]
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

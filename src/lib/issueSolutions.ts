@@ -347,6 +347,56 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
     },
   },
+  hreflangMissingReturn: {
+    title: "Hreflang target does not link back",
+    problem:
+      "Hreflang annotations must be confirmed from both sides. This page lists an alternate version that was crawled, but that version does not list this page in its own hreflang tags, so Google may ignore the pair.",
+    fix: "Add a matching hreflang link on every alternate version pointing back to this page. Each language version should carry the same complete set of hreflang links, including one to itself.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangMissingSelf: {
+    title: "Hreflang set does not include this page",
+    problem:
+      "Every page in a hreflang set should list itself alongside its alternates. Without a self-reference, the set on this page is incomplete and Google may not treat the versions as a group.",
+    fix: "Add a hreflang link whose href is this page's own URL, with this page's language (and region, if used) as the code.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangMissingXDefault: {
+    title: "No x-default hreflang",
+    problem:
+      "The x-default value tells Google which version to show users whose language or region matches none of your listed versions. It is optional, but without it those users get whichever version Google picks.",
+    fix: "Add a hreflang=\"x-default\" link pointing to your fallback page, typically a language selector or your main language version, on every page of the set.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangInvalidCode: {
+    title: "Invalid hreflang language or region code",
+    problem:
+      "Google only understands hreflang values made of an ISO 639-1 language code, optionally followed by an ISO 15924 script code and an ISO 3166-1 alpha-2 region code, or x-default. An unknown code (such as en-UK or english) is ignored.",
+    fix: "Use a two-letter language code, optionally followed by a four-letter script code and a two-letter region code, each after a hyphen: for example en, en-GB, fr-CA, zh-Hant or zh-Hans-US. The region for the United Kingdom is GB, not UK. Never use a region on its own.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangTargetError: {
+    title: "Hreflang points to a broken or non-indexable URL",
+    problem:
+      "An hreflang alternate must be a live, indexable page. This page annotates a URL that answered an error, redirected, or is marked non-indexable (noindex or canonicalised elsewhere), so Google cannot use it as an alternate.",
+    fix: "Point the hreflang link at the final, indexable 200 URL of that language version, or remove the annotation if that version no longer exists.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
   metaTooLong: {
     title: "Meta description is over 155 characters",
     problem:

@@ -58,6 +58,8 @@ import {
   getResourceIssueKeys,
   ingestDuplicateValue,
   ingestNon200LinkSources,
+  createHreflangTracker,
+  ingestHreflangPage,
   searchPages,
   searchResources,
 } from "./lib/filters";
@@ -607,6 +609,7 @@ function App() {
   const sitemapUsedRef = useRef(false);
   const linkGraphRef = useRef(createLinkGraph());
   const non200LinkSourcesRef = useRef(new Set<string>());
+  const hreflangTrackerRef = useRef(createHreflangTracker());
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -620,6 +623,7 @@ function App() {
     sitemapUsedRef.current = false;
     linkGraphRef.current = createLinkGraph();
     non200LinkSourcesRef.current = new Set();
+    hreflangTrackerRef.current = createHreflangTracker();
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -869,6 +873,8 @@ function App() {
     sitemapUsed,
     linkGraph,
     non200LinkSources,
+    hreflangMissingReturn,
+    hreflangTargetError,
   } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
@@ -887,6 +893,7 @@ function App() {
       if (p.discoveredViaSitemap) sitemapUsedRef.current = true;
       addPageToLinkGraph(linkGraphRef.current, p);
       ingestNon200LinkSources(non200LinkSourcesRef.current, linkGraphRef.current, pageByUrlRef.current, p);
+      ingestHreflangPage(hreflangTrackerRef.current, pageByUrlRef.current, p);
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -903,6 +910,8 @@ function App() {
       // rather than a copy of every link crawled so far).
       linkGraph: { ...linkGraphRef.current } satisfies LinkGraph,
       non200LinkSources: new Set(non200LinkSourcesRef.current),
+      hreflangMissingReturn: new Set(hreflangTrackerRef.current.missingReturn),
+      hreflangTargetError: new Set(hreflangTrackerRef.current.targetError),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -922,6 +931,8 @@ function App() {
       sitemapUsed,
       linkGraph,
       non200LinkSources,
+      hreflangMissingReturn,
+      hreflangTargetError,
     }),
     [
       duplicateTitleSet,
@@ -935,6 +946,8 @@ function App() {
       sitemapUsed,
       linkGraph,
       non200LinkSources,
+      hreflangMissingReturn,
+      hreflangTargetError,
     ],
   );
   // Link scores rank the whole graph, so while a crawl runs they refresh on a timer instead
