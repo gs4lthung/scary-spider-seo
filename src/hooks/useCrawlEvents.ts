@@ -4,10 +4,14 @@ import { toast } from "sonner";
 import { type EventBatcher, createEventBatcher } from "@/lib/eventBatcher";
 import type { CrawlProgress, CrawlSummary, PageResult, ResourceResult, SiteInfo } from "@/types";
 
-/** How long page and resource events are buffered before one state update applies them. */
+/** How long page, resource and progress events are buffered before one state update applies them. */
 const FLUSH_DELAY_MS = 150;
 
-type BufferedEvent = { kind: "page"; page: PageResult } | { kind: "resource"; resource: ResourceResult };
+type BufferedEvent =
+  | { kind: "page"; page: PageResult }
+  | { kind: "resource"; resource: ResourceResult }
+  // The payload itself lives in `pendingProgressRef`: only the latest one matters.
+  | { kind: "progress" };
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
@@ -25,10 +29,12 @@ export interface CrawlEventSetters {
 }
 
 /**
- * Registers the six `crawl://*` listeners once on mount. Pages and resources are buffered
- * and applied in one batch per flush window; the other events update state directly.
- * Returns `discardPending`, which drops buffered pages and resources that were not applied
- * yet (used when a new crawl clears the view).
+ * Registers the six `crawl://*` listeners once on mount. Pages, resources and progress are
+ * buffered and applied in one batch per flush window (progress keeps only its latest value);
+ * the other events update state directly. Returns `discardPending`, which drops buffered
+ * events that were not applied yet (used when a new crawl clears the view), and
+ * `discardPendingProgress`, which drops only a buffered progress update (used before an
+ * optimistic pause or resume, so a pre-click payload cannot undo it).
  */
 export function useCrawlEvents({
   setPages,
@@ -40,8 +46,9 @@ export function useCrawlEvents({
   setLinkedUrls,
   setResumableStartUrl,
   activeStartUrlRef,
-}: CrawlEventSetters): { discardPending: () => void } {
+}: CrawlEventSetters): { discardPending: () => void; discardPendingProgress: () => void } {
   const batcherRef = useRef<EventBatcher<BufferedEvent> | null>(null);
+  const pendingProgressRef = useRef<CrawlProgress | null>(null);
 
   useEffect(() => {
     // `listen()`/unlisten are async, and React StrictMode's dev-only
@@ -52,16 +59,22 @@ export function useCrawlEvents({
     let active = true;
     const unlistenFns: Array<() => void> = [];
 
-    // Pages and resources share one batcher so both land in the same flush, as one render.
+    // Pages, resources and progress share one batcher so they land in the same flush, as one render.
     const batcher = createEventBatcher<BufferedEvent>((events) => {
       const pageBatch: PageResult[] = [];
       const resourceBatch: ResourceResult[] = [];
       for (const e of events) {
         if (e.kind === "page") pageBatch.push(e.page);
-        else resourceBatch.push(e.resource);
+        else if (e.kind === "resource") resourceBatch.push(e.resource);
       }
       if (pageBatch.length > 0) setPages((prev) => [...prev, ...pageBatch]);
       if (resourceBatch.length > 0) setResources((prev) => [...prev, ...resourceBatch]);
+      const progress = pendingProgressRef.current;
+      pendingProgressRef.current = null;
+      if (progress) {
+        setProgress(progress);
+        setPaused(progress.paused);
+      }
     }, FLUSH_DELAY_MS);
     batcherRef.current = batcher;
 
@@ -88,14 +101,20 @@ export function useCrawlEvents({
         setSiteInfo(payload);
       });
       await registerListener<CrawlProgress>("crawl://progress", (payload) => {
-        setProgress(payload);
-        setPaused(payload.paused);
+        pendingProgressRef.current = payload;
+        batcher.push({ kind: "progress" });
       });
       await registerListener<CrawlSummary>("crawl://done", (payload) => {
         setRunning(false);
         setPaused(false);
         setLinkedUrls(payload.linkedUrls);
-        setProgress((prev) => (prev ? { ...prev, running: false, paused: false } : prev));
+        // The backend sends a final progress right before `done`; it may still be buffered.
+        const finalProgress = pendingProgressRef.current;
+        pendingProgressRef.current = null;
+        setProgress((prev) => {
+          const latest = finalProgress ?? prev;
+          return latest ? { ...latest, running: false, paused: false } : latest;
+        });
         setResumableStartUrl(payload.resumable ? activeStartUrlRef.current : null);
       });
       await registerListener<string>("crawl://error", (payload) => {
@@ -107,6 +126,7 @@ export function useCrawlEvents({
     return () => {
       active = false;
       batcher.cancel();
+      pendingProgressRef.current = null;
       if (batcherRef.current === batcher) batcherRef.current = null;
       unlistenFns.forEach((fn) => fn());
     };
@@ -124,6 +144,12 @@ export function useCrawlEvents({
     activeStartUrlRef,
   ]);
 
-  const discardPending = useCallback(() => batcherRef.current?.cancel(), []);
-  return { discardPending };
+  const discardPending = useCallback(() => {
+    batcherRef.current?.cancel();
+    pendingProgressRef.current = null;
+  }, []);
+  const discardPendingProgress = useCallback(() => {
+    pendingProgressRef.current = null;
+  }, []);
+  return { discardPending, discardPendingProgress };
 }
