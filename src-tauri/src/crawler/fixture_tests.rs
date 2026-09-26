@@ -370,6 +370,41 @@ async fn resumed_crawl_drops_queued_urls_the_new_scope_excludes() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn custom_search_counts() {
+    let site = FixtureServer::start().await;
+    let out = crawl(
+        &site.url("/"),
+        json!({ "customSearches": [
+            { "id": "dup", "name": "Duplicate", "pattern": "Duplicate" },
+            { "id": "dup-text", "name": "Duplicate text", "pattern": "duplicate", "scope": "text" },
+            { "id": "h1", "name": "H1 tag", "pattern": r"<h1>\w+</h1>", "isRegex": true },
+        ] }),
+    )
+    .await;
+
+    let dup_a = &out.page(&site.url("/dup-a.html")).custom_search_counts;
+    // The title, the H1 and the body text ("duplicate pages").
+    assert!(dup_a["dup"] >= 2, "{dup_a:?}");
+    assert_eq!(dup_a["dup"], 3, "{dup_a:?}");
+    // Visible body text only: the H1 and the paragraph, not the <title> in the head.
+    assert_eq!(dup_a["dup-text"], 2, "{dup_a:?}");
+    assert_eq!(dup_a["h1"], 1, "{dup_a:?}");
+
+    let noindex = &out.page(&site.url("/noindex.html")).custom_search_counts;
+    assert_eq!(noindex["dup"], 0, "{noindex:?}");
+    assert_eq!(noindex["dup-text"], 0, "{noindex:?}");
+    assert_eq!(noindex["h1"], 1, "{noindex:?}");
+
+    // A robots-blocked URL is never fetched, so it has no counts at all (neither
+    // "contains" nor "does not contain" in the frontend).
+    let blocked = out.page(&site.url("/private/secret.html"));
+    assert!(blocked.custom_search_counts.is_empty(), "{blocked:?}");
+    // Without rules nothing is recorded.
+    let plain = crawl(&site.url("/"), json!({ "maxPages": 1 })).await;
+    assert!(plain.page(&site.url("/")).custom_search_counts.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn list_mode_crawls_only_the_listed_urls() {
     let site = FixtureServer::start().await;
     let noindex = site.url("/noindex.html");

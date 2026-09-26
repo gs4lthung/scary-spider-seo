@@ -66,6 +66,7 @@ function makePage(url: string): PageResult {
     structuredDataErrors: [],
     accessibilityViolations: [],
     mobileUsabilityViolations: [],
+    customSearchCounts: {},
     error: null,
   };
 }

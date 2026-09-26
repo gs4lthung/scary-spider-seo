@@ -1,3 +1,4 @@
+use super::custom::CustomSearch;
 use super::hosting;
 use super::parse::parse_page;
 use super::render;
@@ -239,6 +240,12 @@ async fn fetch_following_redirects(
     }
 }
 
+/// Per-crawl settings for analysing a fetched page, shared by every page task.
+struct PageAnalysis {
+    run_mobile_usability_audit: bool,
+    custom_search: CustomSearch,
+}
+
 async fn fetch_and_parse(
     client: &Client,
     browser: Option<Arc<Browser>>,
@@ -246,7 +253,7 @@ async fn fetch_and_parse(
     render_semaphore: Option<Arc<Semaphore>>,
     url: Url,
     depth: usize,
-    run_mobile_usability_audit: bool,
+    analysis: Arc<PageAnalysis>,
 ) -> PageFetchOutcome {
     let started = Instant::now();
 
@@ -372,7 +379,7 @@ async fn fetch_and_parse(
             browser,
             final_url.clone(),
             axe_source,
-            run_mobile_usability_audit,
+            analysis.run_mobile_usability_audit,
         )
         .await
         {
@@ -407,7 +414,30 @@ async fn fetch_and_parse(
     };
 
     let elapsed = started.elapsed().as_millis() as u64;
-    let parsed = parse_page(&body, &final_url);
+    // HTML parsing and the custom search regexes are CPU-bound (both linear in the page
+    // size), so they run together on the blocking pool instead of stalling the async
+    // workers that drive every other in-flight fetch.
+    let parse_url = final_url.clone();
+    let parse_analysis = analysis.clone();
+    let parse_result = tokio::task::spawn_blocking(move || {
+        let parsed = parse_page(&body, &parse_url);
+        let counts = parse_analysis
+            .custom_search
+            .count_matches(&body, &parsed.body_text);
+        (parsed, counts)
+    })
+    .await;
+    let (parsed, custom_search_counts) = match parse_result {
+        Ok(result) => result,
+        Err(e) => {
+            return empty_outcome(PageResult {
+                indexability: "Non-Indexable (Error)".to_string(),
+                response_time_ms: elapsed,
+                error: Some(format!("Failed to parse the page: {e}")),
+                ..base
+            });
+        }
+    };
     let indexability = indexability_for(
         status,
         parsed.canonical.as_deref(),
@@ -508,6 +538,7 @@ async fn fetch_and_parse(
         structured_data_errors: parsed.structured_data_errors,
         accessibility_violations,
         mobile_usability_violations,
+        custom_search_counts,
         error: None,
     };
 
@@ -728,6 +759,17 @@ pub async fn run_crawl<R: Runtime>(
     // compile only fails when `run_crawl` is called directly (tests).
     let scope = match UrlScope::new(&config.include_patterns, &config.exclude_patterns) {
         Ok(s) => s,
+        Err(e) => {
+            let _ = app.emit("crawl://error", e);
+            return Vec::new();
+        }
+    };
+    // Also validated by `start_crawl` before any state is touched.
+    let analysis = match CustomSearch::new(&config.custom_searches) {
+        Ok(custom_search) => Arc::new(PageAnalysis {
+            run_mobile_usability_audit: config.run_mobile_usability_audit,
+            custom_search,
+        }),
         Err(e) => {
             let _ = app.emit("crawl://error", e);
             return Vec::new();
@@ -1051,7 +1093,7 @@ pub async fn run_crawl<R: Runtime>(
                 let browser = browser.clone();
                 let axe_source = axe_source.clone();
                 let render_semaphore = render_semaphore.clone();
-                let run_mobile_usability_audit = config.run_mobile_usability_audit;
+                let analysis = analysis.clone();
                 let task_cancel = cancel.clone();
                 let robots_client = client.clone();
                 page_tasks.spawn(async move {
@@ -1073,7 +1115,7 @@ pub async fn run_crawl<R: Runtime>(
                                 render_semaphore,
                                 url,
                                 depth,
-                                run_mobile_usability_audit,
+                                analysis,
                             )
                             .await
                         } => {

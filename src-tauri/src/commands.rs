@@ -1,7 +1,9 @@
 use crate::crawler::crawl;
+use crate::crawler::custom::CustomSearch;
 use crate::crawler::scope::UrlScope;
 use crate::crawler::types::{
-    CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult, ResourceResult, MAX_LIST_URLS,
+    CrawlConfig, CrawlSnapshot, CrawlSummary, CustomSearchRule, PageResult, ResourceResult,
+    MAX_LIST_URLS,
 };
 use crate::export;
 use crate::state::AppState;
@@ -26,10 +28,9 @@ pub async fn start_crawl(
         return Err("A crawl is already running".to_string());
     }
 
-    // Reject bad include/exclude patterns up front, before any state is touched, so
+    // Reject bad include/exclude patterns and custom searches up front, before any state is touched, so
     // the user can fix them without losing the current results or resume state.
-    UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
-    check_list_size(&config)?;
+    validate_config(&config)?;
 
     // A stopped crawl left queued URLs behind for this exact start URL — continue from
     // there instead of clearing everything and starting over. A resume state for a
@@ -113,6 +114,14 @@ pub async fn start_crawl(
     Ok(())
 }
 
+/// Every check `start_crawl` runs before touching state: include/exclude patterns,
+/// custom search rules and the list size.
+fn validate_config(config: &CrawlConfig) -> Result<(), String> {
+    UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
+    CustomSearch::new(&config.custom_searches)?;
+    check_list_size(config)
+}
+
 /// Rejects a list-mode crawl over `MAX_LIST_URLS` entries before any state is touched.
 fn check_list_size(config: &CrawlConfig) -> Result<(), String> {
     if config.list_urls.len() > MAX_LIST_URLS {
@@ -152,12 +161,20 @@ pub fn get_resources(state: State<'_, AppState>) -> Result<Vec<ResourceResult>, 
     Ok(state.resources.iter().map(|r| r.value().clone()).collect())
 }
 
+/// `custom_searches` are the rules of the results on screen (sent by the frontend, which
+/// keeps them for live and loaded crawls); they name the pages CSV's custom search columns.
 #[tauri::command]
-pub fn export_csv(state: State<'_, AppState>, path: String, what: String) -> Result<(), String> {
+pub fn export_csv(
+    state: State<'_, AppState>,
+    path: String,
+    what: String,
+    custom_searches: Option<Vec<CustomSearchRule>>,
+) -> Result<(), String> {
     match what.as_str() {
         "pages" => {
             let pages = lock_state(&state.pages)?;
-            export::export_pages_csv(&pages, &path).map_err(|e| e.to_string())
+            export::export_pages_csv(&pages, &custom_searches.unwrap_or_default(), &path)
+                .map_err(|e| e.to_string())
         }
         "resources" => {
             let resources: Vec<ResourceResult> =
@@ -177,6 +194,7 @@ pub fn save_crawl(
     state: State<'_, AppState>,
     path: String,
     start_url: String,
+    custom_searches: Option<Vec<CustomSearchRule>>,
 ) -> Result<(), String> {
     let pages = lock_state(&state.pages)?.clone();
     let resources: Vec<ResourceResult> =
@@ -191,6 +209,7 @@ pub fn save_crawl(
         saved_at_unix_ms,
         pages,
         resources,
+        custom_searches: custom_searches.unwrap_or_default(),
     };
 
     let json = serde_json::to_string_pretty(&snapshot).map_err(|e| e.to_string())?;
@@ -232,8 +251,8 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_list_size, save_text_file};
-    use crate::crawler::types::{CrawlConfig, MAX_LIST_URLS};
+    use super::{check_list_size, save_text_file, validate_config};
+    use crate::crawler::types::{CrawlConfig, CustomSearchRule, MAX_LIST_URLS};
 
     fn list_config(len: usize) -> CrawlConfig {
         let mut config: CrawlConfig =
@@ -254,6 +273,21 @@ mod tests {
         let err = check_list_size(&list_config(MAX_LIST_URLS + 1)).unwrap_err();
         assert!(err.contains("50000"), "{err}");
         assert!(err.contains(&(MAX_LIST_URLS + 1).to_string()), "{err}");
+    }
+
+    #[test]
+    fn invalid_custom_search_is_rejected_before_the_crawl() {
+        let mut config = list_config(0);
+        assert!(validate_config(&config).is_ok());
+        config.custom_searches = vec![CustomSearchRule {
+            id: "cs1".to_string(),
+            name: "Prices".to_string(),
+            pattern: "[0-9".to_string(),
+            is_regex: true,
+            ..Default::default()
+        }];
+        let err = validate_config(&config).unwrap_err();
+        assert!(err.contains("\"Prices\""), "{err}");
     }
 
     #[test]

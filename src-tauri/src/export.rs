@@ -1,14 +1,55 @@
-use crate::crawler::types::{PageResult, ResourceResult, ResourceType};
+use crate::crawler::types::{CustomSearchRule, PageResult, ResourceResult, ResourceType};
+use std::collections::HashSet;
 use std::fs::File;
+
+/// The pages CSV's custom search columns: every rule id with a count on at least one page,
+/// as `(id, header)`. Ids of `rules` come first in rule order, then any other id in the order
+/// ids first appear (each page's ids sorted shorter first). A column is headed by the rule's
+/// name, else its pattern, else (a rule not in `rules`) the bare id.
+fn custom_search_columns(
+    pages: &[PageResult],
+    rules: &[CustomSearchRule],
+) -> Vec<(String, String)> {
+    let mut seen_on_pages = HashSet::new();
+    let mut page_order = Vec::new();
+    for p in pages {
+        let mut page_ids: Vec<&String> = p.custom_search_counts.keys().collect();
+        page_ids.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        for id in page_ids {
+            if seen_on_pages.insert(id.as_str()) {
+                page_order.push(id.as_str());
+            }
+        }
+    }
+    let mut columns = Vec::new();
+    let mut emitted = HashSet::new();
+    for rule in rules {
+        if seen_on_pages.contains(rule.id.as_str()) && emitted.insert(rule.id.as_str()) {
+            let label = [rule.name.trim(), rule.pattern.trim()]
+                .into_iter()
+                .find(|s| !s.is_empty())
+                .unwrap_or(rule.id.as_str());
+            columns.push((rule.id.clone(), format!("Custom Search: {label}")));
+        }
+    }
+    for id in page_order {
+        if emitted.insert(id) {
+            columns.push((id.to_string(), format!("Custom Search: {id}")));
+        }
+    }
+    columns
+}
 
 pub fn export_pages_csv(
     pages: &[PageResult],
+    custom_searches: &[CustomSearchRule],
     path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
+    let custom_columns = custom_search_columns(pages, custom_searches);
 
-    wtr.write_record([
+    let fixed_headers = [
         "URL",
         "Status",
         "Status Text",
@@ -70,10 +111,16 @@ pub fn export_pages_csv(
         "Accessibility Violations",
         "Mobile Usability Violations",
         "Error",
-    ])?;
+    ];
+    wtr.write_record(
+        fixed_headers
+            .iter()
+            .map(|h| h.to_string())
+            .chain(custom_columns.iter().map(|(_, header)| header.clone())),
+    )?;
 
     for p in pages {
-        wtr.write_record([
+        let fixed = [
             p.url.clone(),
             p.status.map(|s| s.to_string()).unwrap_or_default(),
             p.status_text.clone(),
@@ -143,7 +190,15 @@ pub fn export_pages_csv(
             p.accessibility_violations.len().to_string(),
             p.mobile_usability_violations.len().to_string(),
             p.error.clone().unwrap_or_default(),
-        ])?;
+        ];
+        // Blank (not 0) for a page the rule never ran on, e.g. a non-HTML URL.
+        let custom = custom_columns.iter().map(|(id, _)| {
+            p.custom_search_counts
+                .get(id)
+                .map(|n| n.to_string())
+                .unwrap_or_default()
+        });
+        wtr.write_record(fixed.into_iter().chain(custom))?;
     }
 
     wtr.flush()?;
@@ -229,6 +284,75 @@ mod tests {
             nofollow,
             is_image_link: false,
         }
+    }
+
+    #[test]
+    fn pages_csv_has_one_column_per_custom_search() {
+        let counts = |pairs: &[(&str, u32)]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), *v))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        let pages = vec![
+            PageResult {
+                url: "https://example.com/".to_string(),
+                custom_search_counts: counts(&[("cs10", 1), ("cs2", 0)]),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/logo.png".to_string(),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/b".to_string(),
+                custom_search_counts: counts(&[("cs2", 4), ("cs3", 2)]),
+                ..Default::default()
+            },
+        ];
+        let path = std::env::temp_dir().join(format!("gseo-pages-cs-{}.csv", std::process::id()));
+        let rules = vec![
+            CustomSearchRule {
+                id: "cs3".to_string(),
+                name: "Prices".to_string(),
+                pattern: r"\$\d+".to_string(),
+                ..Default::default()
+            },
+            CustomSearchRule {
+                id: "cs10".to_string(),
+                name: " ".to_string(),
+                pattern: "needle".to_string(),
+                ..Default::default()
+            },
+            // Never counted on any page: no column.
+            CustomSearchRule {
+                id: "cs99".to_string(),
+                name: "Unused".to_string(),
+                pattern: "x".to_string(),
+                ..Default::default()
+            },
+        ];
+        export_pages_csv(&pages, &rules, path.to_str().unwrap()).unwrap();
+        let mut rdr = csv::Reader::from_path(&path).unwrap();
+        let headers: Vec<String> = rdr.headers().unwrap().iter().map(str::to_string).collect();
+        let rows: Vec<Vec<String>> = rdr
+            .records()
+            .map(|r| r.unwrap().iter().map(str::to_string).collect())
+            .collect();
+        std::fs::remove_file(&path).ok();
+        let tail = |row: &[String]| row[row.len() - 3..].to_vec();
+        assert_eq!(
+            tail(&headers),
+            vec![
+                "Custom Search: Prices",
+                "Custom Search: needle",
+                "Custom Search: cs2"
+            ]
+        );
+        assert_eq!(tail(&rows[0]), vec!["", "1", "0"]);
+        assert_eq!(tail(&rows[1]), vec!["", "", ""]);
+        assert_eq!(tail(&rows[2]), vec!["2", "", "4"]);
+        assert!(rows.iter().all(|r| r.len() == headers.len()));
     }
 
     #[test]

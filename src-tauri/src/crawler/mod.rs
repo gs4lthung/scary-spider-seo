@@ -1,4 +1,5 @@
 pub mod crawl;
+pub mod custom;
 #[cfg(test)]
 mod fixture_tests;
 pub mod hosting;

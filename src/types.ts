@@ -21,7 +21,25 @@ export interface CrawlConfig {
   excludePatterns: string[];
   /** List mode when non-empty: crawl exactly these URLs without following links. `startUrl` is the first of them. */
   listUrls: string[];
+  /** Custom search rules (at most `MAX_CUSTOM_SEARCHES`); each HTML page gets a match count per rule. */
+  customSearches: CustomSearchRule[];
 }
+
+/** What a custom search rule searches: the raw HTML, or the visible body text. */
+export type CustomSearchScope = "html" | "text";
+
+/** One custom search rule: a literal text (case-insensitive) or a regex (case-sensitive unless it says `(?i)`). */
+export interface CustomSearchRule {
+  /** Stable key of the rule's count in `PageResult.customSearchCounts`. */
+  id: string;
+  name: string;
+  pattern: string;
+  isRegex: boolean;
+  scope: CustomSearchScope;
+}
+
+/** Most custom search rules one crawl accepts (mirrors `custom::MAX_CUSTOM_SEARCHES`). */
+export const MAX_CUSTOM_SEARCHES = 10;
 
 /** One internal link found on a page. */
 export interface LinkRef {
@@ -119,6 +137,8 @@ export interface PageResult {
   structuredDataErrors: string[];
   accessibilityViolations: AccessibilityViolation[];
   mobileUsabilityViolations: MobileUsabilityViolation[];
+  /** Match count per custom search rule id (0 included) for parsed HTML pages. Empty for other URLs, crawls without rules and crawls saved before T3.3. */
+  customSearchCounts: Record<string, number>;
   error: string | null;
 }
 
@@ -191,6 +211,8 @@ export interface CrawlSnapshot {
   savedAtUnixMs: number;
   pages: PageResult[];
   resources: ResourceResult[];
+  /** Custom search rules the crawl ran with; absent or empty for crawls saved before T3.3. */
+  customSearches?: CustomSearchRule[];
 }
 
 export const DEFAULT_CONFIG: CrawlConfig = {
@@ -212,4 +234,5 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   includePatterns: [],
   excludePatterns: [],
   listUrls: [],
+  customSearches: [],
 };
