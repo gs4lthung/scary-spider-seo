@@ -1,6 +1,8 @@
 use crate::crawler::crawl;
 use crate::crawler::scope::UrlScope;
-use crate::crawler::types::{CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult, ResourceResult};
+use crate::crawler::types::{
+    CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult, ResourceResult, MAX_LIST_URLS,
+};
 use crate::export;
 use crate::state::AppState;
 use std::sync::atomic::Ordering;
@@ -27,13 +29,16 @@ pub async fn start_crawl(
     // Reject bad include/exclude patterns up front, before any state is touched, so
     // the user can fix them without losing the current results or resume state.
     UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
+    check_list_size(&config)?;
 
     // A stopped crawl left queued URLs behind for this exact start URL — continue from
     // there instead of clearing everything and starting over. A resume state for a
     // different start URL is stale (e.g. the user changed the URL after stopping) and
     // is discarded here so that crawl starts fresh.
+    // List mode never consumes resume state: the list is crawled from scratch, and any
+    // spider crawl's leftover frontier no longer matches the cleared results.
     let resume = match lock_state(&state.resume_state)?.take() {
-        Some(r) if r.start_url == config.start_url => Some(r),
+        Some(r) if !config.is_list_mode() && r.start_url == config.start_url => Some(r),
         _ => None,
     };
 
@@ -105,6 +110,17 @@ pub async fn start_crawl(
         );
     });
 
+    Ok(())
+}
+
+/// Rejects a list-mode crawl over `MAX_LIST_URLS` entries before any state is touched.
+fn check_list_size(config: &CrawlConfig) -> Result<(), String> {
+    if config.list_urls.len() > MAX_LIST_URLS {
+        return Err(format!(
+            "List mode accepts at most {MAX_LIST_URLS} URLs; this list has {}.",
+            config.list_urls.len()
+        ));
+    }
     Ok(())
 }
 
@@ -216,7 +232,29 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::save_text_file;
+    use super::{check_list_size, save_text_file};
+    use crate::crawler::types::{CrawlConfig, MAX_LIST_URLS};
+
+    fn list_config(len: usize) -> CrawlConfig {
+        let mut config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).unwrap();
+        config.list_urls = (0..len)
+            .map(|i| format!("https://example.com/{i}"))
+            .collect();
+        config
+    }
+
+    #[test]
+    fn list_at_the_cap_is_accepted() {
+        assert!(check_list_size(&list_config(MAX_LIST_URLS)).is_ok());
+    }
+
+    #[test]
+    fn list_over_the_cap_is_rejected_with_its_size() {
+        let err = check_list_size(&list_config(MAX_LIST_URLS + 1)).unwrap_err();
+        assert!(err.contains("50000"), "{err}");
+        assert!(err.contains(&(MAX_LIST_URLS + 1).to_string()), "{err}");
+    }
 
     #[test]
     fn save_text_file_writes_contents_verbatim() {
