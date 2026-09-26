@@ -1,4 +1,4 @@
-import type { PageResult, ResourceResult } from "../types";
+import type { CustomSearchRule, PageResult, ResourceResult } from "../types";
 import { isValidHreflang, isXDefault } from "./hreflang";
 import { type LinkGraph, buildLinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
 import type { NearDuplicateCluster } from "./nearDuplicates";
@@ -1355,8 +1355,109 @@ export const ISSUE_DEFS = [
 
 export type IssueKey = (typeof ISSUE_DEFS)[number]["key"];
 
-/** Status buckets plus every registry issue. */
-export type FilterKey = "all" | "2xx" | "3xx" | IssueKey;
+/** Which side of a custom search rule a filter shows: pages with at least one match, or
+ * searched pages with none ("does not contain"). */
+export type CustomSearchMode = "contains" | "missing";
+
+/** Dynamic filter key of one custom search rule, `custom:<id>:contains|missing`. */
+export type CustomSearchFilterKey = `custom:${string}:${CustomSearchMode}`;
+
+/** Status buckets, every registry issue, and the custom search filters. */
+export type FilterKey = "all" | "2xx" | "3xx" | IssueKey | CustomSearchFilterKey;
+
+export function customSearchFilterKey(id: string, mode: CustomSearchMode): CustomSearchFilterKey {
+  return `custom:${id}:${mode}`;
+}
+
+/** The rule id and mode of a custom search filter key, or null for any other key. */
+export function parseCustomSearchFilter(key: FilterKey): { id: string; mode: CustomSearchMode } | null {
+  if (!key.startsWith("custom:")) return null;
+  const sep = key.lastIndexOf(":");
+  const mode = key.slice(sep + 1);
+  const id = key.slice("custom:".length, sep);
+  if (sep < "custom:".length || id === "" || (mode !== "contains" && mode !== "missing")) return null;
+  return { id, mode };
+}
+
+/** Whether a page is on the `mode` side of custom search rule `id`. A page the rule never
+ * ran on (non-HTML, blocked, errored, or crawled before the rule existed) has no count and
+ * matches neither side. */
+export function matchesCustomSearch(page: PageResult, id: string, mode: CustomSearchMode): boolean {
+  const count = page.customSearchCounts[id] as number | undefined;
+  if (count === undefined) return false;
+  return mode === "contains" ? count > 0 : count === 0;
+}
+
+/** Running "contains" / "does not contain" page counts per custom search rule id, in the
+ * order ids were first seen. Built incrementally in `App.tsx` so the Overview never rescans
+ * every page per flush. */
+export interface CustomSearchTracker {
+  counts: Map<string, { contains: number; missing: number }>;
+}
+
+export function createCustomSearchTracker(): CustomSearchTracker {
+  return { counts: new Map() };
+}
+
+export function ingestCustomSearchPage(tracker: CustomSearchTracker, page: PageResult): void {
+  for (const [id, count] of Object.entries(page.customSearchCounts)) {
+    let entry = tracker.counts.get(id);
+    if (!entry) {
+      entry = { contains: 0, missing: 0 };
+      tracker.counts.set(id, entry);
+    }
+    if (count > 0) entry.contains++;
+    else entry.missing++;
+  }
+}
+
+export function getCustomSearchTracker(pages: PageResult[]): CustomSearchTracker {
+  const tracker = createCustomSearchTracker();
+  for (const p of pages) ingestCustomSearchPage(tracker, p);
+  return tracker;
+}
+
+/** One custom search rule as the Overview and the Pages table show it. */
+export interface CustomSearchStat {
+  id: string;
+  label: string;
+  contains: number;
+  missing: number;
+}
+
+function ruleLabel(rule: CustomSearchRule): string {
+  return rule.name.trim() || rule.pattern.trim() || rule.id;
+}
+
+/**
+ * The custom search rules to show for the results on screen: the rules the crawl ran with
+ * (`crawlRules`, in order, even before any page has a count), then any other rule id found
+ * on the pages (a loaded saved crawl, which does not store its rules). Labels come from the
+ * crawl's rules, else from `knownRules` (the options sheet) by id, else the bare id.
+ */
+export function getCustomSearchStats(
+  tracker: CustomSearchTracker,
+  crawlRules: readonly CustomSearchRule[],
+  knownRules: readonly CustomSearchRule[] = [],
+): CustomSearchStat[] {
+  const stats: CustomSearchStat[] = [];
+  const seen = new Set<string>();
+  const known = new Map(knownRules.map((r) => [r.id, r]));
+  const push = (id: string, label: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const counts = tracker.counts.get(id) ?? { contains: 0, missing: 0 };
+    stats.push({ id, label, contains: counts.contains, missing: counts.missing });
+  };
+  for (const rule of crawlRules) {
+    if (rule.pattern.trim() !== "") push(rule.id, ruleLabel(rule));
+  }
+  for (const id of tracker.counts.keys()) {
+    const rule = known.get(id);
+    push(id, rule ? ruleLabel(rule) : `Custom search ${id}`);
+  }
+  return stats;
+}
 
 const ALL_ISSUE_DEFS: readonly IssueDef<IssueKey>[] = ISSUE_DEFS;
 const ISSUE_DEF_BY_KEY: ReadonlyMap<string, IssueDef<IssueKey>> = new Map(ALL_ISSUE_DEFS.map((d) => [d.key, d]));
@@ -1371,6 +1472,7 @@ export function getIssueDef(key: FilterKey): IssueDef<IssueKey> | undefined {
 /** Which tab a filter's results live in — null means it doesn't imply a tab (e.g. "all"). */
 export function filterTab(filter: FilterKey): "pages" | "resources" | null {
   if (filter === "all") return null;
+  if (parseCustomSearchFilter(filter)) return "pages";
   return getIssueDef(filter)?.scope === "resource" ? "resources" : "pages";
 }
 
@@ -1382,6 +1484,8 @@ function statusClass(status: number | null): number | null {
 export function filterPages(pages: PageResult[], filter: FilterKey, ctx: FilterContext): PageResult[] {
   if (filter === "2xx") return pages.filter((p) => statusClass(p.status) === 2);
   if (filter === "3xx") return pages.filter((p) => statusClass(p.status) === 3);
+  const custom = parseCustomSearchFilter(filter);
+  if (custom) return pages.filter((p) => matchesCustomSearch(p, custom.id, custom.mode));
   const def = getIssueDef(filter);
   if (def?.scope !== "page") return pages;
   return pages.filter((p) => def.test(p, ctx));

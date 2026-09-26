@@ -67,6 +67,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     structuredDataErrors: [],
     accessibilityViolations: [],
     mobileUsabilityViolations: [],
+    customSearchCounts: {},
     error: null,
     ...overrides,
   };

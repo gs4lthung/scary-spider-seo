@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { LinkRef, PageResult, ResourceResult } from "../types";
+import type { CustomSearchRule, LinkRef, PageResult, ResourceResult } from "../types";
 import { ISSUE_SOLUTIONS } from "./issueSolutions";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 import {
+  createCustomSearchTracker,
+  customSearchFilterKey,
+  getCustomSearchStats,
+  getCustomSearchTracker,
+  ingestCustomSearchPage,
+  parseCustomSearchFilter,
   type FilterContext,
   type FilterKey,
   DEEP_PAGE_DEPTH,
@@ -128,6 +134,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     structuredDataErrors: [],
     accessibilityViolations: [],
     mobileUsabilityViolations: [],
+    customSearchCounts: {},
     error: null,
     ...overrides,
   };
@@ -1737,5 +1744,75 @@ describe("near-duplicate content", () => {
     const ctx = { ...emptyFilterContext(), nearDuplicates: nearDuplicateContext(pages) };
     expect(getPageIssueKeys(pages[0], ctx)).toContain("nearDuplicateContent");
     expect(getPageIssueKeys(makePage(), ctx)).not.toContain("nearDuplicateContent");
+  });
+});
+
+describe("custom search", () => {
+  const rule = (id: string, name: string, pattern = "x"): CustomSearchRule => ({
+    id,
+    name,
+    pattern,
+    isRegex: false,
+    scope: "html",
+  });
+  const pages = [
+    makePage({ url: "https://example.com/a", customSearchCounts: { cs1: 3, cs2: 0 } }),
+    makePage({ url: "https://example.com/b", customSearchCounts: { cs1: 0, cs2: 1 } }),
+    makePage({ url: "https://example.com/c", customSearchCounts: { cs1: 1 } }),
+    // Not searched (non-HTML, blocked, or an older crawl): neither side of any rule.
+    makePage({ url: "https://example.com/logo.png", customSearchCounts: {} }),
+  ];
+  const urls = (key: FilterKey) => filterPages(pages, key, emptyFilterContext()).map((p) => p.url.slice(20));
+
+  it("custom contains and missing filters", () => {
+    expect(urls(customSearchFilterKey("cs1", "contains"))).toEqual(["a", "c"]);
+    expect(urls(customSearchFilterKey("cs1", "missing"))).toEqual(["b"]);
+    expect(urls("custom:cs2:contains")).toEqual(["b"]);
+    expect(urls("custom:cs2:missing")).toEqual(["a"]);
+    expect(urls("custom:unknown:contains")).toEqual([]);
+    expect(urls("custom:unknown:missing")).toEqual([]);
+    expect(filterTab("custom:cs1:missing")).toBe("pages");
+  });
+
+  it("parses custom filter keys, including ids containing a colon", () => {
+    expect(parseCustomSearchFilter("custom:a:b:missing")).toEqual({ id: "a:b", mode: "missing" });
+    expect(parseCustomSearchFilter("custom:cs1:contains")).toEqual({ id: "cs1", mode: "contains" });
+    expect(parseCustomSearchFilter("custom::contains")).toBeNull();
+    expect(parseCustomSearchFilter("custom:cs1:other" as FilterKey)).toBeNull();
+    expect(parseCustomSearchFilter("titleMissing" as FilterKey)).toBeNull();
+    expect(parseCustomSearchFilter("all")).toBeNull();
+  });
+
+  it("tracker counts match the filters, incrementally", () => {
+    const tracker = createCustomSearchTracker();
+    ingestCustomSearchPage(tracker, pages[0]);
+    ingestCustomSearchPage(tracker, pages[1]);
+    expect(tracker.counts.get("cs1")).toEqual({ contains: 1, missing: 1 });
+    for (const p of pages.slice(2)) ingestCustomSearchPage(tracker, p);
+    expect(getCustomSearchTracker(pages)).toEqual(tracker);
+    for (const [id, counts] of tracker.counts) {
+      expect(counts.contains).toBe(urls(customSearchFilterKey(id, "contains")).length);
+      expect(counts.missing).toBe(urls(customSearchFilterKey(id, "missing")).length);
+    }
+  });
+
+  it("stats list the crawl's rules first, then ids only found on pages", () => {
+    const tracker = getCustomSearchTracker(pages);
+    const stats = getCustomSearchStats(
+      tracker,
+      [rule("cs2", "Prices"), rule("cs9", " ", "needle"), rule("blank", "Blank", "  ")],
+      [rule("cs1", "From options")],
+    );
+    expect(stats).toEqual([
+      { id: "cs2", label: "Prices", contains: 1, missing: 1 },
+      // No name: the pattern labels it; no page yet: zero counts.
+      { id: "cs9", label: "needle", contains: 0, missing: 0 },
+      { id: "cs1", label: "From options", contains: 2, missing: 1 },
+    ]);
+    expect(getCustomSearchStats(tracker, []).map((s) => s.label)).toEqual(["Custom search cs1", "Custom search cs2"]);
+  });
+
+  it("is never reported as an issue", () => {
+    expect(getPageIssueKeys(pages[0], emptyFilterContext())).not.toContain("custom:cs1:contains");
   });
 });
