@@ -98,7 +98,7 @@ function App() {
   // crawl that was stopped, never a stale one.
   const [resumableStartUrl, setResumableStartUrl] = useState<string | null>(null);
   // Always the start URL of whichever crawl most recently started, read by the
-  // `crawl://done` listener below (registered once on mount) instead of `config.startUrl`,
+  // `crawl://done` listener in useCrawlEvents (registered once on mount) instead of `config.startUrl`,
   // which would otherwise be a stale closure from that first render.
   const activeStartUrlRef = useRef<string | null>(null);
 
