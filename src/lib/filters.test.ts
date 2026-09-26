@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CustomSearchRule, LinkRef, PageResult, ResourceResult } from "../types";
+import type { CustomSearchRule, LinkRef, PageResult, RawSignals, ResourceResult } from "../types";
 import { ISSUE_SOLUTIONS } from "./issueSolutions";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 import {
@@ -12,6 +12,8 @@ import {
   type FilterContext,
   type FilterKey,
   DEEP_PAGE_DEPTH,
+  JS_ADDED_LINKS_THRESHOLD,
+  JS_RAW_WORD_RATIO,
   H1_MAX_LENGTH,
   H2_MAX_LENGTH,
   ISSUE_DEFS,
@@ -900,6 +902,19 @@ describe("issue registry", () => {
       at("bad-schema", { structuredDataErrors: ["missing name"] }),
       at("no-schema", { structuredDataTypes: [] }),
       at("a11y", { accessibilityViolations: [{ ...violation, impact: "serious" }] }),
+      at("js-rendered", {
+        rendered: true,
+        internalLinkCount: 20,
+        raw: {
+          title: "Loading",
+          metaDescription: null,
+          h1: null,
+          canonical: null,
+          metaRobots: "noindex",
+          wordCount: 10,
+          internalLinkCount: 0,
+        },
+      }),
       at("insecure", { insecureLinkCount: 1 }),
       makePage({ url: "http://example.com/plain", canonical: "http://example.com/plain" }),
       at("no-hsts", { hsts: false }),
@@ -1816,5 +1831,104 @@ describe("custom search", () => {
 
   it("is never reported as an issue", () => {
     expect(getPageIssueKeys(pages[0], emptyFilterContext())).not.toContain("custom:cs1:contains");
+  });
+});
+
+describe("raw vs rendered HTML (T3.6)", () => {
+  const JS_KEYS = ["jsChangesTitle", "jsChangesCanonical", "jsChangesRobots", "jsAddsMostContent", "jsAddsLinks"] as const;
+
+  /** A rendered page whose raw HTML matches it exactly, so no JavaScript issue applies. */
+  function renderedPage(raw: Partial<RawSignals> = {}, overrides: Partial<PageResult> = {}): PageResult {
+    const page = makePage({ rendered: true, metaRobots: "index, follow", ...overrides });
+    return {
+      ...page,
+      raw: {
+        title: page.title,
+        metaDescription: page.metaDescription,
+        h1: page.h1,
+        canonical: page.canonical,
+        metaRobots: page.metaRobots,
+        wordCount: page.wordCount,
+        internalLinkCount: page.internalLinkCount,
+        ...raw,
+      },
+    };
+  }
+
+  const run = (pages: PageResult[], key: FilterKey) => filterPages(pages, key, emptyFilterContext());
+  const issueKeys = (p: PageResult) => getPageIssueKeys(p, emptyFilterContext()).filter((k) => (JS_KEYS as readonly string[]).includes(k));
+
+  it("raw signals absent means no js issues", () => {
+    expect(issueKeys(makePage({ rendered: true }))).toEqual([]);
+    expect(issueKeys(makePage({ rendered: true, raw: null }))).toEqual([]);
+    // Raw signals on a page that was not rendered (the render fell back to raw HTML) compare nothing.
+    const notRendered = { ...renderedPage({ title: "Other", wordCount: 0, internalLinkCount: 0 }), rendered: false };
+    expect(issueKeys(notRendered)).toEqual([]);
+  });
+
+  it("identical raw and rendered HTML has no js issues", () => {
+    expect(issueKeys(renderedPage())).toEqual([]);
+    // Whitespace and directive order are formatting, not changes.
+    const page = renderedPage(
+      { title: "  A perfectly fine title that is long enough\nfor SEO purposes ", metaRobots: "FOLLOW,index" },
+      { title: "A perfectly fine title that is long enough for SEO purposes" },
+    );
+    expect(issueKeys(page)).toEqual([]);
+  });
+
+  it("jsChangesTitle", () => {
+    expect(issueKeys(renderedPage({ title: "Loading..." }))).toEqual(["jsChangesTitle"]);
+    expect(issueKeys(renderedPage({ title: null }))).toEqual(["jsChangesTitle"]);
+    const flagged = renderedPage({ title: "Loading..." });
+    expect(run([flagged, renderedPage()], "jsChangesTitle")).toEqual([flagged]);
+
+  });
+
+  it("jsChangesCanonical", () => {
+    expect(issueKeys(renderedPage({ canonical: "https://example.com/other" }))).toEqual(["jsChangesCanonical"]);
+    expect(issueKeys(renderedPage({ canonical: null }))).toEqual(["jsChangesCanonical"]);
+    const flagged = renderedPage({ canonical: null });
+    expect(run([flagged, renderedPage()], "jsChangesCanonical")).toEqual([flagged]);
+
+  });
+
+  it("jsChangesRobots", () => {
+    expect(issueKeys(renderedPage({ metaRobots: "noindex" }))).toEqual(["jsChangesRobots"]);
+    // JavaScript adding "index, follow" (the default) changes nothing.
+    expect(issueKeys(renderedPage({ metaRobots: null }))).toEqual([]);
+    expect(issueKeys(renderedPage({ metaRobots: "all" }))).toEqual([]);
+    // A real directive appearing or changing is flagged.
+    expect(issueKeys(renderedPage({ metaRobots: null }, { metaRobots: "noindex" }))).toEqual(["jsChangesRobots"]);
+    expect(issueKeys(renderedPage({ metaRobots: "nofollow" }, { metaRobots: "none" }))).toEqual(["jsChangesRobots"]);
+    expect(issueKeys(renderedPage({ metaRobots: "noindex" }, { metaRobots: null }))).toEqual(["jsChangesRobots"]);
+    const flagged = renderedPage({ metaRobots: "noindex" });
+    expect(run([flagged, renderedPage()], "jsChangesRobots")).toEqual([flagged]);
+
+  });
+
+  it("jsAddsMostContent at the word ratio boundary", () => {
+    const rendered = 500;
+    const atRatio = rendered * JS_RAW_WORD_RATIO;
+    expect(issueKeys(renderedPage({ wordCount: atRatio - 1 }, { wordCount: rendered }))).toEqual(["jsAddsMostContent"]);
+    expect(issueKeys(renderedPage({ wordCount: 0 }, { wordCount: rendered }))).toEqual(["jsAddsMostContent"]);
+    expect(issueKeys(renderedPage({ wordCount: atRatio }, { wordCount: rendered }))).toEqual([]);
+    // An empty rendered page has no content for JavaScript to have added.
+    expect(issueKeys(renderedPage({ wordCount: 0 }, { wordCount: 0 }))).toEqual([]);
+  });
+
+  it("jsAddsLinks at the added-links boundary", () => {
+    const raw = 3;
+    expect(
+      issueKeys(renderedPage({ internalLinkCount: raw }, { internalLinkCount: raw + JS_ADDED_LINKS_THRESHOLD + 1 })),
+    ).toEqual(["jsAddsLinks"]);
+    expect(issueKeys(renderedPage({ internalLinkCount: raw }, { internalLinkCount: raw + JS_ADDED_LINKS_THRESHOLD }))).toEqual(
+      [],
+    );
+    // JavaScript removing links is not this issue.
+    expect(issueKeys(renderedPage({ internalLinkCount: 50 }, { internalLinkCount: 5 }))).toEqual([]);
+  });
+
+  it("every js issue has a solution", () => {
+    for (const key of JS_KEYS) expect(ISSUE_SOLUTIONS[key].source.url).toContain("javascript-seo-basics");
   });
 });

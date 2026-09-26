@@ -774,6 +774,56 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://web.dev/articles/accessible-tap-targets",
     },
   },
+  jsChangesTitle: {
+    title: "JavaScript changes the title",
+    problem:
+      "The <title> in the raw HTML differs from the one after JavaScript runs. Google renders pages in a second, deferred step, so until then (and for crawlers and social previews that never run JavaScript) the raw title is the one they see.",
+    fix: "Put the final title in the server-sent HTML. If a framework sets it on the client, render it on the server (SSR or static generation) so the raw and rendered titles match.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsChangesCanonical: {
+    title: "JavaScript changes the canonical",
+    problem:
+      "The canonical link in the raw HTML differs from the one after rendering (added, removed or pointing elsewhere). Google may use either, so the page can be canonicalised to a URL you did not intend.",
+    fix: "Serve the correct rel=canonical in the raw HTML and do not change it with JavaScript. If JavaScript must set it, make sure the raw HTML has no conflicting canonical.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsChangesRobots: {
+    title: "JavaScript changes meta robots",
+    problem:
+      "The meta robots directives in the raw HTML differ from the rendered ones. When the raw HTML says noindex, Google may skip rendering entirely, so JavaScript that removes noindex does not work; JavaScript that adds noindex is applied late and inconsistently.",
+    fix: "Decide indexing on the server: send the final meta robots tag (or X-Robots-Tag header) in the raw response, and do not add, remove or change it with JavaScript.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsAddsMostContent: {
+    title: "Most content is added by JavaScript",
+    problem:
+      "The raw HTML has less than half the words of the rendered page. Google can index rendered content, but rendering is queued and can fail or time out, and other search engines and AI crawlers often read only the raw HTML.",
+    fix: "Render the main content on the server (SSR, static generation or hydration of server-rendered markup) so the raw HTML already carries the page's text.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsAddsLinks: {
+    title: "JavaScript adds internal links",
+    problem:
+      "The rendered page has more than five internal links beyond those in the raw HTML. Links that exist only after rendering are discovered later, and not at all by crawlers that do not run JavaScript, which slows or prevents crawling of the pages they point to.",
+    fix: "Output navigation and content links as plain <a href> elements in the server-sent HTML. Keep JavaScript for enhancing links, not creating them.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
   urlUppercase: {
     title: "URL contains uppercase characters",
     problem:

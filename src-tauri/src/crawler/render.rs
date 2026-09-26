@@ -306,39 +306,62 @@ fn run_mobile_usability(tab: &Tab) -> Result<Vec<MobileUsabilityViolation>, Stri
     Ok(violations)
 }
 
-/// Renders a page in a fresh browser tab, returning the post-JS-execution HTML and,
-/// when requested, an accessibility violation list and/or a mobile-usability violation
-/// list from the same loaded page (so each audit reflects what the browser actually
-/// rendered).
+/// What `render_page` got from the browser tab.
+pub struct RenderedPage {
+    /// Post-JS-execution HTML.
+    pub html: String,
+    /// URL of the tab after rendering. Differs from the requested URL when a script or
+    /// meta refresh navigated the tab elsewhere.
+    pub final_url: String,
+    pub accessibility_violations: Vec<AccessibilityViolation>,
+    pub mobile_usability_violations: Vec<MobileUsabilityViolation>,
+}
+
+/// True when the tab ended on the requested document (the fragment ignored), so the
+/// rendered HTML is the same page as the raw HTML fetched for `requested` rather than
+/// the result of a client-side navigation.
+pub fn rendered_same_document(requested: &Url, rendered_url: &str) -> bool {
+    let Ok(mut rendered) = Url::parse(rendered_url) else {
+        return false;
+    };
+    let mut requested = requested.clone();
+    requested.set_fragment(None);
+    rendered.set_fragment(None);
+    rendered == requested
+}
+
+/// Renders a page in a fresh browser tab, returning the post-JS-execution HTML, the
+/// tab's final URL and, when requested, an accessibility violation list and/or a
+/// mobile-usability violation list from the same loaded page (so each audit reflects
+/// what the browser actually rendered).
 pub async fn render_page(
     browser: Arc<Browser>,
     url: Url,
     axe_source: Option<Arc<String>>,
     run_mobile_usability_audit: bool,
-) -> Result<
-    (
-        String,
-        Vec<AccessibilityViolation>,
-        Vec<MobileUsabilityViolation>,
-    ),
-    String,
-> {
+) -> Result<RenderedPage, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let tab = browser.new_tab().map_err(|e| e.to_string())?;
         let result = (|| {
             tab.navigate_to(url.as_str()).map_err(|e| e.to_string())?;
             tab.wait_until_navigated().map_err(|e| e.to_string())?;
             let html = tab.get_content().map_err(|e| e.to_string())?;
+            let final_url = tab.get_url();
             let mobile_usability_violations = if run_mobile_usability_audit {
                 run_mobile_usability(&tab).unwrap_or_default()
             } else {
                 Vec::new()
             };
-            let violations = match axe_source.as_deref() {
+            let accessibility_violations = match axe_source.as_deref() {
                 Some(src) => run_axe(&tab, src).unwrap_or_default(),
                 None => Vec::new(),
             };
-            Ok((html, violations, mobile_usability_violations))
+            Ok(RenderedPage {
+                html,
+                final_url,
+                accessibility_violations,
+                mobile_usability_violations,
+            })
         })();
         // headless_chrome never closes a tab on its own, so a new tab per rendered
         // page (opened above) leaks — and its renderer process memory — for the
@@ -348,4 +371,32 @@ pub async fn render_page(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rendered_same_document_ignores_only_the_fragment() {
+        let requested = Url::parse("https://example.com/page?a=1").unwrap();
+        assert!(rendered_same_document(
+            &requested,
+            "https://example.com/page?a=1"
+        ));
+        assert!(rendered_same_document(
+            &requested,
+            "https://example.com/page?a=1#top"
+        ));
+        assert!(!rendered_same_document(
+            &requested,
+            "https://example.com/login"
+        ));
+        assert!(!rendered_same_document(
+            &requested,
+            "https://example.com/page?a=2"
+        ));
+        assert!(!rendered_same_document(&requested, "about:blank"));
+        assert!(!rendered_same_document(&requested, "not a url"));
+    }
 }

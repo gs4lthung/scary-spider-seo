@@ -1,4 +1,4 @@
-import type { CustomSearchRule, PageResult, ResourceResult } from "../types";
+import type { CustomSearchRule, PageResult, RawSignals, ResourceResult } from "../types";
 import { isValidHreflang, isXDefault } from "./hreflang";
 import { type LinkGraph, buildLinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
 import type { NearDuplicateCluster } from "./nearDuplicates";
@@ -31,6 +31,12 @@ export const DEEP_PAGE_DEPTH = 3;
 export const LARGE_HTML_BYTES = 1_048_576;
 /** Images larger than this (100 KB, Screaming Frog's "Over 100 KB" default) are "large images". */
 export const LARGE_IMAGE_BYTES = 102_400;
+/** A rendered page whose raw HTML has fewer words than this fraction of the rendered word
+ * count gets most of its content from JavaScript. */
+export const JS_RAW_WORD_RATIO = 0.5;
+/** A rendered page with more than this many internal links beyond its raw HTML's count
+ * gets its links from JavaScript. */
+export const JS_ADDED_LINKS_THRESHOLD = 5;
 
 /** Anchor texts that say nothing about the target (compared lowercase, after trimming
  * punctuation and collapsing whitespace, by `isNonDescriptiveAnchor`). */
@@ -461,6 +467,7 @@ export type OverviewSection =
   | "Performance"
   | "Meta & Social"
   | "Mobile Usability"
+  | "JavaScript"
   | "Structured Data"
   | "Accessibility"
   | "Security"
@@ -509,6 +516,56 @@ const hasHtml = (p: PageResult) => p.htmlSizeBytes > 0;
 const hasSecurityHeaders = (p: PageResult) => hasHtml(p) && p.securityHeadersCaptured;
 
 const isBlank = (value: string | null | undefined) => !value || value.trim() === "";
+
+/** Whitespace-collapsed text, so formatting differences between raw and rendered HTML
+ * are not reported as a change. */
+const normalizedText = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim();
+
+/** Raw HTML signals of a rendered page, or null when the page was not compared (option off,
+ * not rendered, or a crawl saved before T3.6), in which case no JavaScript issue applies. */
+function comparedRaw(p: PageResult): RawSignals | null {
+  return p.rendered && p.raw ? p.raw : null;
+}
+
+/** Directives that only restate the default, so adding or removing them changes nothing. */
+const NO_OP_ROBOTS_DIRECTIVES: ReadonlySet<string> = new Set(["index", "follow", "all"]);
+
+function effectiveDirectives(metaRobots: string | null): Set<string> {
+  const directives = parseRobotsDirectives(metaRobots, null);
+  for (const d of NO_OP_ROBOTS_DIRECTIVES) directives.delete(d);
+  return directives;
+}
+
+function sameDirectives(a: string | null, b: string | null): boolean {
+  const left = effectiveDirectives(a);
+  const right = effectiveDirectives(b);
+  return left.size === right.size && [...left].every((d) => right.has(d));
+}
+
+export function jsChangesTitle(p: PageResult): boolean {
+  const raw = comparedRaw(p);
+  return !!raw && normalizedText(raw.title) !== normalizedText(p.title);
+}
+
+export function jsChangesCanonical(p: PageResult): boolean {
+  const raw = comparedRaw(p);
+  return !!raw && normalizedText(raw.canonical) !== normalizedText(p.canonical);
+}
+
+export function jsChangesRobots(p: PageResult): boolean {
+  const raw = comparedRaw(p);
+  return !!raw && !sameDirectives(raw.metaRobots, p.metaRobots);
+}
+
+export function jsAddsMostContent(p: PageResult): boolean {
+  const raw = comparedRaw(p);
+  return !!raw && p.wordCount > 0 && raw.wordCount < p.wordCount * JS_RAW_WORD_RATIO;
+}
+
+export function jsAddsLinks(p: PageResult): boolean {
+  const raw = comparedRaw(p);
+  return !!raw && p.internalLinkCount > raw.internalLinkCount + JS_ADDED_LINKS_THRESHOLD;
+}
 
 /** `X-Frame-Options`, or CSP `frame-ancestors`, which supersedes it in modern browsers. */
 export function hasFrameProtection(p: PageResult): boolean {
@@ -1162,6 +1219,46 @@ export const ISSUE_DEFS = [
     tone: "bad",
     section: "Mobile Usability",
     test: (p) => p.mobileUsabilityViolations.length > 0,
+  }),
+  pageIssue({
+    key: "jsChangesTitle",
+    label: "JavaScript changes the title",
+    group: "technical",
+    tone: "warn",
+    section: "JavaScript",
+    test: jsChangesTitle,
+  }),
+  pageIssue({
+    key: "jsChangesCanonical",
+    label: "JavaScript changes the canonical",
+    group: "indexing",
+    tone: "bad",
+    section: "JavaScript",
+    test: jsChangesCanonical,
+  }),
+  pageIssue({
+    key: "jsChangesRobots",
+    label: "JavaScript changes meta robots",
+    group: "indexing",
+    tone: "bad",
+    section: "JavaScript",
+    test: jsChangesRobots,
+  }),
+  pageIssue({
+    key: "jsAddsMostContent",
+    label: `Most content added by JavaScript (raw under ${JS_RAW_WORD_RATIO * 100}% of words)`,
+    group: "content",
+    tone: "warn",
+    section: "JavaScript",
+    test: jsAddsMostContent,
+  }),
+  pageIssue({
+    key: "jsAddsLinks",
+    label: `JavaScript adds internal links (over ${JS_ADDED_LINKS_THRESHOLD})`,
+    group: "links",
+    tone: "warn",
+    section: "JavaScript",
+    test: jsAddsLinks,
   }),
   pageIssue({
     key: "structuredDataErrors",

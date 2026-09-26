@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Raw title before JavaScript</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <h1>JavaScript changes this page</h1>
+  <p>The raw HTML has this short paragraph only.</p>
+  <nav id="links"><a href="/">Home</a></nav>
+  <script>
+    document.title = "Rendered title set by JavaScript";
+    var nav = document.getElementById("links");
+    for (var i = 1; i <= 10; i++) {
+      var a = document.createElement("a");
+      a.href = "/js-link-" + i + ".html";
+      a.textContent = "Added link " + i;
+      nav.appendChild(a);
+    }
+  </script>
+</body>
+</html>

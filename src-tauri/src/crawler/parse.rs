@@ -1,5 +1,7 @@
 use crate::crawler::custom::Extraction;
-use crate::crawler::types::{HreflangLink, LinkRef, MAX_HREFLANG_LINKS, MAX_OUTLINKS_PER_PAGE};
+use crate::crawler::types::{
+    HreflangLink, LinkRef, RawSignals, MAX_HREFLANG_LINKS, MAX_OUTLINKS_PER_PAGE,
+};
 use scraper::{ElementRef, Html, Selector};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -362,6 +364,28 @@ fn count_mixed_content(document: &Html, base: &Url) -> usize {
         .count()
 }
 
+impl RawSignals {
+    /// Copies the SEO critical signals of a parsed page. `internal_link_count` counts
+    /// every internal link, like `PageResult::internal_link_count`.
+    pub fn from_parsed(parsed: &ParsedPage) -> Self {
+        Self {
+            title: parsed.title.clone(),
+            meta_description: parsed.meta_description.clone(),
+            h1: parsed.h1.clone(),
+            canonical: parsed.canonical.clone(),
+            meta_robots: parsed.meta_robots.clone(),
+            word_count: parsed.word_count,
+            internal_link_count: parsed.internal_links.len(),
+        }
+    }
+}
+
+/// Parses raw (unrendered) HTML just for the signals the raw vs rendered comparison
+/// needs; custom extraction does not run on it.
+pub fn parse_raw_signals(body: &str, base: &Url) -> RawSignals {
+    RawSignals::from_parsed(&parse_page_with(body, base, &Extraction::default()))
+}
+
 /// `parse_page_with` without custom extraction rules (the crawl always passes its rules).
 #[cfg(test)]
 pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
@@ -659,6 +683,32 @@ mod tests {
 
     fn parse(html: &str) -> ParsedPage {
         parse_page(html, &base())
+    }
+
+    #[test]
+    fn raw_signals_copy_parsed_fields() {
+        let html = r#"<html><head><title> Raw title </title>
+            <meta name="description" content="Raw description">
+            <meta name="robots" content="noindex, follow">
+            <link rel="canonical" href="/canonical"></head>
+            <body><h1>Raw heading</h1><p>one two three four five</p>
+              <a href="/a">A</a><a href="/b">B</a><a href="https://other.example/">X</a>
+            </body></html>"#;
+        let parsed = parse(html);
+        let raw = RawSignals::from_parsed(&parsed);
+        assert_eq!(raw.title, parsed.title);
+        assert_eq!(raw.meta_description.as_deref(), Some("Raw description"));
+        assert_eq!(raw.h1.as_deref(), Some("Raw heading"));
+        assert_eq!(raw.canonical, parsed.canonical);
+        assert!(raw.canonical.is_some());
+        assert_eq!(raw.meta_robots.as_deref(), Some("noindex, follow"));
+        assert_eq!(raw.word_count, parsed.word_count);
+        assert!(raw.word_count > 0);
+        assert_eq!(raw.internal_link_count, 2);
+        assert_eq!(parse_raw_signals(html, &base()), raw);
+
+        let empty = RawSignals::from_parsed(&parse("<html><body></body></html>"));
+        assert_eq!(empty, RawSignals::default());
     }
 
     fn extraction_rule(id: &str, selector: &str, mode: ExtractionMode) -> ExtractionRule {

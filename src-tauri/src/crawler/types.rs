@@ -57,6 +57,11 @@ pub struct CrawlConfig {
     /// page into `PageResult::extracted`.
     #[serde(default)]
     pub extractions: Vec<ExtractionRule>,
+    /// With `render_js` on, also GET and parse the raw (pre-JavaScript) HTML of every
+    /// page into `PageResult::raw`, so the frontend can flag what JavaScript changed.
+    /// Ignored without `render_js`.
+    #[serde(default)]
+    pub compare_raw_html: bool,
 }
 
 /// One custom extraction rule: a CSS selector and what to take from each element it
@@ -319,8 +324,34 @@ pub struct PageResult {
     /// rules and crawls saved before custom extraction existed.
     #[serde(default)]
     pub extracted: BTreeMap<String, Vec<String>>,
+    /// SEO signals of the raw HTML, before JavaScript ran. Set only for pages that were
+    /// rendered by a crawl with `compare_raw_html` on; `None` otherwise, including for
+    /// every crawl saved before this field existed.
+    #[serde(default)]
+    pub raw: Option<RawSignals>,
     #[serde(default)]
     pub error: Option<String>,
+}
+
+/// The SEO critical elements of a page's raw (unrendered) HTML, compared by the frontend
+/// against the rendered values on the same `PageResult`. Built by `RawSignals::from_parsed`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawSignals {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub meta_description: Option<String>,
+    #[serde(default)]
+    pub h1: Option<String>,
+    #[serde(default)]
+    pub canonical: Option<String>,
+    #[serde(default)]
+    pub meta_robots: Option<String>,
+    #[serde(default)]
+    pub word_count: usize,
+    #[serde(default)]
+    pub internal_link_count: usize,
 }
 
 /// Most internal outlinks stored per page, so a page with a huge link list cannot
@@ -493,6 +524,15 @@ mod tests {
         assert!(snapshot.custom_searches.is_empty());
         assert!(home.extracted.is_empty());
         assert!(snapshot.extractions.is_empty());
+        assert!(snapshot.pages.iter().all(|p| p.raw.is_none()));
+    }
+
+    /// A config sent without the T3.6 `compareRawHtml` field does not fetch raw HTML.
+    #[test]
+    fn config_without_compare_raw_html_defaults_off() {
+        let config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
+        assert!(!config.compare_raw_html);
     }
 
     /// A config sent without the T3.1 pattern fields means "no restriction".

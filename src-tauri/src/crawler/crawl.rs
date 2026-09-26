@@ -1,6 +1,6 @@
 use super::custom::{CustomSearch, Extraction};
 use super::hosting;
-use super::parse::parse_page_with;
+use super::parse::{parse_page_with, parse_raw_signals};
 use super::render;
 use super::robots::RobotsRules;
 use super::scope::UrlScope;
@@ -243,6 +243,8 @@ async fn fetch_following_redirects(
 /// Per-crawl settings for analysing a fetched page, shared by every page task.
 struct PageAnalysis {
     run_mobile_usability_audit: bool,
+    /// Also GET the raw HTML of rendered pages and record its signals in `PageResult::raw`.
+    compare_raw_html: bool,
     custom_search: CustomSearch,
     extraction: Extraction,
 }
@@ -258,7 +260,10 @@ async fn fetch_and_parse(
 ) -> PageFetchOutcome {
     let started = Instant::now();
 
-    let request_method = if browser.is_some() {
+    // Rendering takes the body from Chrome, so a plain HEAD is enough unless the raw
+    // HTML is wanted too for the raw vs rendered comparison.
+    let fetch_raw_html = browser.is_some() && analysis.compare_raw_html;
+    let request_method = if browser.is_some() && !fetch_raw_html {
         Method::HEAD
     } else {
         Method::GET
@@ -362,7 +367,17 @@ async fn fetch_and_parse(
     let mut rendered = false;
     let mut accessibility_violations = Vec::new();
     let mut mobile_usability_violations = Vec::new();
+    let mut raw_body: Option<String> = None;
     let body: String = if let Some(browser) = browser {
+        if fetch_raw_html {
+            match resp.text().await {
+                Ok(b) => raw_body = Some(b),
+                Err(e) => {
+                    let elapsed = started.elapsed().as_millis() as u64;
+                    return body_read_error_outcome(base, elapsed, e);
+                }
+            }
+        }
         // A rendered page opens a full Chrome tab — much heavier than a plain fetch —
         // so it's throttled by its own (CPU-core-scaled) semaphore independent of
         // `config.concurrency`, keeping a high page-fetch concurrency from also meaning
@@ -384,12 +399,20 @@ async fn fetch_and_parse(
         )
         .await
         {
-            Ok((html, violations, mobile_violations)) => {
+            Ok(page) => {
                 rendered = true;
-                accessibility_violations = violations;
-                mobile_usability_violations = mobile_violations;
-                html
+                accessibility_violations = page.accessibility_violations;
+                mobile_usability_violations = page.mobile_usability_violations;
+                // A script or meta refresh that navigated the tab to another document
+                // is not "JavaScript changed this page": drop the raw HTML so the
+                // two documents are never compared.
+                if !render::rendered_same_document(&final_url, &page.final_url) {
+                    raw_body = None;
+                }
+                page.html
             }
+            // Rendering failed: parse the raw HTML instead, reusing it when already fetched.
+            Err(_) if raw_body.is_some() => raw_body.take().unwrap_or_default(),
             Err(_) => match client.get(final_url.clone()).send().await {
                 Ok(response) => match response.text().await {
                     Ok(b) => b,
@@ -420,15 +443,19 @@ async fn fetch_and_parse(
     // workers that drive every other in-flight fetch.
     let parse_url = final_url.clone();
     let parse_analysis = analysis.clone();
+    // Raw signals only mean something next to a rendered body; the fallback path above
+    // already parses the raw HTML as the page itself.
+    let raw_body = if rendered { raw_body } else { None };
     let parse_result = tokio::task::spawn_blocking(move || {
         let parsed = parse_page_with(&body, &parse_url, &parse_analysis.extraction);
         let counts = parse_analysis
             .custom_search
             .count_matches(&body, &parsed.body_text);
-        (parsed, counts)
+        let raw = raw_body.map(|raw| parse_raw_signals(&raw, &parse_url));
+        (parsed, counts, raw)
     })
     .await;
-    let (parsed, custom_search_counts) = match parse_result {
+    let (parsed, custom_search_counts, raw) = match parse_result {
         Ok(result) => result,
         Err(e) => {
             return empty_outcome(PageResult {
@@ -541,6 +568,7 @@ async fn fetch_and_parse(
         mobile_usability_violations,
         custom_search_counts,
         extracted: parsed.extracted,
+        raw,
         error: None,
     };
 
@@ -772,6 +800,7 @@ pub async fn run_crawl<R: Runtime>(
     {
         Ok((custom_search, extraction)) => Arc::new(PageAnalysis {
             run_mobile_usability_audit: config.run_mobile_usability_audit,
+            compare_raw_html: config.compare_raw_html,
             custom_search,
             extraction,
         }),

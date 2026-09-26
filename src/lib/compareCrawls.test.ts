@@ -8,7 +8,7 @@ import {
   compareCrawls,
   incomparableIssueKeys,
 } from "./compareCrawls";
-import { countIssues } from "./filters";
+import { type IssueKey, countIssues } from "./filters";
 
 function makePage(overrides: Partial<PageResult> = {}): PageResult {
   return {
@@ -279,6 +279,28 @@ describe("compareCrawls", () => {
       }),
     ];
     expect(incomparableIssueKeys(crawl(pages), crawl(pages)).size).toBe(0);
+  });
+
+  it("marks js comparison issues n/a when a crawl rendered pages without raw HTML", () => {
+    const raw = {
+      title: "Raw",
+      metaDescription: null,
+      h1: null,
+      canonical: null,
+      metaRobots: null,
+      wordCount: 1,
+      internalLinkCount: 0,
+    };
+    const compared = crawl([makePage({ url: "https://example.com/", rendered: true, raw })]);
+    const renderedOnly = crawl([makePage({ url: "https://example.com/", rendered: true })]);
+    const notRendered = crawl([makePage({ url: "https://example.com/" })]);
+    const jsKeys: IssueKey[] = ["jsChangesTitle", "jsChangesCanonical", "jsChangesRobots", "jsAddsMostContent", "jsAddsLinks"];
+    const incomparableJs = (a: typeof compared, b: typeof compared) =>
+      jsKeys.filter((k) => incomparableIssueKeys(a, b).has(k));
+    expect(incomparableJs(compared, renderedOnly)).toEqual(jsKeys);
+    // No page rendered: nothing could have been compared, so zero is a real count.
+    expect(incomparableJs(compared, notRendered)).toEqual([]);
+    expect(incomparableJs(compared, compared)).toEqual([]);
   });
 
   it("counts url collisions and keeps the first page", () => {

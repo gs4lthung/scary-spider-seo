@@ -25,6 +25,8 @@ export interface CrawlConfig {
   customSearches: CustomSearchRule[];
   /** Custom extraction rules (at most `MAX_EXTRACTIONS`); each HTML page gets the values each rule's selector matches. */
   extractions: ExtractionRule[];
+  /** With `renderJs` on, also fetch each page's raw HTML so `PageResult.raw` can be compared with the rendered page. Ignored without `renderJs`. */
+  compareRawHtml: boolean;
 }
 
 /** What a custom search rule searches: the raw HTML, or the visible body text. */
@@ -160,7 +162,20 @@ export interface PageResult {
   customSearchCounts: Record<string, number>;
   /** Values per custom extraction rule id (at most 10 values of 500 chars; an empty list when nothing matched) for parsed HTML pages. Empty for other URLs, crawls without rules and crawls saved before T3.4. */
   extracted: Record<string, string[]>;
+  /** SEO signals of the raw HTML before JavaScript ran. Only set on pages rendered by a crawl with `compareRawHtml` on; absent or null otherwise, including in crawls saved before T3.6. */
+  raw?: RawSignals | null;
   error: string | null;
+}
+
+/** The SEO critical elements of a page's raw (unrendered) HTML. */
+export interface RawSignals {
+  title: string | null;
+  metaDescription: string | null;
+  h1: string | null;
+  canonical: string | null;
+  metaRobots: string | null;
+  wordCount: number;
+  internalLinkCount: number;
 }
 
 export interface AccessibilityViolation {
@@ -259,4 +274,5 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   listUrls: [],
   customSearches: [],
   extractions: [],
+  compareRawHtml: false,
 };

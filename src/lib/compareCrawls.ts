@@ -244,6 +244,13 @@ export const SIGNAL_FAMILIES: readonly SignalFamily[] = [
     captured: ({ pages }) => pages.some((p) => p.contentSimhash) || !pages.some((p) => p.wordCount >= 20),
     issues: ["nearDuplicateContent"],
   },
+  {
+    // Raw HTML is only captured when the crawl rendered pages with the comparison option on,
+    // so a crawl that rendered pages without it (or predates T3.6) has unknown counts.
+    name: "raw vs rendered HTML (T3.6)",
+    captured: ({ pages }) => pages.some((p) => p.raw) || !pages.some((p) => p.rendered),
+    issues: ["jsChangesTitle", "jsChangesCanonical", "jsChangesRobots", "jsAddsMostContent", "jsAddsLinks"],
+  },
 ];
 
 /** Issues whose count is unknown in at least one of the two crawls. */

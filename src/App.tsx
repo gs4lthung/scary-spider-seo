@@ -1455,6 +1455,16 @@ function App() {
             },
             { label: "Depth", value: selectedPage.depth },
             { label: "JS Rendered", value: selectedPage.rendered ? "Yes" : "No" },
+            // Raw (pre-JavaScript) values, only for pages compared with "Compare raw and rendered HTML".
+            ...(selectedPage.raw
+              ? [
+                  { label: "Raw Title", value: selectedPage.raw.title },
+                  { label: "Raw Canonical", value: selectedPage.raw.canonical },
+                  { label: "Raw Meta Robots", value: selectedPage.raw.metaRobots },
+                  { label: "Raw Word Count", value: selectedPage.raw.wordCount },
+                  { label: "Raw Internal Links", value: selectedPage.raw.internalLinkCount },
+                ]
+              : []),
             {
               label: "HSTS",
               value: selectedPage.url.startsWith("https:") ? (selectedPage.hsts ? "Yes" : "No") : null,
