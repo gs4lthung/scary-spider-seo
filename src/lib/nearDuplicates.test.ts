@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { bestTimeMs } from "./testTiming";
 import type { PageResult } from "../types";
 import {
   createNearDuplicateTracker,
@@ -166,18 +167,10 @@ describe("findNearDuplicates", () => {
       previous = value;
     }
     const run = () => findNearDuplicates(pages);
-    // An untimed warm-up pass lets the JIT compile the hot loops. The full suite runs test files
-    // in parallel workers, so one timed pass can be slowed by CPU contention that has nothing to
-    // do with this code: retry until a pass fits the budget (up to MAX_ATTEMPTS) and assert on
-    // the best one.
+    // An untimed warm-up pass lets the JIT compile the hot loops. Timed passes measure CPU time
+    // (see bestTimeMs), not wall-clock, because parallel Vitest workers and cargo can deschedule
+    // this process; passes repeat for a bounded window and the best one must fit the budget.
     expect(run().size).toBe((count / 10) * 2);
-    const MAX_ATTEMPTS = 10;
-    let best = Infinity;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS && best >= 1000; attempt++) {
-      const start = performance.now();
-      run();
-      best = Math.min(best, performance.now() - start);
-    }
-    expect(best).toBeLessThan(1000);
+    expect(bestTimeMs(run, 1000)).toBeLessThan(1000);
   }, 60_000);
 });
