@@ -721,6 +721,13 @@ function App() {
     closeGuardRef.current = { running, pagesCount: pages.length, resourcesCount: resources.length };
   }, [running, pages.length, resources.length]);
 
+  // The results currently on screen, so handleStart can put them back if the backend
+  // rejects the start (e.g. an invalid include/exclude pattern) after the view was cleared.
+  const shownCrawlRef = useRef({ pages, resources, siteInfo, linkedUrls, progress });
+  useEffect(() => {
+    shownCrawlRef.current = { pages, resources, siteInfo, linkedUrls, progress };
+  }, [pages, resources, siteInfo, linkedUrls, progress]);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
@@ -763,6 +770,9 @@ function App() {
     // them. A different start URL (or a crawl that ran to completion) always starts fresh.
     const continuing = resumableStartUrl === startUrl;
     activeStartUrlRef.current = startUrl;
+    // Cleared up front rather than after `invoke` resolves, because crawl events can
+    // arrive before it does; restored below if the backend rejects the start.
+    const previous = shownCrawlRef.current;
     if (!continuing) {
       setPages([]);
       setResources([]);
@@ -782,6 +792,17 @@ function App() {
     } catch (err) {
       toast.error(String(err));
       setRunning(false);
+      // A rejected start leaves the backend's results and resume state untouched, so the
+      // view must match it again. Resetting the trackers makes them re-ingest every
+      // restored page on the next derivation.
+      setProgress(previous.progress);
+      if (!continuing) {
+        resetDerivedTrackers();
+        setPages(previous.pages);
+        setResources(previous.resources);
+        setSiteInfo(previous.siteInfo);
+        setLinkedUrls(previous.linkedUrls);
+      }
     }
   }, [config, preferHttps, resumableStartUrl, resetDerivedTrackers]);
 
