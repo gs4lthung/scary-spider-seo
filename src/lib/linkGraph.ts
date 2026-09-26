@@ -109,21 +109,24 @@ export function linkScore(graph: LinkGraph, iterations = 20, damping = 0.85): Ma
 
   // Compressed adjacency: the targets of page i are edgeTargets[edgeStart[i] .. edgeStart[i + 1]).
   const edgeStart = new Int32Array(n + 1);
-  const targets: number[] = [];
+  let linkCount = 0;
+  for (const p of pages) linkCount += p.outlinks?.length ?? 0;
+  // Sized for every outlink up front; only the first `edgeCount` entries are used.
+  const edgeTargets = new Int32Array(linkCount);
+  let edgeCount = 0;
   // lastSource[j] === i marks target j as already counted for source i.
   const lastSource = new Int32Array(n).fill(-1);
   for (let i = 0; i < n; i++) {
-    edgeStart[i] = targets.length;
+    edgeStart[i] = edgeCount;
     for (const link of pages[i].outlinks ?? []) {
       if (link.nofollow) continue;
       const j = indexOf.get(link.url);
       if (j === undefined || j === i || lastSource[j] === i) continue;
       lastSource[j] = i;
-      targets.push(j);
+      edgeTargets[edgeCount++] = j;
     }
   }
-  edgeStart[n] = targets.length;
-  const edgeTargets = Int32Array.from(targets);
+  edgeStart[n] = edgeCount;
 
   let rank = new Float64Array(n).fill(1 / n);
   let next = new Float64Array(n);
