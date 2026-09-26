@@ -1894,7 +1894,13 @@ describe("raw vs rendered HTML (T3.6)", () => {
 
   it("jsChangesRobots", () => {
     expect(issueKeys(renderedPage({ metaRobots: "noindex" }))).toEqual(["jsChangesRobots"]);
-    expect(issueKeys(renderedPage({ metaRobots: null }))).toEqual(["jsChangesRobots"]);
+    // JavaScript adding "index, follow" (the default) changes nothing.
+    expect(issueKeys(renderedPage({ metaRobots: null }))).toEqual([]);
+    expect(issueKeys(renderedPage({ metaRobots: "all" }))).toEqual([]);
+    // A real directive appearing or changing is flagged.
+    expect(issueKeys(renderedPage({ metaRobots: null }, { metaRobots: "noindex" }))).toEqual(["jsChangesRobots"]);
+    expect(issueKeys(renderedPage({ metaRobots: "nofollow" }, { metaRobots: "none" }))).toEqual(["jsChangesRobots"]);
+    expect(issueKeys(renderedPage({ metaRobots: "noindex" }, { metaRobots: null }))).toEqual(["jsChangesRobots"]);
     const flagged = renderedPage({ metaRobots: "noindex" });
     expect(run([flagged, renderedPage()], "jsChangesRobots")).toEqual([flagged]);
 

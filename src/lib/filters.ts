@@ -527,9 +527,18 @@ function comparedRaw(p: PageResult): RawSignals | null {
   return p.rendered && p.raw ? p.raw : null;
 }
 
+/** Directives that only restate the default, so adding or removing them changes nothing. */
+const NO_OP_ROBOTS_DIRECTIVES: ReadonlySet<string> = new Set(["index", "follow", "all"]);
+
+function effectiveDirectives(metaRobots: string | null): Set<string> {
+  const directives = parseRobotsDirectives(metaRobots, null);
+  for (const d of NO_OP_ROBOTS_DIRECTIVES) directives.delete(d);
+  return directives;
+}
+
 function sameDirectives(a: string | null, b: string | null): boolean {
-  const left = parseRobotsDirectives(a, null);
-  const right = parseRobotsDirectives(b, null);
+  const left = effectiveDirectives(a);
+  const right = effectiveDirectives(b);
   return left.size === right.size && [...left].every((d) => right.has(d));
 }
 
