@@ -9,7 +9,7 @@ must produce.
 | --- | --- |
 | `/` | none: the clean baseline (title, meta, one h1, lang, viewport, OG, canonical, JSON-LD) |
 | `/missing-title.html` | no title, no meta description, no h1, no lang |
-| `/dup-a.html`, `/dup-b.html` | duplicate title, meta description and content hash |
+| `/dup-a.html`, `/dup-b.html` | duplicate title, meta description and content hash; "Duplicate" appears 3 times in the HTML and twice in the visible text (custom search) |
 | `/h1-and-images.html` | two h1s, one image without alt, one broken image (`/img/missing.png`), three images without `width`/`height`, one of them `/img/large.png` (150000 bytes, route in the test server) |
 | `/noindex.html` | meta robots noindex |
 | `/canonicalised.html` | canonical pointing elsewhere |
