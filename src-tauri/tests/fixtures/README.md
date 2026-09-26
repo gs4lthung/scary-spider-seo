@@ -10,7 +10,7 @@ must produce.
 | `/` | none: the clean baseline (title, meta, one h1, lang, viewport, OG, canonical, JSON-LD) |
 | `/missing-title.html` | no title, no meta description, no h1, no lang |
 | `/dup-a.html`, `/dup-b.html` | duplicate title, meta description and content hash |
-| `/h1-and-images.html` | two h1s, one image without alt, one broken image (`/img/missing.png`) |
+| `/h1-and-images.html` | two h1s, one image without alt, one broken image (`/img/missing.png`), three images without `width`/`height`, one of them `/img/large.png` (150000 bytes, route in the test server) |
 | `/noindex.html` | meta robots noindex |
 | `/canonicalised.html` | canonical pointing elsewhere |
 | `/old-page` | 301 to `/new-page.html` (route in the test server) |

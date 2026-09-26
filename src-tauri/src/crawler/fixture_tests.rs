@@ -86,6 +86,9 @@ const SECURITY_HEADERS: &[(&str, &str)] = &[
     ("Referrer-Policy", "strict-origin-when-cross-origin"),
 ];
 
+/// Body size of `/img/large.png`, over the frontend's 100 KB `largeImage` threshold.
+const LARGE_IMAGE_BYTES: usize = 150_000;
+
 /// Routes that can't be static files (redirects, images) are handled here; everything
 /// else is read from the fixture directory, with `{{ORIGIN}}` substituted.
 fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Vec<u8> {
@@ -99,6 +102,14 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
         "/loop-b" => return redirect("/loop-a"),
         "/img/ok.png" | "/img/decorative.png" | "/img/logo.png" => {
             return http_response("200 OK", &[("Content-Type", "image/png")], b"\x89PNG", head)
+        }
+        "/img/large.png" => {
+            return http_response(
+                "200 OK",
+                &[("Content-Type", "image/png")],
+                &vec![0u8; LARGE_IMAGE_BYTES],
+                head,
+            )
         }
         _ => {}
     }
@@ -277,9 +288,11 @@ async fn extracts_on_page_signals() {
 
     let images = out.page(&site.url("/h1-and-images.html"));
     assert_eq!(images.h1_count, 2);
-    assert_eq!(images.image_count, 3);
+    assert_eq!(images.image_count, 4);
     // alt="" marks a decorative image and is deliberately not counted as missing.
     assert_eq!(images.missing_alt_count, 1);
+    // Only /img/ok.png carries both width and height.
+    assert_eq!(images.images_missing_dimensions, 3);
 
     let bad = out.page(&site.url("/bad-jsonld.html"));
     assert_eq!(bad.structured_data_errors.len(), 1);
@@ -583,6 +596,21 @@ async fn checks_image_resources() {
     let described = out.resource(&site.url("/img/ok.png"));
     assert_eq!(described.alt_text.as_deref(), Some("A described image"));
     assert_eq!(described.source_page, site.url("/h1-and-images.html"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn records_image_content_length() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signal for the frontend's largeImage check, read from the HEAD response.
+    let large = out.resource(&site.url("/img/large.png"));
+    assert_eq!(large.status, Some(200));
+    assert_eq!(large.content_length, Some(LARGE_IMAGE_BYTES as u64));
+    assert_eq!(
+        out.resource(&site.url("/img/ok.png")).content_length,
+        Some(4)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

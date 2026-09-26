@@ -85,6 +85,9 @@ pub struct ParsedPage {
     /// sources that resolve to plain `http:`. Always 0 on a non-HTTPS page.
     pub mixed_content_count: usize,
     pub missing_alt_count: usize,
+    /// `<img src>` elements lacking a `width` or `height` attribute (either one absent).
+    /// CSS sizing is not considered.
+    pub images_missing_dimensions: usize,
     pub lang: Option<String>,
     pub hreflang_values: Vec<String>,
     /// Hreflang annotations with resolvable hrefs, capped at `MAX_HREFLANG_LINKS`.
@@ -485,12 +488,16 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
     // An explicit alt="" (decorative image) is intentional per accessibility best
     // practice; only a wholly absent alt attribute counts as "missing".
     let mut missing_alt_count = 0;
+    let mut images_missing_dimensions = 0;
     for img in html.select(&IMG_SEL) {
         if let Some(src) = img.value().attr("src") {
             if let Some(joined) = resolve_url(base, src) {
                 let alt_attr = img.value().attr("alt");
                 if alt_attr.is_none() {
                     missing_alt_count += 1;
+                }
+                if img.value().attr("width").is_none() || img.value().attr("height").is_none() {
+                    images_missing_dimensions += 1;
                 }
                 let alt = alt_attr.map(|s| s.to_string()).filter(|s| !s.is_empty());
                 images.push((joined, alt));
@@ -548,6 +555,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         insecure_link_count,
         mixed_content_count,
         missing_alt_count,
+        images_missing_dimensions,
         lang,
         hreflang_values,
         hreflang_links,
@@ -888,6 +896,20 @@ mod tests {
         let page = parse(&html);
         assert_eq!(page.internal_outlinks.len(), MAX_OUTLINKS_PER_PAGE);
         assert_eq!(page.internal_links.len(), MAX_OUTLINKS_PER_PAGE + 5);
+    }
+
+    #[test]
+    fn counts_images_missing_dimensions() {
+        let page = parse(
+            r#"<img src="/a.png" width="10" height="10">
+            <img src="/b.png" width="10">
+            <img src="/c.png" height="10">
+            <img src="/d.png">
+            <img src="/e.png" style="width:10px;height:10px">
+            <img width="1" alt="no src">"#,
+        );
+        assert_eq!(page.images.len(), 5);
+        assert_eq!(page.images_missing_dimensions, 4);
     }
 
     #[test]

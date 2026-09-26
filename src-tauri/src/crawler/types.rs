@@ -169,6 +169,10 @@ pub struct PageResult {
     pub insecure_link_count: usize,
     #[serde(default)]
     pub missing_alt_count: usize,
+    /// `<img src>` elements missing a `width` or `height` attribute. 0 for crawls
+    /// saved before this field existed.
+    #[serde(default)]
+    pub images_missing_dimensions: usize,
     #[serde(default)]
     pub lang: Option<String>,
     #[serde(default)]
@@ -286,6 +290,11 @@ pub struct ResourceResult {
     pub is_insecure: bool,
     #[serde(default)]
     pub error: Option<String>,
+    /// Size in bytes from the `Content-Length` response header of the HEAD request
+    /// (or the GET fallback). `None` when the server sent no usable header, and for
+    /// crawls saved before this field existed.
+    #[serde(default)]
+    pub content_length: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -364,5 +373,7 @@ mod tests {
         assert_eq!(home.pagination_prev, None);
         assert!(home.outlinks.is_empty());
         assert!(home.hreflang_links.is_empty());
+        assert_eq!(home.images_missing_dimensions, 0);
+        assert_eq!(snapshot.resources[0].content_length, None);
     }
 }
