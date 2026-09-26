@@ -380,8 +380,8 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
   hreflangInvalidCode: {
     title: "Invalid hreflang language or region code",
     problem:
-      "Google only understands hreflang values made of an ISO 639-1 language code, optionally followed by an ISO 3166-1 alpha-2 region code, or x-default. An unknown code (such as en-UK or english) is ignored.",
-    fix: "Use a two-letter language code, optionally followed by a hyphen and a two-letter region code, for example en, en-GB or fr-CA. The region for the United Kingdom is GB, not UK. Never use a region on its own.",
+      "Google only understands hreflang values made of an ISO 639-1 language code, optionally followed by an ISO 15924 script code and an ISO 3166-1 alpha-2 region code, or x-default. An unknown code (such as en-UK or english) is ignored.",
+    fix: "Use a two-letter language code, optionally followed by a four-letter script code and a two-letter region code, each after a hyphen: for example en, en-GB, fr-CA, zh-Hant or zh-Hans-US. The region for the United Kingdom is GB, not UK. Never use a region on its own.",
     source: {
       label: "Google Search Central: Tell Google about localized versions of your page",
       url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
