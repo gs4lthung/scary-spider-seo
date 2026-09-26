@@ -43,6 +43,7 @@ function makePage(url: string): PageResult {
     lang: "en",
     hreflangValues: [],
     internalNofollowCount: 0,
+    outlinks: [],
     textRatioPct: 20,
     contentHash: url,
     xRobotsTag: null,

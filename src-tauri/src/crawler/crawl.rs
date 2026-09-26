@@ -413,6 +413,7 @@ async fn fetch_and_parse(
         lang: parsed.lang,
         hreflang_values: parsed.hreflang_values,
         internal_nofollow_count: parsed.internal_nofollow_count,
+        outlinks: parsed.internal_outlinks,
         text_ratio_pct: parsed.text_ratio_pct,
         content_hash: parsed.content_hash,
         x_robots_tag,

@@ -143,6 +143,10 @@ pub fn export_csv(state: State<'_, AppState>, path: String, what: String) -> Res
                 state.resources.iter().map(|r| r.value().clone()).collect();
             export::export_resources_csv(&resources, &path).map_err(|e| e.to_string())
         }
+        "links" => {
+            let pages = lock_state(&state.pages)?;
+            export::export_links_csv(&pages, &path).map_err(|e| e.to_string())
+        }
         _ => Err(format!("Unknown export type: {what}")),
     }
 }

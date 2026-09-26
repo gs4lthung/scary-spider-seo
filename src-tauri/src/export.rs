@@ -169,3 +169,96 @@ pub fn export_resources_csv(
     wtr.flush()?;
     Ok(())
 }
+
+/// One row per internal link (`PageResult.outlinks`), duplicates included.
+pub fn export_links_csv(
+    pages: &[PageResult],
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = File::create(path)?;
+    let mut wtr = csv::Writer::from_writer(file);
+
+    wtr.write_record(["Source", "Target", "Anchor", "Nofollow"])?;
+
+    for p in pages {
+        for link in &p.outlinks {
+            wtr.write_record([
+                p.url.as_str(),
+                link.url.as_str(),
+                link.anchor.as_str(),
+                if link.nofollow { "true" } else { "false" },
+            ])?;
+        }
+    }
+
+    wtr.flush()?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crawler::types::LinkRef;
+
+    fn link(url: &str, anchor: &str, nofollow: bool) -> LinkRef {
+        LinkRef {
+            url: url.to_string(),
+            anchor: anchor.to_string(),
+            nofollow,
+            is_image_link: false,
+        }
+    }
+
+    #[test]
+    fn links_csv_has_one_row_per_link() {
+        let pages = vec![
+            PageResult {
+                url: "https://example.com/".to_string(),
+                outlinks: vec![
+                    link("https://example.com/a", "Read, \"the\" guide", false),
+                    link("https://example.com/a", "Other", true),
+                ],
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/a".to_string(),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/b".to_string(),
+                outlinks: vec![link("https://example.com/", "", false)],
+                ..Default::default()
+            },
+        ];
+        let path = std::env::temp_dir().join(format!("gseo-links-{}.csv", std::process::id()));
+        export_links_csv(&pages, path.to_str().unwrap()).unwrap();
+        let mut rdr = csv::Reader::from_path(&path).unwrap();
+        assert_eq!(
+            rdr.headers().unwrap(),
+            vec!["Source", "Target", "Anchor", "Nofollow"]
+        );
+        let rows: Vec<Vec<String>> = rdr
+            .records()
+            .map(|r| r.unwrap().iter().map(str::to_string).collect())
+            .collect();
+        std::fs::remove_file(&path).ok();
+        assert_eq!(
+            rows,
+            vec![
+                vec![
+                    "https://example.com/",
+                    "https://example.com/a",
+                    "Read, \"the\" guide",
+                    "false"
+                ],
+                vec![
+                    "https://example.com/",
+                    "https://example.com/a",
+                    "Other",
+                    "true"
+                ],
+                vec!["https://example.com/b", "https://example.com/", "", "false"],
+            ]
+        );
+    }
+}

@@ -44,6 +44,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     lang: "en",
     hreflangValues: [],
     internalNofollowCount: 0,
+    outlinks: [],
     textRatioPct: 20,
     contentHash: "hash1",
     xRobotsTag: null,
