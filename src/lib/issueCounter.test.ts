@@ -140,8 +140,10 @@ describe("IssueCounter", () => {
       return counts;
     };
     crawl(); // warm-up, so the JIT has compiled the hot loops
-    const ms = bestTimeMs(crawl, BUDGET_MS);
+    // One pass is a couple of seconds of wall time on a loaded machine, so give the retry
+    // window room for several passes (see bestTimeMs); the budget itself is unchanged.
+    const ms = bestTimeMs(crawl, BUDGET_MS, 90_000);
     console.log(`IssueCounter: 50k pages in ${BATCH} page batches took ${ms.toFixed(0)} ms`);
     expect(ms).toBeLessThan(BUDGET_MS);
-  }, 60_000);
+  }, 180_000);
 });
