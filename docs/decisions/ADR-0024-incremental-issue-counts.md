@@ -1,4 +1,4 @@
-# ADR-0023: Incremental derived state and issue counts
+# ADR-0024: Incremental derived state and issue counts
 
 ## Context
 
