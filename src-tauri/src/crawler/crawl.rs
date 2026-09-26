@@ -1,6 +1,6 @@
-use super::custom::CustomSearch;
+use super::custom::{CustomSearch, Extraction};
 use super::hosting;
-use super::parse::parse_page;
+use super::parse::parse_page_with;
 use super::render;
 use super::robots::RobotsRules;
 use super::scope::UrlScope;
@@ -244,6 +244,7 @@ async fn fetch_following_redirects(
 struct PageAnalysis {
     run_mobile_usability_audit: bool,
     custom_search: CustomSearch,
+    extraction: Extraction,
 }
 
 async fn fetch_and_parse(
@@ -414,13 +415,13 @@ async fn fetch_and_parse(
     };
 
     let elapsed = started.elapsed().as_millis() as u64;
-    // HTML parsing and the custom search regexes are CPU-bound (both linear in the page
-    // size), so they run together on the blocking pool instead of stalling the async
+    // HTML parsing (custom extraction included) and the custom search regexes are
+    // CPU-bound, so they run together on the blocking pool instead of stalling the async
     // workers that drive every other in-flight fetch.
     let parse_url = final_url.clone();
     let parse_analysis = analysis.clone();
     let parse_result = tokio::task::spawn_blocking(move || {
-        let parsed = parse_page(&body, &parse_url);
+        let parsed = parse_page_with(&body, &parse_url, &parse_analysis.extraction);
         let counts = parse_analysis
             .custom_search
             .count_matches(&body, &parsed.body_text);
@@ -539,6 +540,7 @@ async fn fetch_and_parse(
         accessibility_violations,
         mobile_usability_violations,
         custom_search_counts,
+        extracted: parsed.extracted,
         error: None,
     };
 
@@ -765,10 +767,13 @@ pub async fn run_crawl<R: Runtime>(
         }
     };
     // Also validated by `start_crawl` before any state is touched.
-    let analysis = match CustomSearch::new(&config.custom_searches) {
-        Ok(custom_search) => Arc::new(PageAnalysis {
+    let analysis = match CustomSearch::new(&config.custom_searches)
+        .and_then(|custom_search| Ok((custom_search, Extraction::new(&config.extractions)?)))
+    {
+        Ok((custom_search, extraction)) => Arc::new(PageAnalysis {
             run_mobile_usability_audit: config.run_mobile_usability_audit,
             custom_search,
+            extraction,
         }),
         Err(e) => {
             let _ = app.emit("crawl://error", e);

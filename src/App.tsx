@@ -34,6 +34,7 @@ import {
   type CrawlSnapshot,
   type CrawlSummary,
   type CustomSearchRule,
+  type ExtractionRule,
   type PageResult,
   type ResourceResult,
   type SiteInfo,
@@ -85,6 +86,15 @@ import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
 import { MAX_LIST_URLS, parseUrlList, withScheme } from "./lib/url";
 import { activeCustomSearches, mergeCustomSearchRules, reconcileCustomSearchIds } from "./lib/customSearch";
+import {
+  type ExtractionColumn,
+  activeExtractions,
+  extractedCell,
+  getExtractionColumns,
+  ingestExtractionIds,
+  mergeExtractionRules,
+  reconcileExtractionIds,
+} from "./lib/extraction";
 
 type Tab = "overview" | "pages" | "resources" | "sitemap";
 
@@ -158,6 +168,7 @@ function buildPageColumns(
   ctx: FilterContext,
   linkScores: Map<string, number>,
   customSearches: readonly CustomSearchColumn[],
+  extractions: readonly ExtractionColumn[],
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
 ): ColumnDef<PageResult, any>[] {
   // The Issues column's accessorFn runs for every row on every table rebuild (react-table
@@ -534,6 +545,17 @@ function buildPageColumns(
         accessorFn: (page) => page.customSearchCounts[id] ?? null,
       }),
     ),
+    // One column per custom extraction rule: its values joined with " | ", blank where
+    // nothing matched or the rule never ran.
+    ...extractions.map(
+      ({ id, label }): ColumnDef<PageResult, string | null> => ({
+        id: `extract:${id}`,
+        header: label,
+        size: 220,
+        meta: { description: `Custom extraction "${label}": values matched on the page, joined with " | ".` },
+        accessorFn: (page) => extractedCell(page, id),
+      }),
+    ),
   ];
 }
 
@@ -609,8 +631,10 @@ const resourceColumns: ColumnDef<ResourceResult, any>[] = [
 interface CrawlSource {
   startUrl: string;
   listMode: boolean;
-  /** Custom search rules the crawl ran with; empty for a loaded saved crawl, which does not store them. */
+  /** Custom search rules the crawl ran with (for a loaded crawl, the rules saved with it). */
   customSearches: CustomSearchRule[];
+  /** Custom extraction rules the crawl ran with (for a loaded crawl, the rules saved with it). */
+  extractions: ExtractionRule[];
 }
 
 function App() {
@@ -643,6 +667,7 @@ function App() {
     startUrl: "",
     listMode: false,
     customSearches: [],
+    extractions: [],
   });
   const pagesBufRef = useRef<PageResult[]>([]);
   const resourcesBufRef = useRef<ResourceResult[]>([]);
@@ -663,6 +688,7 @@ function App() {
   const hreflangTrackerRef = useRef(createHreflangTracker());
   const nearDuplicateTrackerRef = useRef(createNearDuplicateTracker());
   const customSearchTrackerRef = useRef(createCustomSearchTracker());
+  const extractionIdsRef = useRef(new Set<string>());
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -679,6 +705,7 @@ function App() {
     hreflangTrackerRef.current = createHreflangTracker();
     nearDuplicateTrackerRef.current = createNearDuplicateTracker();
     customSearchTrackerRef.current = createCustomSearchTracker();
+    extractionIdsRef.current = new Set();
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -845,15 +872,24 @@ function App() {
     const shownCustomSearches = continuing
       ? mergeCustomSearchRules(shownSource.customSearches, customSearches)
       : customSearches;
+    // Extraction rules follow the same rule: an edited rule gets a fresh id on continue.
+    const activeExtraction = activeExtractions(config.extractions);
+    const { rules: extractions, renamed: renamedExtractions } = continuing
+      ? reconcileExtractionIds(activeExtraction, shownSource.extractions)
+      : { rules: activeExtraction, renamed: new Map<string, string>() };
+    const shownExtractions = continuing ? mergeExtractionRules(shownSource.extractions, extractions) : extractions;
     // Only sent to the backend: `config` keeps the Spider box's URL and no list.
-    const nextConfig = { ...config, startUrl, listUrls, customSearches };
-    if (renamed.size > 0) {
+    const nextConfig = { ...config, startUrl, listUrls, customSearches, extractions };
+    if (renamed.size > 0 || renamedExtractions.size > 0) {
+      const withNewId = <T extends { id: string }>(rules: T[], ids: Map<string, string>) =>
+        rules.map((r) => {
+          const id = ids.get(r.id);
+          return id ? { ...r, id } : r;
+        });
       setConfig((c) => ({
         ...c,
-        customSearches: c.customSearches.map((r) => {
-          const id = renamed.get(r.id);
-          return id ? { ...r, id } : r;
-        }),
+        customSearches: withNewId(c.customSearches, renamed),
+        extractions: withNewId(c.extractions, renamedExtractions),
       }));
     }
     activeStartUrlRef.current = startUrl;
@@ -861,7 +897,7 @@ function App() {
     // arrive before it does; restored below if the backend rejects the start.
     const previous = shownCrawlRef.current;
     const previousSource = shownSource;
-    setShownSource({ startUrl, listMode, customSearches: shownCustomSearches });
+    setShownSource({ startUrl, listMode, customSearches: shownCustomSearches, extractions: shownExtractions });
     if (!continuing) {
       setPages([]);
       setResources([]);
@@ -931,11 +967,16 @@ function App() {
         defaultPath: `${what}-export.csv`,
       });
       if (!path) return;
-      await invoke("export_csv", { path, what, customSearches: shownSource.customSearches });
+      await invoke("export_csv", {
+        path,
+        what,
+        customSearches: shownSource.customSearches,
+        extractions: shownSource.extractions,
+      });
     } catch (err) {
       toast.error(String(err));
     }
-  }, [shownSource.customSearches]);
+  }, [shownSource.customSearches, shownSource.extractions]);
 
   const handleSaveCrawl = useCallback(async () => {
     try {
@@ -948,11 +989,12 @@ function App() {
         path,
         startUrl: shownSource.startUrl || config.startUrl,
         customSearches: shownSource.customSearches,
+        extractions: shownSource.extractions,
       });
     } catch (err) {
       toast.error(String(err));
     }
-  }, [shownSource.startUrl, shownSource.customSearches, config.startUrl]);
+  }, [shownSource.startUrl, shownSource.customSearches, shownSource.extractions, config.startUrl]);
 
   const handleOpenCrawl = useCallback(async () => {
     try {
@@ -971,8 +1013,13 @@ function App() {
       setFilter("all");
       setConfig((prev) => ({ ...prev, startUrl: snapshot.startUrl }));
       // Saved crawls don't record their mode; they are classified as spider crawls.
-      // Rules come from the snapshot only (empty before T3.3), never from the options sheet.
-      setShownSource({ startUrl: snapshot.startUrl, listMode: false, customSearches: snapshot.customSearches ?? [] });
+      // Rules come from the snapshot only (empty before T3.3 and T3.4), never from the options sheet.
+      setShownSource({
+        startUrl: snapshot.startUrl,
+        listMode: false,
+        customSearches: snapshot.customSearches ?? [],
+        extractions: snapshot.extractions ?? [],
+      });
     } catch (err) {
       toast.error(String(err));
     }
@@ -998,6 +1045,7 @@ function App() {
     hreflangTargetError,
     nearDuplicates,
     customSearchTracker,
+    extractionIds,
   } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
@@ -1019,6 +1067,7 @@ function App() {
       ingestHreflangPage(hreflangTrackerRef.current, pageByUrlRef.current, p);
       ingestNearDuplicatePage(nearDuplicateTrackerRef.current, p);
       ingestCustomSearchPage(customSearchTrackerRef.current, p);
+      ingestExtractionIds(extractionIdsRef.current, p);
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -1043,6 +1092,8 @@ function App() {
       customSearchTracker: {
         counts: new Map([...customSearchTrackerRef.current.counts].map(([id, c]) => [id, { ...c }])),
       },
+      // Rule ids seen on the pages (at most one per rule), for the extraction columns.
+      extractionIds: [...extractionIdsRef.current],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -1133,9 +1184,16 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputed only when ids or labels change
     [customSearchColumnsKey],
   );
+  // Rules of the crawl on screen, plus rule ids only found on its pages. Keyed on ids and labels
+  // only, so the columns are not rebuilt on every flush.
+  const extractionColumnsKey = JSON.stringify(getExtractionColumns(extractionIds, shownSource.extractions));
+  const extractionColumns = useMemo<ExtractionColumn[]>(
+    () => JSON.parse(extractionColumnsKey) as ExtractionColumn[],
+    [extractionColumnsKey],
+  );
   const pageColumns = useMemo(
-    () => buildPageColumns(filterContext, linkScores, customSearchColumns),
-    [filterContext, linkScores, customSearchColumns],
+    () => buildPageColumns(filterContext, linkScores, customSearchColumns, extractionColumns),
+    [filterContext, linkScores, customSearchColumns, extractionColumns],
   );
 
   const selectedPageLinks = useMemo(
@@ -1366,6 +1424,10 @@ function App() {
             ...customSearchColumns.map(({ id, label }) => ({
               label: `Custom search: ${label}`,
               value: selectedPage.customSearchCounts[id] ?? null,
+            })),
+            ...extractionColumns.map(({ id, label }) => ({
+              label: `Extraction: ${label}`,
+              value: extractedCell(selectedPage, id),
             })),
             { label: "Canonical", value: selectedPage.canonical },
             { label: "Meta Robots", value: selectedPage.metaRobots },

@@ -23,6 +23,8 @@ export interface CrawlConfig {
   listUrls: string[];
   /** Custom search rules (at most `MAX_CUSTOM_SEARCHES`); each HTML page gets a match count per rule. */
   customSearches: CustomSearchRule[];
+  /** Custom extraction rules (at most `MAX_EXTRACTIONS`); each HTML page gets the values each rule's selector matches. */
+  extractions: ExtractionRule[];
 }
 
 /** What a custom search rule searches: the raw HTML, or the visible body text. */
@@ -40,6 +42,23 @@ export interface CustomSearchRule {
 
 /** Most custom search rules one crawl accepts (mirrors `custom::MAX_CUSTOM_SEARCHES`). */
 export const MAX_CUSTOM_SEARCHES = 10;
+
+/** What a custom extraction rule takes from each element its selector matches. */
+export type ExtractionMode = "text" | "attr" | "inner_html";
+
+/** One custom extraction rule: a CSS selector and what to extract from the matched elements. */
+export interface ExtractionRule {
+  /** Stable key of the rule's values in `PageResult.extracted`. */
+  id: string;
+  name: string;
+  selector: string;
+  mode: ExtractionMode;
+  /** Attribute read in `attr` mode; ignored otherwise. */
+  attr: string | null;
+}
+
+/** Most custom extraction rules one crawl accepts (mirrors `custom::MAX_EXTRACTIONS`). */
+export const MAX_EXTRACTIONS = 10;
 
 /** One internal link found on a page. */
 export interface LinkRef {
@@ -139,6 +158,8 @@ export interface PageResult {
   mobileUsabilityViolations: MobileUsabilityViolation[];
   /** Match count per custom search rule id (0 included) for parsed HTML pages. Empty for other URLs, crawls without rules and crawls saved before T3.3. */
   customSearchCounts: Record<string, number>;
+  /** Values per custom extraction rule id (at most 10 values of 500 chars; an empty list when nothing matched) for parsed HTML pages. Empty for other URLs, crawls without rules and crawls saved before T3.4. */
+  extracted: Record<string, string[]>;
   error: string | null;
 }
 
@@ -213,6 +234,8 @@ export interface CrawlSnapshot {
   resources: ResourceResult[];
   /** Custom search rules the crawl ran with; absent or empty for crawls saved before T3.3. */
   customSearches?: CustomSearchRule[];
+  /** Custom extraction rules the crawl ran with; absent or empty for crawls saved before T3.4. */
+  extractions?: ExtractionRule[];
 }
 
 export const DEFAULT_CONFIG: CrawlConfig = {
@@ -235,4 +258,5 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   excludePatterns: [],
   listUrls: [],
   customSearches: [],
+  extractions: [],
 };

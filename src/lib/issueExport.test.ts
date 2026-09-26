@@ -68,6 +68,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     accessibilityViolations: [],
     mobileUsabilityViolations: [],
     customSearchCounts: {},
+    extracted: {},
     error: null,
     ...overrides,
   };

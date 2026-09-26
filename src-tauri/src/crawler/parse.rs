@@ -1,6 +1,8 @@
+use crate::crawler::custom::Extraction;
 use crate::crawler::types::{HreflangLink, LinkRef, MAX_HREFLANG_LINKS, MAX_OUTLINKS_PER_PAGE};
 use scraper::{ElementRef, Html, Selector};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 use url::Url;
 
@@ -112,6 +114,9 @@ pub struct ParsedPage {
     pub has_twitter_card: bool,
     pub structured_data_types: Vec<String>,
     pub structured_data_errors: Vec<String>,
+    /// Values of the crawl's custom extraction rules, keyed by rule id (see
+    /// `Extraction::extract`). Empty when the crawl has no rules.
+    pub extracted: BTreeMap<String, Vec<String>>,
 }
 
 /// Walks a parsed JSON-LD value collecting every `@type` found, including
@@ -357,8 +362,19 @@ fn count_mixed_content(document: &Html, base: &Url) -> usize {
         .count()
 }
 
+/// `parse_page_with` without custom extraction rules (the crawl always passes its rules).
+#[cfg(test)]
 pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
+    parse_page_with(body, base, &Extraction::default())
+}
+
+/// Parses `body` once and extracts every signal from it, custom extraction rules included.
+pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> ParsedPage {
     let mut html = Html::parse_document(body);
+
+    // Custom extraction runs on the full document, before <script>, <style>, <noscript>
+    // and <template> are stripped below, so a rule can extract JSON-LD or inline code.
+    let extracted = extraction.extract(&html);
 
     // Extract JSON-LD structured data before stripping <script> tags below.
     let mut structured_data_types = Vec::new();
@@ -627,12 +643,15 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         has_twitter_card,
         structured_data_types,
         structured_data_errors,
+        extracted,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crawler::custom::{MAX_EXTRACTED_CHARS, MAX_EXTRACTED_VALUES};
+    use crate::crawler::types::{ExtractionMode, ExtractionRule};
 
     fn base() -> Url {
         Url::parse("https://example.com/dir/page").unwrap()
@@ -640,6 +659,88 @@ mod tests {
 
     fn parse(html: &str) -> ParsedPage {
         parse_page(html, &base())
+    }
+
+    fn extraction_rule(id: &str, selector: &str, mode: ExtractionMode) -> ExtractionRule {
+        ExtractionRule {
+            id: id.to_string(),
+            name: String::new(),
+            selector: selector.to_string(),
+            mode,
+            attr: None,
+        }
+    }
+
+    #[test]
+    fn extracts_text_attr_and_inner_html() {
+        let html = r#"<html><head>
+            <meta property="og:image" content=" https://example.com/og.png ">
+            <script type="application/ld+json">{"@type": "Product"}</script>
+            <style>.price { color: red }</style></head>
+            <body>
+              <p class="price">
+                 $19.99
+                 <small>incl.   tax</small></p>
+              <p class="price">   </p>
+              <p class="price">$5</p>
+              <div id="box"> <b>bold</b> text </div>
+              <a href="/a">no rel</a>
+            </body></html>"#;
+        let mut og = extraction_rule("og", r#"meta[property="og:image"]"#, ExtractionMode::Attr);
+        og.attr = Some("content".to_string());
+        let mut rel = extraction_rule("rel", "a", ExtractionMode::Attr);
+        rel.attr = Some("rel".to_string());
+        let extraction = Extraction::new(&[
+            extraction_rule("price", ".price", ExtractionMode::Text),
+            og,
+            extraction_rule("box", "#box", ExtractionMode::InnerHtml),
+            extraction_rule(
+                "ld",
+                r#"script[type="application/ld+json"]"#,
+                ExtractionMode::Text,
+            ),
+            rel,
+            extraction_rule("none", ".missing", ExtractionMode::Text),
+        ])
+        .unwrap();
+        let parsed = parse_page_with(html, &base(), &extraction);
+        let ex = &parsed.extracted;
+        // Whitespace collapsed; the blank element is skipped.
+        assert_eq!(ex["price"], vec!["$19.99 incl. tax", "$5"]);
+        assert_eq!(ex["og"], vec!["https://example.com/og.png"]);
+        assert_eq!(ex["box"], vec!["<b>bold</b> text"]);
+        // Extraction runs before scripts are stripped.
+        assert_eq!(ex["ld"], vec![r#"{"@type": "Product"}"#]);
+        // An element without the attribute gives no value; every rule still has an entry.
+        assert!(ex["rel"].is_empty());
+        assert!(ex["none"].is_empty());
+        // The rest of parsing still strips scripts from the visible text.
+        assert!(!parsed.body_text.contains("Product"));
+        assert!(parse(html).extracted.is_empty());
+    }
+
+    #[test]
+    fn extraction_values_are_capped() {
+        let long_word = "\u{e9}".repeat(MAX_EXTRACTED_CHARS + 50);
+        let items: String = (0..MAX_EXTRACTED_VALUES + 5)
+            .map(|i| format!("<li>item {i}</li>"))
+            .collect();
+        let html = format!("<body><ul>{items}</ul><p>{long_word}</p></body>");
+        let extraction = Extraction::new(&[
+            extraction_rule("li", "li", ExtractionMode::Text),
+            extraction_rule("p", "p", ExtractionMode::Text),
+        ])
+        .unwrap();
+        let ex = parse_page_with(&html, &base(), &extraction).extracted;
+        assert_eq!(ex["li"].len(), MAX_EXTRACTED_VALUES);
+        assert_eq!(ex["li"][0], "item 0");
+        assert_eq!(
+            ex["li"][MAX_EXTRACTED_VALUES - 1],
+            format!("item {}", MAX_EXTRACTED_VALUES - 1)
+        );
+        assert_eq!(ex["p"].len(), 1);
+        assert_eq!(ex["p"][0].chars().count(), MAX_EXTRACTED_CHARS);
+        assert!(long_word.starts_with(&ex["p"][0]));
     }
 
     fn strings(urls: &[Url]) -> Vec<String> {
