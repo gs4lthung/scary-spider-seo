@@ -973,6 +973,7 @@ describe("issue registry", () => {
       hreflangMissingReturn: hreflang.missingReturn,
       hreflangTargetError: hreflang.targetError,
       nearDuplicates: nearDuplicateContext(pages),
+      listMode: false,
     };
     return { pages, resources, ctx };
   }
@@ -1395,6 +1396,13 @@ describe("multiple titles, meta descriptions, meta refresh and pagination issues
     it("does not flag crawled 200 targets or pages without pagination", () => {
       expect(run("paginationTargetError", { paginationNext: ok.url, paginationPrev: ok.url }, ctx)).toBe(false);
       expect(run("paginationTargetError", { paginationNext: null, paginationPrev: null }, ctx)).toBe(false);
+    });
+
+    it("in a list-mode crawl, ignores uncrawled targets but still flags crawled errors", () => {
+      const listCtx: FilterContext = { ...ctx, listMode: true };
+      expect(run("paginationTargetError", { paginationNext: "https://example.com/never-crawled" }, listCtx)).toBe(false);
+      expect(run("paginationTargetError", { paginationNext: gone.url }, listCtx)).toBe(true);
+      expect(run("paginationTargetError", { paginationNext: moved.url }, listCtx)).toBe(true);
     });
   });
 

@@ -424,6 +424,9 @@ export interface FilterContext {
   /** Pages with at least one near duplicate, by URL, with their cluster (see `nearDuplicates.ts`).
    * Exact copies alone do not count; they are `duplicateContent`. */
   nearDuplicates: Map<string, NearDuplicateCluster>;
+  /** True when the results come from a list-mode crawl, which never follows links, so a
+   * link target missing from the crawl is expected rather than an issue. */
+  listMode: boolean;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -442,6 +445,7 @@ export function emptyFilterContext(): FilterContext {
     hreflangMissingReturn: new Set(),
     hreflangTargetError: new Set(),
     nearDuplicates: new Map(),
+    listMode: false,
   };
 }
 
@@ -617,7 +621,9 @@ function paginationTargets(p: PageResult): string[] {
  * (the crawler stores the final status on a redirected URL, so the chain marks it). */
 function isPaginationTargetError(url: string, ctx: FilterContext): boolean {
   const target = ctx.pageByUrl.get(url);
-  return target === undefined || target.status !== 200 || target.redirectChain.length > 0;
+  // List mode only crawls the listed URLs, so an uncrawled target says nothing about it.
+  if (target === undefined) return !ctx.listMode;
+  return target.status !== 200 || target.redirectChain.length > 0;
 }
 
 interface AnchorFlags {
