@@ -57,6 +57,7 @@ import {
   getTitlePixelWidth,
   getResourceIssueKeys,
   ingestDuplicateValue,
+  ingestNon200LinkSources,
   searchPages,
   searchResources,
 } from "./lib/filters";
@@ -87,22 +88,24 @@ const LINK_SCORE_INTERVAL_MS = 2000;
  */
 function useThrottledValue<T>(value: T, throttle: boolean, intervalMs: number): T {
   const [sampled, setSampled] = useState(value);
+  const [wasThrottling, setWasThrottling] = useState(throttle);
+  // When throttling turns on, start from the current value rather than whatever was sampled
+  // during the previous throttled stretch (a previous crawl). Adjusting state while rendering
+  // is React's documented pattern for resetting state when a prop changes.
+  if (throttle !== wasThrottling) {
+    setWasThrottling(throttle);
+    if (throttle) setSampled(value);
+  }
   const latestRef = useRef(value);
   useEffect(() => {
     latestRef.current = value;
   }, [value]);
   useEffect(() => {
     if (!throttle) return;
-    const sample = () => setSampled(latestRef.current);
-    // Sample once right away so a resumed crawl does not show a stale value for a whole interval.
-    const first = window.setTimeout(sample, 0);
-    const id = window.setInterval(sample, intervalMs);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(id);
-    };
+    const id = window.setInterval(() => setSampled(latestRef.current), intervalMs);
+    return () => window.clearInterval(id);
   }, [throttle, intervalMs]);
-  return throttle ? sampled : value;
+  return throttle && wasThrottling ? sampled : value;
 }
 
 /** Wraps a cell's rendered value in destructive styling when `bad` is true — the inline, at-a-glance counterpart to DetailModal's `isError` fields. */
@@ -603,6 +606,7 @@ function App() {
   const pageByUrlRef = useRef(new Map<string, PageResult>());
   const sitemapUsedRef = useRef(false);
   const linkGraphRef = useRef(createLinkGraph());
+  const non200LinkSourcesRef = useRef(new Set<string>());
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -615,6 +619,7 @@ function App() {
     pageByUrlRef.current = new Map();
     sitemapUsedRef.current = false;
     linkGraphRef.current = createLinkGraph();
+    non200LinkSourcesRef.current = new Set();
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -863,6 +868,7 @@ function App() {
     pageByUrl,
     sitemapUsed,
     linkGraph,
+    non200LinkSources,
   } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
@@ -880,6 +886,7 @@ function App() {
       pageByUrlRef.current.set(p.url, p);
       if (p.discoveredViaSitemap) sitemapUsedRef.current = true;
       addPageToLinkGraph(linkGraphRef.current, p);
+      ingestNon200LinkSources(non200LinkSourcesRef.current, linkGraphRef.current, pageByUrlRef.current, p);
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -895,6 +902,7 @@ function App() {
       // A new wrapper per change (the graph's maps grow in place, which is O(new links)
       // rather than a copy of every link crawled so far).
       linkGraph: { ...linkGraphRef.current } satisfies LinkGraph,
+      non200LinkSources: new Set(non200LinkSourcesRef.current),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -913,6 +921,7 @@ function App() {
       pageByUrl,
       sitemapUsed,
       linkGraph,
+      non200LinkSources,
     }),
     [
       duplicateTitleSet,
@@ -925,6 +934,7 @@ function App() {
       pageByUrl,
       sitemapUsed,
       linkGraph,
+      non200LinkSources,
     ],
   );
   // Link scores rank the whole graph, so while a crawl runs they refresh on a timer instead

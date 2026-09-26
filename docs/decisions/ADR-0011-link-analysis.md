@@ -30,7 +30,11 @@ T2.4 derives inlinks, unique inlinks, a 0 to 100 link score and four issues
 - **`linksToErrorPages`** fires when any outlink points at a crawled page that did not answer a
   plain 200: 4xx/5xx, no response, or a redirect (a non-empty `redirectChain`, since the crawler
   stores the final status on a redirected URL). Targets the crawl never reached (depth or page
-  limits) are unknown and not flagged.
+  limits) are unknown and not flagged, and neither are robots-blocked targets (no status, but
+  never requested). The predicate reads `FilterContext.non200LinkSources`, a set of source URLs
+  maintained incrementally as pages arrive (`ingestNon200LinkSources`): a new non-200 page
+  marks the pages already linking to it through the graph, and a new page checks its own
+  outlinks once. That keeps the Overview recount O(1) per page instead of a lookup per link.
 - **Anchors.** `emptyAnchors` flags a link whose anchor is blank, which includes an image link
   whose image has no alt. `nonDescriptiveAnchors` compares the anchor lowercased, with leading
   and trailing punctuation, symbols and whitespace trimmed and inner whitespace collapsed,
@@ -44,7 +48,7 @@ T2.4 derives inlinks, unique inlinks, a 0 to 100 link score and four issues
   target (no object per link) and materialises `Inlink` objects only for the page open in the
   detail view, capped at `MAX_LINK_ROWS` (100) rows per list. Link scores are recomputed when
   the graph changes while no crawl runs, and every 2 seconds while one does
-  (`useThrottledValue`).
+  (`useThrottledValue`, which restarts from the current graph when a crawl starts).
 - **Columns.** The new "Inlinks", "Unique Inlinks" and "Link Score" columns take the Inlinks
   name; the existing columns are renamed "Internal Outlinks" and "External Outlinks" to say
   what they always showed. Column ids are unchanged, so saved column widths still apply.

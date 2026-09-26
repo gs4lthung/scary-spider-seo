@@ -36,19 +36,22 @@ import {
   getDuplicateMetaSet,
   getDuplicateTitleSet,
   getMetaPixelWidth,
+  getNon200LinkSourceSet,
   getPageByUrlMap,
   getPageIssueKeys,
   getResourceIssueKeys,
   getSitemapUsed,
   getTitlePixelWidth,
   hasHeadingLevelSkip,
+  isNon200LinkTarget,
   isNonDescriptiveAnchor,
   ingestDuplicateValue,
+  ingestNon200LinkSources,
   parseRobotsDirectives,
   searchPages,
   searchResources,
 } from "./filters";
-import { buildLinkGraph } from "./linkGraph";
+import { addPageToLinkGraph, buildLinkGraph, createLinkGraph } from "./linkGraph";
 
 function makePage(overrides: Partial<PageResult> = {}): PageResult {
   return {
@@ -840,6 +843,7 @@ describe("issue registry", () => {
       pageByUrl: getPageByUrlMap(pages),
       sitemapUsed: getSitemapUsed(pages),
       linkGraph: buildLinkGraph(pages),
+      non200LinkSources: getNon200LinkSourceSet(pages),
     };
     return { pages, resources, ctx };
   }
@@ -1353,17 +1357,52 @@ describe("link analysis issues", () => {
     const gone = at("gone", { status: 404 });
     const moved = at("moved", { redirectChain: ["https://example.com/moved"], redirectUrl: ok.url });
     const failed = at("failed", { status: null, error: "timeout" });
-    const ctx: FilterContext = { ...emptyFilterContext(), pageByUrl: getPageByUrlMap([ok, gone, moved, failed]) };
+    const blocked = at("blocked", {
+      status: null,
+      statusText: "Blocked",
+      indexability: "Non-Indexable (robots.txt)",
+      htmlSizeBytes: 0,
+    });
+    const targets = [ok, gone, moved, failed, blocked];
+    /** Whether a source page with these outlinks is flagged, crawled after (or before) the targets. */
+    const flagged = (outlinks: LinkRef[], sourceFirst = false) => {
+      const source = at("source", { outlinks });
+      const pages = sourceFirst ? [source, ...targets] : [...targets, source];
+      const ctx: FilterContext = { ...emptyFilterContext(), non200LinkSources: getNon200LinkSourceSet(pages) };
+      return filterPages(pages, "linksToErrorPages", ctx).includes(source);
+    };
 
     it("flags links to a crawled 4xx, redirected or failed page", () => {
-      expect(run("linksToErrorPages", { outlinks: [link(ok.url), link(gone.url)] }, ctx)).toBe(true);
-      expect(run("linksToErrorPages", { outlinks: [link(moved.url)] }, ctx)).toBe(true);
-      expect(run("linksToErrorPages", { outlinks: [link(failed.url)] }, ctx)).toBe(true);
+      expect(flagged([link(ok.url), link(gone.url)])).toBe(true);
+      expect(flagged([link(moved.url)])).toBe(true);
+      expect(flagged([link(failed.url)])).toBe(true);
     });
 
-    it("does not flag links to 200 pages or to URLs the crawl never reached", () => {
-      expect(run("linksToErrorPages", { outlinks: [link(ok.url)] }, ctx)).toBe(false);
-      expect(run("linksToErrorPages", { outlinks: [link("https://example.com/not-crawled")] }, ctx)).toBe(false);
+    it("flags the source whichever of source and target is crawled first", () => {
+      expect(flagged([link(gone.url)], true)).toBe(true);
+      expect(flagged([link(ok.url)], true)).toBe(false);
+    });
+
+    it("builds the same set incrementally as in one pass", () => {
+      const pages = [at("a", { outlinks: [link(gone.url)] }), gone, ok, at("b", { outlinks: [link(moved.url)] }), moved];
+      const graph = createLinkGraph();
+      const pageByUrl = new Map<string, PageResult>();
+      const sources = new Set<string>();
+      for (const page of pages) {
+        addPageToLinkGraph(graph, page);
+        pageByUrl.set(page.url, page);
+        ingestNon200LinkSources(sources, graph, pageByUrl, page);
+      }
+      expect(sources).toEqual(getNon200LinkSourceSet(pages));
+      expect([...sources].sort()).toEqual(["https://example.com/a", "https://example.com/b"]);
+    });
+
+    it("does not flag links to 200 pages, robots-blocked pages or URLs the crawl never reached", () => {
+      expect(isNon200LinkTarget(blocked)).toBe(false);
+      expect(flagged([link(ok.url)])).toBe(false);
+      expect(flagged([link(blocked.url)])).toBe(false);
+      expect(flagged([link(blocked.url)], true)).toBe(false);
+      expect(flagged([link("https://example.com/not-crawled")])).toBe(false);
     });
   });
 
@@ -1376,8 +1415,8 @@ describe("link analysis issues", () => {
     const single = makePage({ url: "https://example.com/single", depth: 2 });
     const ctx: FilterContext = {
       ...emptyFilterContext(),
-      pageByUrl: getPageByUrlMap([target, source, single]),
       linkGraph: buildLinkGraph([target, source, single]),
+      non200LinkSources: getNon200LinkSourceSet([target, source, single]),
     };
     expect(getPageIssueKeys(source, ctx)).toEqual(
       expect.arrayContaining(["nonDescriptiveAnchors", "emptyAnchors", "linksToErrorPages"]),

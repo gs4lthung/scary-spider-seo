@@ -1,5 +1,5 @@
 import type { PageResult, ResourceResult } from "../types";
-import { type LinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
+import { type LinkGraph, buildLinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 
 export const TITLE_MIN_LENGTH = 30;
@@ -171,6 +171,57 @@ function pageDirectives(p: PageResult): Set<string> {
   return directives;
 }
 
+/** Indexability the crawler gives a URL it did not fetch because robots.txt disallows it
+ * (`robots_blocked_result` in crawl.rs: no status, no error). */
+const ROBOTS_BLOCKED_INDEXABILITY = "Non-Indexable (robots.txt)";
+
+/**
+ * Whether links to this crawled page count as links to a non-200 page: it answered an error
+ * status, gave no response, or redirected (marked by its chain, since the crawler stores the
+ * final status on a redirected URL). A robots-blocked URL was never requested, so its status
+ * is unknown rather than an error.
+ */
+export function isNon200LinkTarget(p: PageResult): boolean {
+  if (p.status === null && p.indexability === ROBOTS_BLOCKED_INDEXABILITY) return false;
+  return p.status !== 200 || p.redirectChain.length > 0;
+}
+
+/**
+ * Adds to `sources` every page that links to a crawled non-200 page, as `page` joins the crawl.
+ * Call it after `page` is in both `graph` and `pageByUrl`: earlier pages linking to `page` are
+ * found through the graph, and `page`'s own outlinks are checked once against the pages
+ * crawled so far, so a live crawl never rescans old links. Targets the crawl never reached
+ * are unknown and not counted.
+ */
+export function ingestNon200LinkSources(
+  sources: Set<string>,
+  graph: LinkGraph,
+  pageByUrl: ReadonlyMap<string, PageResult>,
+  page: PageResult,
+): void {
+  if (isNon200LinkTarget(page)) {
+    for (const source of graph.targets.get(page.url)?.sources ?? []) sources.add(source);
+  }
+  if (sources.has(page.url)) return;
+  for (const link of page.outlinks) {
+    if (link.url === page.url) continue;
+    const target = pageByUrl.get(link.url);
+    if (target && isNon200LinkTarget(target)) {
+      sources.add(page.url);
+      return;
+    }
+  }
+}
+
+/** URLs of pages that link to a crawled non-200 page (`FilterContext.non200LinkSources`). */
+export function getNon200LinkSourceSet(pages: PageResult[]): Set<string> {
+  const graph = buildLinkGraph(pages);
+  const pageByUrl = getPageByUrlMap(pages);
+  const sources = new Set<string>();
+  for (const page of pages) ingestNon200LinkSources(sources, graph, pageByUrl, page);
+  return sources;
+}
+
 /**
  * Counts occurrences of a value (title / meta description / content hash) one page at
  * a time, so duplicate detection can stay incremental during a live crawl.
@@ -223,6 +274,8 @@ export interface FilterContext {
   sitemapUsed: boolean;
   /** Internal link graph of the crawl (see `buildLinkGraph`). */
   linkGraph: LinkGraph;
+  /** Pages linking to a crawled non-200 page (see `getNon200LinkSourceSet`). */
+  non200LinkSources: Set<string>;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -237,6 +290,7 @@ export function emptyFilterContext(): FilterContext {
     pageByUrl: new Map(),
     sitemapUsed: false,
     linkGraph: createLinkGraph(),
+    non200LinkSources: new Set(),
   };
 }
 
@@ -423,14 +477,6 @@ function anchorFlags(p: PageResult): AnchorFlags {
     anchorFlagsCache.set(p, flags);
   }
   return flags;
-}
-
-/** A link target is in error when the crawl saw it answer anything but a plain 200: an error
- * status, no response, or a redirect (marked by its chain, since the crawler stores the final
- * status on a redirected URL). Targets the crawl never reached are unknown, not errors. */
-function isCrawledNon200(url: string, ctx: FilterContext): boolean {
-  const target = ctx.pageByUrl.get(url);
-  return target !== undefined && (target.status !== 200 || target.redirectChain.length > 0);
 }
 
 const is2xx = (p: PageResult) => p.status !== null && p.status >= 200 && p.status < 300;
@@ -884,7 +930,7 @@ export const ISSUE_DEFS = [
     group: "links",
     tone: "warn",
     section: "Links",
-    test: (p, ctx) => p.outlinks.some((l) => isCrawledNon200(l.url, ctx)),
+    test: (p, ctx) => ctx.non200LinkSources.has(p.url),
   }),
   pageIssue({
     key: "slowResponse",
