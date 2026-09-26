@@ -491,6 +491,20 @@ pub struct CrawlSnapshot {
     pub extractions: Vec<ExtractionRule>,
 }
 
+/// Borrowed, serialize-only view of a [`CrawlSnapshot`], so `save_crawl` can write straight
+/// from the locked state without cloning every page and resource first. Field names and
+/// order match `CrawlSnapshot`, so a file written from this deserializes as a `CrawlSnapshot`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrawlSnapshotRef<'a> {
+    pub start_url: &'a str,
+    pub saved_at_unix_ms: u64,
+    pub pages: &'a [PageResult],
+    pub resources: Vec<&'a ResourceResult>,
+    pub custom_searches: &'a [CustomSearchRule],
+    pub extractions: &'a [ExtractionRule],
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 4,
     "startedAt": "2026-09-26T06:47:42.306Z",
-    "lastProgressAt": "2026-09-26T06:47:42.308Z"
+    "lastProgressAt": "2026-09-26T07:43:04.574Z"
   },
   "tasks": {
     "T1.1": {
@@ -262,10 +262,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.105Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "8eaf617",
+      "updatedAt": "2026-09-26T07:43:04.573Z"
     },
     "T4.2": {
       "title": "Incremental derived state and Overview counts",
@@ -294,20 +294,20 @@
       "milestone": 4,
       "plan": "docs/plan/M4-optimization.md",
       "deps": [],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.106Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "29fdcc6",
+      "updatedAt": "2026-09-26T07:42:42.306Z"
     },
     "T4.5": {
       "title": "Synthetic large-site fixture and crawl throughput budget",
       "milestone": 4,
       "plan": "docs/plan/M4-optimization.md",
       "deps": [],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.106Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "b1f6c5f",
+      "updatedAt": "2026-09-26T07:27:19.717Z"
     },
     "T4.6": {
       "title": "Reuse the start page response for site info",
@@ -316,10 +316,10 @@
       "deps": [
         "T4.5"
       ],
-      "status": "pending",
-      "attempts": 0,
+      "status": "in_progress",
+      "attempts": 1,
       "note": "",
-      "updatedAt": "2026-09-25T18:11:07.106Z"
+      "updatedAt": "2026-09-26T07:27:26.990Z"
     }
   }
 }

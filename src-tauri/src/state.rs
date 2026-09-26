@@ -4,6 +4,9 @@ use dashmap::DashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 
+/// Every field is an `Arc`, so a clone is a cheap second handle on the same state (used to
+/// move it into `spawn_blocking` for file I/O).
+#[derive(Clone)]
 pub struct AppState {
     pub running: Arc<AtomicBool>,
     pub cancel: Arc<AtomicBool>,
