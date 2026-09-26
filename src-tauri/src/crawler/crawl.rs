@@ -33,6 +33,62 @@ struct PageFetchOutcome {
     discovered_internal: Vec<Url>,
     discovered_external: Vec<Url>,
     discovered_images: Vec<(Url, Option<String>)>,
+    /// Technologies detected on this page. Only set for the start page (see
+    /// `PageTarget::detect_site_tech`), whose fetch doubles as the site info probe.
+    site_tech: Option<SiteTech>,
+}
+
+impl PageFetchOutcome {
+    fn with_site_tech(mut self, site_tech: Option<SiteTech>) -> Self {
+        self.site_tech = site_tech;
+        self
+    }
+}
+
+/// What `techdetect` found on the start page, for `SiteInfo`.
+struct SiteTech {
+    header: techdetect::HeaderTech,
+    cms: Option<String>,
+    technologies: Vec<String>,
+}
+
+impl SiteTech {
+    fn from_headers(headers: &reqwest::header::HeaderMap) -> Self {
+        Self {
+            header: techdetect::detect_from_headers(headers),
+            cms: None,
+            technologies: Vec::new(),
+        }
+    }
+}
+
+/// A page to fetch: its URL, crawl depth and whether to fingerprint its technologies.
+struct PageTarget {
+    url: Url,
+    depth: usize,
+    /// True only for the start page while site info is still pending, so the crawl
+    /// requests the start URL once instead of a separate probe plus the page fetch.
+    detect_site_tech: bool,
+}
+
+/// Fills the technology fields of the pending site info (left empty when `site_tech`
+/// is `None`) and emits `crawl://site_info`. Does nothing once it has been emitted.
+fn emit_site_info<R: Runtime>(
+    app: &AppHandle<R>,
+    pending: &mut Option<SiteInfo>,
+    site_tech: Option<SiteTech>,
+) {
+    let Some(mut info) = pending.take() else {
+        return;
+    };
+    if let Some(tech) = site_tech {
+        info.server = tech.header.server;
+        info.powered_by = tech.header.powered_by;
+        info.cdn = tech.header.cdn;
+        info.cms = tech.cms;
+        info.technologies = tech.technologies;
+    }
+    let _ = app.emit("crawl://site_info", info);
 }
 
 /// The crawl loop's in-progress frontier state, captured when a crawl is stopped with
@@ -166,6 +222,7 @@ fn empty_outcome(result: PageResult) -> PageFetchOutcome {
         discovered_internal: Vec::new(),
         discovered_external: Vec::new(),
         discovered_images: Vec::new(),
+        site_tech: None,
     }
 }
 
@@ -254,10 +311,14 @@ async fn fetch_and_parse(
     browser: Option<Arc<Browser>>,
     axe_source: Option<Arc<String>>,
     render_semaphore: Option<Arc<Semaphore>>,
-    url: Url,
-    depth: usize,
+    target: PageTarget,
     analysis: Arc<PageAnalysis>,
 ) -> PageFetchOutcome {
+    let PageTarget {
+        url,
+        depth,
+        detect_site_tech,
+    } = target;
     let started = Instant::now();
 
     // Rendering takes the body from Chrome, so a plain HEAD is enough unless the raw
@@ -286,6 +347,10 @@ async fn fetch_and_parse(
     };
 
     let resp = followed.response;
+    // Headers of the final response, like the auto-following probe this replaces saw.
+    // Every return from here on carries it, so site info keeps the header signals even
+    // when the start page is not HTML or its body can't be read.
+    let mut site_tech = detect_site_tech.then(|| SiteTech::from_headers(resp.headers()));
     let redirect_chain = followed.chain;
     let status_code = resp.status();
     let status = status_code.as_u16();
@@ -361,7 +426,8 @@ async fn fetch_and_parse(
             indexability,
             response_time_ms: elapsed,
             ..base
-        });
+        })
+        .with_site_tech(site_tech);
     }
 
     let mut rendered = false;
@@ -374,7 +440,7 @@ async fn fetch_and_parse(
                 Ok(b) => raw_body = Some(b),
                 Err(e) => {
                     let elapsed = started.elapsed().as_millis() as u64;
-                    return body_read_error_outcome(base, elapsed, e);
+                    return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                 }
             }
         }
@@ -418,12 +484,12 @@ async fn fetch_and_parse(
                     Ok(b) => b,
                     Err(e) => {
                         let elapsed = started.elapsed().as_millis() as u64;
-                        return body_read_error_outcome(base, elapsed, e);
+                        return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                     }
                 },
                 Err(e) => {
                     let elapsed = started.elapsed().as_millis() as u64;
-                    return body_read_error_outcome(base, elapsed, e);
+                    return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                 }
             },
         }
@@ -432,7 +498,7 @@ async fn fetch_and_parse(
             Ok(b) => b,
             Err(e) => {
                 let elapsed = started.elapsed().as_millis() as u64;
-                return body_read_error_outcome(base, elapsed, e);
+                return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
             }
         }
     };
@@ -446,16 +512,20 @@ async fn fetch_and_parse(
     // Raw signals only mean something next to a rendered body; the fallback path above
     // already parses the raw HTML as the page itself.
     let raw_body = if rendered { raw_body } else { None };
+    let detect_html_tech = site_tech.is_some();
     let parse_result = tokio::task::spawn_blocking(move || {
         let parsed = parse_page_with(&body, &parse_url, &parse_analysis.extraction);
         let counts = parse_analysis
             .custom_search
             .count_matches(&body, &parsed.body_text);
         let raw = raw_body.map(|raw| parse_raw_signals(&raw, &parse_url));
-        (parsed, counts, raw)
+        // The parsed body is the rendered HTML when JS rendering is on, the raw HTML
+        // otherwise; either way the markers `detect_from_html` looks for are in it.
+        let html_tech = detect_html_tech.then(|| techdetect::detect_from_html(&body));
+        (parsed, counts, raw, html_tech)
     })
     .await;
-    let (parsed, custom_search_counts, raw) = match parse_result {
+    let (parsed, custom_search_counts, raw, html_tech) = match parse_result {
         Ok(result) => result,
         Err(e) => {
             return empty_outcome(PageResult {
@@ -463,9 +533,14 @@ async fn fetch_and_parse(
                 response_time_ms: elapsed,
                 error: Some(format!("Failed to parse the page: {e}")),
                 ..base
-            });
+            })
+            .with_site_tech(site_tech);
         }
     };
+    if let (Some(tech), Some((cms, technologies))) = (site_tech.as_mut(), html_tech) {
+        tech.cms = cms;
+        tech.technologies = technologies;
+    }
     let indexability = indexability_for(
         status,
         parsed.canonical.as_deref(),
@@ -582,6 +657,7 @@ async fn fetch_and_parse(
             .collect(),
         discovered_external: parsed.external_links,
         discovered_images: parsed.images,
+        site_tech,
     }
 }
 
@@ -811,7 +887,7 @@ pub async fn run_crawl<R: Runtime>(
     };
 
     // `client` auto-follows redirects (used for every auxiliary fetch: robots.txt,
-    // sitemap, tech detection, resource checks) so those keep working exactly as
+    // sitemap, llms.txt, resource checks) so those keep working exactly as
     // before. `page_client` disables auto-follow so the main page fetch can walk
     // the redirect chain itself and report every hop.
     let client = match Client::builder()
@@ -849,7 +925,10 @@ pub async fn run_crawl<R: Runtime>(
         robots_by_origin.insert(start_robots_key.clone(), Arc::new(OnceCell::from(rules)));
     }
 
-    {
+    // Everything site info needs except the technologies, which come from the start
+    // page's own crawl fetch (see `PageTarget::detect_site_tech`), so the start URL is
+    // requested once. Emitted by `emit_site_info` when that page's outcome arrives.
+    let mut pending_site_info = {
         let llms_txt_found = match start_url.join("/llms.txt") {
             Ok(llms_txt_url) => matches!(
                 client.get(llms_txt_url).send().await,
@@ -858,25 +937,6 @@ pub async fn run_crawl<R: Runtime>(
             Err(_) => false,
         };
         let llms_txt_url = start_url.join("/llms.txt").ok().map(|u| u.to_string());
-
-        let (server, powered_by, cdn, cms, technologies) =
-            match client.get(start_url.clone()).send().await {
-                Ok(resp) => {
-                    let header_tech = techdetect::detect_from_headers(resp.headers());
-                    let (cms, technologies) = match resp.text().await {
-                        Ok(body) => techdetect::detect_from_html(&body),
-                        Err(_) => (None, Vec::new()),
-                    };
-                    (
-                        header_tech.server,
-                        header_tech.powered_by,
-                        header_tech.cdn,
-                        cms,
-                        technologies,
-                    )
-                }
-                Err(_) => (None, None, None, None, Vec::new()),
-            };
 
         let ip_addresses = hosting::resolve_ips(&start_url).await;
 
@@ -892,23 +952,20 @@ pub async fn run_crawl<R: Runtime>(
             (None, None)
         };
 
-        let _ = app.emit(
-            "crawl://site_info",
-            SiteInfo {
-                llms_txt_found,
-                llms_txt_url,
-                robots_txt_checked: config.respect_robots,
-                server,
-                powered_by,
-                cdn,
-                cms,
-                technologies,
-                ip_addresses,
-                hosting_org,
-                hosting_country,
-            },
-        );
-    }
+        Some(SiteInfo {
+            llms_txt_found,
+            llms_txt_url,
+            robots_txt_checked: config.respect_robots,
+            server: None,
+            powered_by: None,
+            cdn: None,
+            cms: None,
+            technologies: Vec::new(),
+            ip_addresses,
+            hosting_org,
+            hosting_country,
+        })
+    };
 
     let browser: Option<Arc<Browser>> = if config.render_js
         || config.run_accessibility_audit
@@ -1049,6 +1106,16 @@ pub async fn run_crawl<R: Runtime>(
         }
     }
 
+    // Site info waits for the start page's outcome, which brings the technologies. When
+    // this crawl will never fetch the start page, emit it now without them: a resumed
+    // crawl already fetched the start page before it was stopped (its frontier only
+    // holds the rest), and list mode may not list the start URL at all.
+    let start_key = normalize(&start_url);
+    let is_start_page = |url: &Url| normalize(url) == start_key;
+    if !frontier.iter().any(|(url, _, _)| is_start_page(url)) {
+        emit_site_info(&app, &mut pending_site_info, None);
+    }
+
     let mut page_tasks: JoinSet<Option<PageFetchOutcome>> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
 
@@ -1081,8 +1148,15 @@ pub async fn run_crawl<R: Runtime>(
                 let robots = robots_cell.as_ref().and_then(|cell| cell.get());
                 let pending_robots = robots_cell.clone().filter(|cell| !cell.initialized());
 
+                let detect_site_tech = pending_site_info.is_some() && is_start_page(&url);
+
                 if let Some(robots) = robots {
                     if !robots.is_allowed(url.path()) {
+                        // A blocked start page is never fetched, so there is nothing
+                        // to detect technologies from.
+                        if detect_site_tech {
+                            emit_site_info(&app, &mut pending_site_info, None);
+                        }
                         crawled_count += 1;
                         let mut result = robots_blocked_result(&url, depth);
                         result.discovered_via_sitemap = via_sitemap;
@@ -1147,8 +1221,7 @@ pub async fn run_crawl<R: Runtime>(
                                 browser,
                                 axe_source,
                                 render_semaphore,
-                                url,
-                                depth,
+                                PageTarget { url, depth, detect_site_tech },
                                 analysis,
                             )
                             .await
@@ -1188,7 +1261,14 @@ pub async fn run_crawl<R: Runtime>(
                 }
                 if let Some(Ok(Some(outcome))) = res {
                     crawled_count += 1;
-                    let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images } = outcome;
+                    let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images, site_tech } = outcome;
+                    // The start page's outcome completes site info, with or without
+                    // technologies (a robots block or failed fetch leaves them empty).
+                    if pending_site_info.is_some()
+                        && Url::parse(&result.url).is_ok_and(|url| is_start_page(&url))
+                    {
+                        emit_site_info(&app, &mut pending_site_info, site_tech);
+                    }
 
                     // List mode never follows links, but still records them as linked.
                     if !list_mode && result.depth < config.max_depth {
@@ -1280,6 +1360,9 @@ pub async fn run_crawl<R: Runtime>(
             }
         }
     }
+
+    // Stopped before the start page's outcome arrived: still report what is known.
+    emit_site_info(&app, &mut pending_site_info, None);
 
     let cancelled = cancel.load(Ordering::SeqCst);
     if cancelled {
