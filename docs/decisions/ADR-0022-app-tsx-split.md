@@ -1,4 +1,4 @@
-# ADR-0021: How App.tsx is split
+# ADR-0022: How App.tsx is split
 
 ## Context
 
