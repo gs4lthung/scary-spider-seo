@@ -553,6 +553,26 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://web.dev/articles/ttfb",
     },
   },
+  largeImage: {
+    title: "Image over 100 KB",
+    problem:
+      "Large image files take longer to download, which slows the page and often delays Largest Contentful Paint when the image is above the fold. They also cost visitors on metered mobile connections. The size here comes from the Content-Length header, and 100 KB is the threshold Screaming Frog uses for its Images tab.",
+    fix: "Compress the image, resize it to the largest size it is actually displayed at, and serve a modern format such as WebP or AVIF with a fallback where needed. Use srcset so small screens download a smaller file.",
+    source: {
+      label: "Chrome for Developers: Serve images in modern formats",
+      url: "https://developer.chrome.com/docs/lighthouse/performance/uses-webp-images",
+    },
+  },
+  imageMissingDimensions: {
+    title: "Images without width and height attributes",
+    problem:
+      "When an <img> has no width and height attributes, the browser cannot reserve space for it before the file arrives, so the content below jumps once the image loads. That layout shift counts toward Cumulative Layout Shift, a Core Web Vitals metric. This check looks at the HTML attributes only; sizing done purely in CSS is not detected.",
+    fix: "Add width and height attributes with the image's intrinsic size to every <img>, then keep it responsive in CSS with height: auto (or use aspect-ratio). The browser uses the attribute ratio to reserve the right space.",
+    source: {
+      label: "web.dev: Optimize Cumulative Layout Shift",
+      url: "https://web.dev/articles/optimize-cls",
+    },
+  },
   missingViewport: {
     title: "Missing viewport meta tag",
     problem: "Without a viewport tag, mobile browsers render the page at a desktop-width layout and then shrink it to fit the screen, producing tiny unreadable text and squished layouts. Google also factors this into mobile usability/page-experience signals.",

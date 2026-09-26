@@ -28,6 +28,8 @@ export const LOW_WORD_COUNT = 200;
 export const DEEP_PAGE_DEPTH = 3;
 /** HTML documents larger than this (1 MiB) are "large HTML". */
 export const LARGE_HTML_BYTES = 1_048_576;
+/** Images larger than this (100 KB, Screaming Frog's "Over 100 KB" default) are "large images". */
+export const LARGE_IMAGE_BYTES = 102_400;
 
 /** Anchor texts that say nothing about the target (compared lowercase, after trimming
  * punctuation and collapsing whitespace, by `isNonDescriptiveAnchor`). */
@@ -1102,6 +1104,22 @@ export const ISSUE_DEFS = [
     tone: "warn",
     section: "Performance",
     test: (p) => p.htmlSizeBytes > LARGE_HTML_BYTES,
+  }),
+  resourceIssue({
+    key: "largeImage",
+    label: "Large images (>100 KB)",
+    group: "technical",
+    tone: "warn",
+    section: "Performance",
+    test: (r) => r.resourceType === "image" && (r.contentLength ?? 0) > LARGE_IMAGE_BYTES,
+  }),
+  pageIssue({
+    key: "imageMissingDimensions",
+    label: "Images missing width/height",
+    group: "technical",
+    tone: "warn",
+    section: "Performance",
+    test: (p) => p.imagesMissingDimensions > 0,
   }),
   pageIssue({
     key: "missingSocialTags",
