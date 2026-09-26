@@ -1,6 +1,7 @@
 mod commands;
 mod crawler;
 mod export;
+mod snapshot;
 mod state;
 
 use state::AppState;

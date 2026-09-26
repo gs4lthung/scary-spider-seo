@@ -2,11 +2,13 @@ use crate::crawler::crawl;
 use crate::crawler::custom::{CustomSearch, Extraction};
 use crate::crawler::scope::UrlScope;
 use crate::crawler::types::{
-    CrawlConfig, CrawlSnapshot, CrawlSummary, CustomSearchRule, ExtractionRule, PageResult,
-    ResourceResult, MAX_LIST_URLS,
+    CrawlConfig, CrawlSnapshot, CrawlSnapshotRef, CrawlSummary, CustomSearchRule, ExtractionRule,
+    PageResult, ResourceResult, MAX_LIST_URLS,
 };
 use crate::export;
+use crate::snapshot;
 use crate::state::AppState;
+use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -205,25 +207,26 @@ pub fn save_crawl(
     custom_searches: Option<Vec<CustomSearchRule>>,
     extractions: Option<Vec<ExtractionRule>>,
 ) -> Result<(), String> {
-    let pages = lock_state(&state.pages)?.clone();
-    let resources: Vec<ResourceResult> =
-        state.resources.iter().map(|r| r.value().clone()).collect();
     let saved_at_unix_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
+    let custom_searches = custom_searches.unwrap_or_default();
+    let extractions = extractions.unwrap_or_default();
 
-    let snapshot = CrawlSnapshot {
-        start_url,
+    // Serialize straight from the locked state: no clone of pages or resources. The
+    // resource guards hold shard read locks only for the duration of the write.
+    let pages = lock_state(&state.pages)?;
+    let resource_guards: Vec<_> = state.resources.iter().collect();
+    let snapshot = CrawlSnapshotRef {
+        start_url: &start_url,
         saved_at_unix_ms,
-        pages,
-        resources,
-        custom_searches: custom_searches.unwrap_or_default(),
-        extractions: extractions.unwrap_or_default(),
+        pages: &pages,
+        resources: resource_guards.iter().map(|r| r.value()).collect(),
+        custom_searches: &custom_searches,
+        extractions: &extractions,
     };
-
-    let json = serde_json::to_string_pretty(&snapshot).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    snapshot::write_snapshot(Path::new(&path), &snapshot)
 }
 
 #[tauri::command]
@@ -233,11 +236,9 @@ pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnaps
     Ok(snapshot)
 }
 
-/// Reads and parses a saved crawl file. Fields missing from crawls saved by older builds
-/// take their `#[serde(default)]` values.
+/// Reads and parses a saved crawl file (compact or pretty-printed, any build's format).
 fn parse_snapshot_file(path: &str) -> Result<CrawlSnapshot, String> {
-    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&content).map_err(|e| e.to_string())
+    snapshot::read_snapshot(Path::new(path))
 }
 
 /// Replaces the current crawl in `state` with `snapshot` (what `load_crawl` does after parsing).
