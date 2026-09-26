@@ -39,6 +39,12 @@ describe("buildLinkGraph", () => {
     ]);
   });
 
+  it("getInlinks returns at most the requested number of links", () => {
+    const graph = buildLinkGraph([page("", [link("a")]), page("b", [link("a")]), page("c", [link("a")])]);
+    expect(getInlinks(graph, url("a"), 2).map((l) => l.source)).toEqual([url(""), url("b")]);
+    expect(getInlinks(graph, url("missing"))).toEqual([]);
+  });
+
   it("ignores a page's links to itself", () => {
     const graph = buildLinkGraph([page("a", [link("a")])]);
     expect(getInlinkCount(graph, url("a"))).toBe(0);
