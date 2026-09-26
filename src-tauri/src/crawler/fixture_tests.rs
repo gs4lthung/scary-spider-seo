@@ -147,6 +147,8 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
 struct CrawlOutput {
     pages: Vec<PageResult>,
     resources: Vec<ResourceResult>,
+    /// Normalized internal URLs some crawled page linked to (the `run_crawl` result).
+    linked_urls: Vec<String>,
 }
 
 impl CrawlOutput {
@@ -197,11 +199,15 @@ async fn crawl(start_url: &str, overrides: serde_json::Value) -> CrawlOutput {
         resources_checked: Arc::new(AtomicUsize::new(0)),
         resume_slot: Arc::new(Mutex::new(None)),
     };
-    run_crawl(app.handle().clone(), config, state, None).await;
+    let linked_urls = run_crawl(app.handle().clone(), config, state, None).await;
 
     let pages = pages.lock().unwrap().clone();
     let resources = resources.iter().map(|e| e.value().clone()).collect();
-    CrawlOutput { pages, resources }
+    CrawlOutput {
+        pages,
+        resources,
+        linked_urls,
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -244,6 +250,63 @@ async fn crawls_every_linked_page_exactly_once() {
     .map(|p| site.url(p))
     .collect();
     assert_eq!(out.urls(), expected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn exclude_pattern_skips_matching_pages() {
+    let site = FixtureServer::start().await;
+    let full = crawl(&site.url("/"), json!({})).await;
+    let out = crawl(&site.url("/"), json!({ "excludePatterns": ["/dup-"] })).await;
+
+    let dup_a = site.url("/dup-a.html");
+    let dup_b = site.url("/dup-b.html");
+    let expected: Vec<&str> = full
+        .urls()
+        .into_iter()
+        .filter(|u| *u != dup_a && *u != dup_b)
+        .collect();
+    assert_eq!(out.urls(), expected);
+    // `/near-dup-*` pages don't contain "/dup-" and are still crawled.
+    out.page(&site.url("/near-dup-a.html"));
+    // Excluded URLs still count as linked, so orphan detection is unaffected.
+    assert!(out.linked_urls.contains(&dup_a), "{:?}", out.linked_urls);
+    assert!(out.linked_urls.contains(&dup_b), "{:?}", out.linked_urls);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn include_pattern_limits_the_crawl() {
+    let site = FixtureServer::start().await;
+    // Anchored on the path segment: a bare "noindex" would also match
+    // `/canonical-to-noindex.html`, which the fixture site links from the home page.
+    let out = crawl(
+        &site.url("/"),
+        json!({ "includePatterns": [r"/noindex\.html$"] }),
+    )
+    .await;
+    // The start URL is always crawled even though it doesn't match.
+    assert_eq!(out.urls(), vec![site.url("/"), site.url("/noindex.html")]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn include_pattern_applies_to_sitemap_urls() {
+    let site = FixtureServer::start().await;
+    let out = crawl(
+        &site.url("/"),
+        json!({ "useSitemap": true, "includePatterns": ["/noindex"] }),
+    )
+    .await;
+    // `/noindex-in-sitemap.html` is only reachable through the sitemap and matches;
+    // every other sitemap URL is filtered out.
+    let urls = out.urls();
+    assert!(
+        urls.contains(&site.url("/noindex-in-sitemap.html").as_str()),
+        "{urls:?}"
+    );
+    assert!(
+        urls.iter()
+            .all(|u| *u == site.url("/") || u.contains("/noindex")),
+        "{urls:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
