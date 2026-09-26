@@ -410,25 +410,159 @@ async fn list_mode_checks_images_of_listed_pages() {
     assert!(image.is_internal);
 }
 
+/// A throwaway origin for list-mode tests: every request is answered by `handler(path)`,
+/// which may wait before answering. Returns the origin, e.g. `http://127.0.0.1:1234`.
+async fn start_custom_server<F, Fut>(handler: F) -> String
+where
+    F: Fn(String) -> Fut + Clone + Send + Sync + 'static,
+    Fut: std::future::Future<Output = Vec<u8>> + Send + 'static,
+{
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind custom server");
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let handler = handler.clone();
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 8192];
+                let mut len = 0;
+                while !buf[..len].windows(4).any(|w| w == b"\r\n\r\n") && len < buf.len() {
+                    match stream.read(&mut buf[len..]).await {
+                        Ok(0) | Err(_) => return,
+                        Ok(n) => len += n,
+                    }
+                }
+                let request = String::from_utf8_lossy(&buf[..len]).into_owned();
+                let path = request.split_whitespace().nth(1).unwrap_or("/").to_string();
+                let response = handler(path).await;
+                let _ = stream.write_all(&response).await;
+                let _ = stream.shutdown().await;
+            });
+        }
+    });
+    origin
+}
+
+fn html_ok() -> Vec<u8> {
+    http_response(
+        "200 OK",
+        &[("Content-Type", "text/html; charset=utf-8")],
+        b"<!doctype html><title>Listed</title><h1>Listed</h1>",
+        false,
+    )
+}
+
+fn robots_txt(body: &str) -> Vec<u8> {
+    http_response(
+        "200 OK",
+        &[("Content-Type", "text/plain")],
+        body.as_bytes(),
+        false,
+    )
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn list_mode_respects_robots_per_host() {
-    // Two servers are two origins, each with its own robots.txt that disallows `/private/`.
-    // The second origin's rules can only apply if list mode fetches robots.txt per host.
-    let first = FixtureServer::start().await;
-    let second = FixtureServer::start().await;
+    // The start origin (the fixture site) disallows `/private/` only. The second origin
+    // disallows `/members/`, so `/members/page.html` can only come back blocked if list
+    // mode fetches the second origin's own robots.txt.
+    let site = FixtureServer::start().await;
+    let other = start_custom_server(|path: String| async move {
+        if path == "/robots.txt" {
+            robots_txt("User-agent: *\nDisallow: /members/\n")
+        } else {
+            html_ok()
+        }
+    })
+    .await;
+    let members = format!("{other}/members/page.html");
+    let open = format!("{other}/open.html");
     let listed = vec![
-        first.url("/noindex.html"),
-        second.url("/private/secret.html"),
-        second.url("/dup-a.html"),
+        site.url("/noindex.html"),
+        site.url("/private/secret.html"),
+        members.clone(),
+        open.clone(),
     ];
     let out = crawl(&listed[0], json!({ "listUrls": &listed })).await;
 
-    assert_eq!(out.pages.len(), 3);
-    let blocked = out.page(&second.url("/private/secret.html"));
-    assert_eq!(blocked.status_text, "Blocked");
-    assert_eq!(blocked.indexability, "Non-Indexable (robots.txt)");
-    assert_eq!(out.page(&second.url("/dup-a.html")).status, Some(200));
-    assert_eq!(out.page(&first.url("/noindex.html")).status, Some(200));
+    assert_eq!(out.pages.len(), 4);
+    for blocked in [&members, &site.url("/private/secret.html")] {
+        let page = out.page(blocked);
+        assert_eq!(page.status_text, "Blocked", "{blocked}");
+        assert_eq!(page.indexability, "Non-Indexable (robots.txt)", "{blocked}");
+    }
+    assert_eq!(out.page(&open).status, Some(200));
+    assert_eq!(out.page(&site.url("/noindex.html")).status, Some(200));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_fetches_robots_off_the_dispatch_path() {
+    // The gated origin answers its robots.txt only once the signal origin has received a
+    // request. If robots.txt were fetched on the dispatch path, the signal URL (listed
+    // after it) could not be dispatched until that fetch gave up, the gated rules would be
+    // lost, and `/gated/page.html` would be crawled instead of blocked. No timing involved.
+    let site = FixtureServer::start().await;
+    let (signal_tx, signal_rx) = tokio::sync::watch::channel(false);
+    let signal_tx = Arc::new(signal_tx);
+    let gated = start_custom_server(move |path: String| {
+        let mut signal_rx = signal_rx.clone();
+        async move {
+            if path == "/robots.txt" {
+                // Safety net so a regression fails the assertion instead of hanging.
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(20),
+                    signal_rx.wait_for(|fired| *fired),
+                )
+                .await;
+                robots_txt("User-agent: *\nDisallow: /gated/\n")
+            } else {
+                html_ok()
+            }
+        }
+    })
+    .await;
+    let signal = start_custom_server(move |_path: String| {
+        let signal_tx = signal_tx.clone();
+        async move {
+            signal_tx.send_replace(true);
+            html_ok()
+        }
+    })
+    .await;
+    // An origin nobody listens on: its robots.txt and page both fail fast, and the crawl
+    // still finishes.
+    let dead = {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        format!("http://{}", listener.local_addr().unwrap())
+    };
+
+    let gated_page = format!("{gated}/gated/page.html");
+    let dead_page = format!("{dead}/page.html");
+    let signal_page = format!("{signal}/page.html");
+    let listed = vec![
+        site.url("/noindex.html"),
+        gated_page.clone(),
+        dead_page.clone(),
+        signal_page.clone(),
+    ];
+    let out = crawl(
+        &listed[0],
+        json!({ "listUrls": &listed, "concurrency": 4, "timeoutSecs": 5 }),
+    )
+    .await;
+
+    assert_eq!(out.pages.len(), 4, "{:?}", out.urls());
+    let gated_result = out.page(&gated_page);
+    assert_eq!(gated_result.status_text, "Blocked");
+    assert_eq!(gated_result.indexability, "Non-Indexable (robots.txt)");
+    assert_eq!(out.page(&signal_page).status, Some(200));
+    let dead_result = out.page(&dead_page);
+    assert_eq!(dead_result.status, None);
+    assert!(dead_result.error.is_some());
 }
 
 #[tokio::test(flavor = "multi_thread")]
