@@ -10,6 +10,7 @@ import {
   H2_MAX_LENGTH,
   ISSUE_DEFS,
   LARGE_HTML_BYTES,
+  LARGE_IMAGE_BYTES,
   LOW_WORD_COUNT,
   LOW_TEXT_RATIO_THRESHOLD_PCT,
   NON_DESCRIPTIVE_ANCHORS,
@@ -100,6 +101,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     mixedContentCount: 0,
     insecureLinkCount: 0,
     missingAltCount: 0,
+    imagesMissingDimensions: 0,
     lang: "en",
     hreflangValues: [],
     hreflangLinks: [],
@@ -134,6 +136,7 @@ function makeResource(overrides: Partial<ResourceResult> = {}): ResourceResult {
     isInternal: true,
     isInsecure: false,
     error: null,
+    contentLength: null,
     ...overrides,
   };
 }
@@ -271,6 +274,13 @@ describe("filterPages", () => {
       makePage({ htmlSizeBytes: 0, isMinified: false }),
     ];
     expect(run(pages, "unminified")).toEqual([pages[0]]);
+  });
+
+  it("flags pages with images missing width or height", () => {
+    const pages = [makePage({ imagesMissingDimensions: 1 }), makePage({ imagesMissingDimensions: 0 })];
+    expect(run(pages, "imageMissingDimensions")).toEqual([pages[0]]);
+    expect(getPageIssueKeys(pages[0], emptyFilterContext())).toContain("imageMissingDimensions");
+    expect(getPageIssueKeys(pages[1], emptyFilterContext())).not.toContain("imageMissingDimensions");
   });
 
   it("flags missing alt text and insecure links by count", () => {
@@ -580,6 +590,21 @@ describe("searchResources", () => {
   });
 });
 
+describe("largeImage", () => {
+  it("flags images over 100 KB by Content-Length, with the boundary not flagged", () => {
+    const resources = [
+      makeResource({ contentLength: LARGE_IMAGE_BYTES + 1 }),
+      makeResource({ contentLength: LARGE_IMAGE_BYTES }),
+      makeResource({ contentLength: null }),
+      makeResource({ resourceType: "link", contentLength: LARGE_IMAGE_BYTES * 10 }),
+    ];
+    expect(filterTab("largeImage")).toBe("resources");
+    expect(filterResources(resources, "largeImage")).toEqual([resources[0]]);
+    expect(getResourceIssueKeys(resources[0])).toEqual(["largeImage"]);
+    expect(getResourceIssueKeys(resources[2])).toEqual([]);
+  });
+});
+
 describe("getResourceIssueKeys", () => {
   it("flags broken resources and insecure resources", () => {
     expect(getResourceIssueKeys(makeResource({ status: 404 }))).toEqual(["broken"]);
@@ -846,6 +871,7 @@ describe("issue registry", () => {
       at("two-h1", { h1Count: 2 }),
       at("thin", { textRatioPct: LOW_TEXT_RATIO_THRESHOLD_PCT - 1 }),
       at("no-alt", { missingAltCount: 2 }),
+      at("no-dimensions", { imagesMissingDimensions: 1 }),
       at("nofollow", { internalNofollowCount: 1 }),
       at("unminified", { isMinified: false }),
       at("two-canonicals", { canonicalCount: 2 }),
@@ -919,6 +945,7 @@ describe("issue registry", () => {
       makeResource({ url: "https://example.com/missing.png", status: 404 }),
       makeResource({ url: "https://example.com/timeout.png", status: null, error: "timeout" }),
       makeResource({ url: "http://example.com/insecure.png", isInsecure: true }),
+      makeResource({ url: "https://example.com/large.png", contentLength: LARGE_IMAGE_BYTES + 1 }),
     ];
     const hreflang = getHreflangTracker(pages);
     const ctx: FilterContext = {

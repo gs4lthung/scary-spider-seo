@@ -46,6 +46,7 @@ function makePage(url: string): PageResult {
     mixedContentCount: 0,
     insecureLinkCount: 0,
     missingAltCount: 0,
+    imagesMissingDimensions: 0,
     lang: "en",
     hreflangValues: [],
     hreflangLinks: [],

@@ -50,6 +50,7 @@ pub fn export_pages_csv(
         "Mixed Content",
         "Insecure Links",
         "Missing Alt Images",
+        "Images Missing Dimensions",
         "Lang",
         "Hreflang Values",
         "Hreflang Links",
@@ -117,6 +118,7 @@ pub fn export_pages_csv(
             p.mixed_content_count.to_string(),
             p.insecure_link_count.to_string(),
             p.missing_alt_count.to_string(),
+            p.images_missing_dimensions.to_string(),
             p.lang.clone().unwrap_or_default(),
             p.hreflang_values.join(", "),
             p.hreflang_links
@@ -162,6 +164,7 @@ pub fn export_resources_csv(
         "Internal",
         "Alt Text",
         "Insecure",
+        "Size (bytes)",
         "Error",
     ])?;
 
@@ -178,6 +181,7 @@ pub fn export_resources_csv(
             r.is_internal.to_string(),
             r.alt_text.clone().unwrap_or_default(),
             r.is_insecure.to_string(),
+            r.content_length.map(|n| n.to_string()).unwrap_or_default(),
             r.error.clone().unwrap_or_default(),
         ])?;
     }

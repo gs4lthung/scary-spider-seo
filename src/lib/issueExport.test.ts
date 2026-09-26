@@ -47,6 +47,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     mixedContentCount: 0,
     insecureLinkCount: 0,
     missingAltCount: 0,
+    imagesMissingDimensions: 0,
     lang: "en",
     hreflangValues: [],
     hreflangLinks: [],
@@ -81,6 +82,7 @@ function makeResource(overrides: Partial<ResourceResult> = {}): ResourceResult {
     isInternal: true,
     isInsecure: false,
     error: null,
+    contentLength: null,
     ...overrides,
   };
 }

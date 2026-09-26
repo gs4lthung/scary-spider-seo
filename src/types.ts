@@ -89,6 +89,8 @@ export interface PageResult {
   mixedContentCount: number;
   insecureLinkCount: number;
   missingAltCount: number;
+  /** `<img src>` elements missing a `width` or `height` attribute. 0 for crawls saved before T2.7. */
+  imagesMissingDimensions: number;
   lang: string | null;
   hreflangValues: string[];
   /** Hreflang annotations with resolvable hrefs, in document order, capped at 300. Empty for crawls saved before T2.6. */
@@ -139,6 +141,8 @@ export interface ResourceResult {
   isInternal: boolean;
   isInsecure: boolean;
   error: string | null;
+  /** Bytes from the `Content-Length` response header; null when absent and for crawls saved before T2.7. */
+  contentLength: number | null;
 }
 
 export interface CrawlProgress {

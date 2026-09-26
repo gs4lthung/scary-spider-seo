@@ -439,6 +439,7 @@ async fn fetch_and_parse(
         mixed_content_count: parsed.mixed_content_count,
         insecure_link_count: parsed.insecure_link_count,
         missing_alt_count: parsed.missing_alt_count,
+        images_missing_dimensions: parsed.images_missing_dimensions,
         lang: parsed.lang,
         hreflang_values: parsed.hreflang_values,
         hreflang_links: parsed.hreflang_links,
@@ -473,22 +474,62 @@ async fn fetch_and_parse(
     }
 }
 
-async fn check_resource(client: &Client, url: &Url) -> (Option<u16>, String, Option<String>) {
+/// Outcome of a resource status check.
+struct ResourceCheck {
+    status: Option<u16>,
+    status_text: String,
+    error: Option<String>,
+    content_length: Option<u64>,
+}
+
+impl ResourceCheck {
+    fn from_response(resp: &reqwest::Response) -> Self {
+        Self {
+            status: Some(resp.status().as_u16()),
+            status_text: resp.status().to_string(),
+            error: None,
+            content_length: header_content_length(resp.headers()),
+        }
+    }
+
+    fn failed(error: String) -> Self {
+        Self {
+            status: None,
+            status_text: "Error".to_string(),
+            error: Some(error),
+            content_length: None,
+        }
+    }
+}
+
+/// Reads the raw `Content-Length` header. `Response::content_length()` is not used
+/// because on a HEAD response it reports the (empty) body size hint, not the header.
+fn header_content_length(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    headers
+        .get(reqwest::header::CONTENT_LENGTH)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+async fn check_resource(client: &Client, url: &Url) -> ResourceCheck {
     match client.head(url.clone()).send().await {
         Ok(resp) => {
             let status = resp.status();
             if status.as_u16() == 405 || status.as_u16() == 501 {
                 match client.get(url.clone()).send().await {
-                    Ok(r2) => (Some(r2.status().as_u16()), r2.status().to_string(), None),
-                    Err(e) => (None, "Error".to_string(), Some(e.to_string())),
+                    Ok(r2) => ResourceCheck::from_response(&r2),
+                    Err(e) => ResourceCheck::failed(e.to_string()),
                 }
             } else {
-                (Some(status.as_u16()), status.to_string(), None)
+                ResourceCheck::from_response(&resp)
             }
         }
         Err(e) => match client.get(url.clone()).send().await {
-            Ok(r2) => (Some(r2.status().as_u16()), r2.status().to_string(), None),
-            Err(_) => (None, "Error".to_string(), Some(e.to_string())),
+            Ok(r2) => ResourceCheck::from_response(&r2),
+            Err(_) => ResourceCheck::failed(e.to_string()),
         },
     }
 }
@@ -559,6 +600,7 @@ fn queue_resource_check<R: Runtime>(
             is_internal,
             is_insecure,
             error: None,
+            content_length: None,
         },
     );
 
@@ -573,7 +615,7 @@ fn queue_resource_check<R: Runtime>(
                 drop(permit);
                 Some(result)
             } => {
-                let Some((status, status_text, error)) = result else {
+                let Some(check) = result else {
                     return;
                 };
                 let entry = ResourceResult {
@@ -581,11 +623,12 @@ fn queue_resource_check<R: Runtime>(
                     resource_type: kind,
                     source_page,
                     alt_text,
-                    status,
-                    status_text,
+                    status: check.status,
+                    status_text: check.status_text,
                     is_internal,
                     is_insecure,
-                    error,
+                    error: check.error,
+                    content_length: check.content_length,
                 };
                 ctx.resources.insert(key, entry.clone());
                 ctx.resources_checked.fetch_add(1, Ordering::Relaxed);
