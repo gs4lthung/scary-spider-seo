@@ -206,10 +206,28 @@ export function CrawlOptionsSheet({ config, running, listMode = false, onChange 
                   onChange({
                     ...config,
                     renderJs: checked,
+                    compareRawHtml: checked ? config.compareRawHtml : false,
                     runAccessibilityAudit: checked ? config.runAccessibilityAudit : false,
                     runMobileUsabilityAudit: checked ? config.runMobileUsabilityAudit : false,
                   })
                 }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span id="compare-raw-html-label" className="text-sm font-medium">
+                  Compare raw and rendered HTML
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Also downloads each page's HTML before JavaScript runs and flags pages where JavaScript changes the
+                  title, canonical or meta robots, or adds most of the content or links. Requires Render JavaScript.
+                </span>
+              </div>
+              <Switch
+                aria-labelledby="compare-raw-html-label"
+                checked={config.compareRawHtml}
+                disabled={running || !config.renderJs}
+                onCheckedChange={(checked) => set("compareRawHtml", checked)}
               />
             </div>
             <div className="flex items-center justify-between gap-4">
