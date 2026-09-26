@@ -115,7 +115,7 @@ export function CustomSearchEditor({ rules, disabled, onChange }: CustomSearchEd
           variant="outline"
           size="sm"
           disabled={disabled || full}
-          onClick={() => onChange([...rules, newCustomSearchRule(rules)])}
+          onClick={() => onChange([...rules, newCustomSearchRule()])}
         >
           <Plus />
           Add search
