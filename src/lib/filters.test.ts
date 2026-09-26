@@ -99,6 +99,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     missingAltCount: 0,
     lang: "en",
     hreflangValues: [],
+    hreflangLinks: [],
     internalNofollowCount: 0,
     outlinks: [],
     textRatioPct: 20,
