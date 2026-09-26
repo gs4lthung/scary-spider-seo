@@ -35,6 +35,14 @@ pub struct CrawlConfig {
     pub run_accessibility_audit: bool,
     #[serde(default)]
     pub run_mobile_usability_audit: bool,
+    /// Regular expressions matched against the full URL: when any are given, a
+    /// discovered URL must match at least one to be crawled. The start URL is exempt.
+    #[serde(default)]
+    pub include_patterns: Vec<String>,
+    /// Regular expressions matched against the full URL: a discovered URL matching any
+    /// of them is not crawled. Wins over `include_patterns`.
+    #[serde(default)]
+    pub exclude_patterns: Vec<String>,
 }
 
 fn default_max_pages() -> usize {
@@ -380,5 +388,14 @@ mod tests {
         assert_eq!(home.images_missing_dimensions, 0);
         assert_eq!(home.content_simhash, "");
         assert_eq!(snapshot.resources[0].content_length, None);
+    }
+
+    /// A config sent without the T3.1 pattern fields means "no restriction".
+    #[test]
+    fn config_without_patterns_defaults_to_empty() {
+        let config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
+        assert!(config.include_patterns.is_empty());
+        assert!(config.exclude_patterns.is_empty());
     }
 }

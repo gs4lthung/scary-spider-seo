@@ -15,6 +15,10 @@ export interface CrawlConfig {
   lookupHosting: boolean;
   runAccessibilityAudit: boolean;
   runMobileUsabilityAudit: boolean;
+  /** Regular expressions matched against the full URL; when any are given, a discovered URL must match one to be crawled. The start URL is always crawled. */
+  includePatterns: string[];
+  /** Regular expressions matched against the full URL; a discovered URL matching any is not crawled (wins over include). */
+  excludePatterns: string[];
 }
 
 /** One internal link found on a page. */
@@ -203,4 +207,6 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   lookupHosting: false,
   runAccessibilityAudit: false,
   runMobileUsabilityAudit: false,
+  includePatterns: [],
+  excludePatterns: [],
 };

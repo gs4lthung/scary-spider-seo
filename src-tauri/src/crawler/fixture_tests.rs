@@ -3,7 +3,7 @@
 //! in-process on 127.0.0.1, and `run_crawl` runs on Tauri's mock runtime, so these
 //! tests need no network, no browser and no window.
 
-use super::crawl::{run_crawl, CrawlState};
+use super::crawl::{run_crawl, CrawlResumeState, CrawlState};
 use super::types::{CrawlConfig, LinkRef, PageResult, ResourceResult};
 use dashmap::DashMap;
 use serde_json::json;
@@ -147,6 +147,8 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
 struct CrawlOutput {
     pages: Vec<PageResult>,
     resources: Vec<ResourceResult>,
+    /// Normalized internal URLs some crawled page linked to (the `run_crawl` result).
+    linked_urls: Vec<String>,
 }
 
 impl CrawlOutput {
@@ -173,6 +175,18 @@ impl CrawlOutput {
 
 /// Crawls `start_url` with the given config overrides (camelCase `CrawlConfig` keys).
 async fn crawl(start_url: &str, overrides: serde_json::Value) -> CrawlOutput {
+    crawl_resumable(start_url, overrides, None, false).await.0
+}
+
+/// Like `crawl`, but can continue from `resume` and can start already stopped
+/// (`stopped: true` makes the loop exit before fetching anything, leaving the whole
+/// seeded frontier queued). Also returns the resume state the crawl left behind.
+async fn crawl_resumable(
+    start_url: &str,
+    overrides: serde_json::Value,
+    resume: Option<CrawlResumeState>,
+    stopped: bool,
+) -> (CrawlOutput, Option<CrawlResumeState>) {
     let mut config = json!({
         "startUrl": start_url,
         "concurrency": 4,
@@ -187,21 +201,30 @@ async fn crawl(start_url: &str, overrides: serde_json::Value) -> CrawlOutput {
     let config: CrawlConfig = serde_json::from_value(config).expect("valid crawl config");
 
     let app = tauri::test::mock_app();
+    let resume_slot = Arc::new(Mutex::new(None));
     let pages = Arc::new(Mutex::new(Vec::new()));
     let resources = Arc::new(DashMap::new());
     let state = CrawlState {
-        cancel: Arc::new(AtomicBool::new(false)),
+        cancel: Arc::new(AtomicBool::new(stopped)),
         paused: Arc::new(AtomicBool::new(false)),
         pages: pages.clone(),
         resources: resources.clone(),
         resources_checked: Arc::new(AtomicUsize::new(0)),
-        resume_slot: Arc::new(Mutex::new(None)),
+        resume_slot: resume_slot.clone(),
     };
-    run_crawl(app.handle().clone(), config, state, None).await;
+    let linked_urls = run_crawl(app.handle().clone(), config, state, resume).await;
 
     let pages = pages.lock().unwrap().clone();
     let resources = resources.iter().map(|e| e.value().clone()).collect();
-    CrawlOutput { pages, resources }
+    let left_behind = resume_slot.lock().unwrap().take();
+    (
+        CrawlOutput {
+            pages,
+            resources,
+            linked_urls,
+        },
+        left_behind,
+    )
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -244,6 +267,106 @@ async fn crawls_every_linked_page_exactly_once() {
     .map(|p| site.url(p))
     .collect();
     assert_eq!(out.urls(), expected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn exclude_pattern_skips_matching_pages() {
+    let site = FixtureServer::start().await;
+    let full = crawl(&site.url("/"), json!({})).await;
+    let out = crawl(&site.url("/"), json!({ "excludePatterns": ["/dup-"] })).await;
+
+    let dup_a = site.url("/dup-a.html");
+    let dup_b = site.url("/dup-b.html");
+    let expected: Vec<&str> = full
+        .urls()
+        .into_iter()
+        .filter(|u| *u != dup_a && *u != dup_b)
+        .collect();
+    assert_eq!(out.urls(), expected);
+    // `/near-dup-*` pages don't contain "/dup-" and are still crawled.
+    out.page(&site.url("/near-dup-a.html"));
+    // Excluded URLs still count as linked, so orphan detection is unaffected.
+    assert!(out.linked_urls.contains(&dup_a), "{:?}", out.linked_urls);
+    assert!(out.linked_urls.contains(&dup_b), "{:?}", out.linked_urls);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn include_pattern_limits_the_crawl() {
+    let site = FixtureServer::start().await;
+    // Anchored on the path segment: a bare "noindex" would also match
+    // `/canonical-to-noindex.html`, which the fixture site links from the home page.
+    let out = crawl(
+        &site.url("/"),
+        json!({ "includePatterns": [r"/noindex\.html$"] }),
+    )
+    .await;
+    // The start URL is always crawled even though it doesn't match.
+    assert_eq!(out.urls(), vec![site.url("/"), site.url("/noindex.html")]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn include_pattern_applies_to_sitemap_urls() {
+    let site = FixtureServer::start().await;
+    let out = crawl(
+        &site.url("/"),
+        json!({ "useSitemap": true, "includePatterns": ["/noindex"] }),
+    )
+    .await;
+    // `/noindex-in-sitemap.html` is only reachable through the sitemap and matches;
+    // every other sitemap URL is filtered out.
+    let urls = out.urls();
+    assert!(
+        urls.contains(&site.url("/noindex-in-sitemap.html").as_str()),
+        "{urls:?}"
+    );
+    assert!(
+        urls.iter()
+            .all(|u| *u == site.url("/") || u.contains("/noindex")),
+        "{urls:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resumed_crawl_drops_queued_urls_the_new_scope_excludes() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    // Stopped before anything is fetched: the frontier holds `/` plus the sitemap URLs.
+    let (stopped, resume) =
+        crawl_resumable(&start, json!({ "useSitemap": true }), None, true).await;
+    assert!(stopped.pages.is_empty());
+    let resume = resume.expect("a stopped crawl with a queued frontier leaves resume state");
+    let queued: Vec<String> = resume
+        .frontier
+        .iter()
+        .map(|(u, _, _)| u.to_string())
+        .collect();
+    let orphan = site.url("/orphan.html");
+    let gone = site.url("/gone-in-sitemap.html");
+    assert!(
+        queued.contains(&orphan) && queued.contains(&gone),
+        "{queued:?}"
+    );
+    let scheduled_before = resume.scheduled_count;
+
+    // Resumed with patterns that exclude two queued URLs, and one that matches the start
+    // URL too (which is still crawled). Depth 0 keeps the crawl to the queued URLs.
+    let (out, left) = crawl_resumable(
+        &start,
+        json!({ "maxDepth": 0, "excludePatterns": ["orphan", "gone-", "/$"] }),
+        Some(resume),
+        false,
+    )
+    .await;
+    assert!(left.is_none());
+    let urls = out.urls();
+    assert!(urls.contains(&start.as_str()), "{urls:?}");
+    assert!(!urls.contains(&orphan.as_str()), "{urls:?}");
+    assert!(!urls.contains(&gone.as_str()), "{urls:?}");
+    assert!(
+        urls.contains(&site.url("/noindex-in-sitemap.html").as_str()),
+        "{urls:?}"
+    );
+    assert!(scheduled_before > urls.len());
 }
 
 #[tokio::test(flavor = "multi_thread")]

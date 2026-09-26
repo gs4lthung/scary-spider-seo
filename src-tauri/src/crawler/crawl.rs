@@ -2,6 +2,7 @@ use super::hosting;
 use super::parse::parse_page;
 use super::render;
 use super::robots::RobotsRules;
+use super::scope::UrlScope;
 use super::sitemap;
 use super::techdetect;
 use super::types::*;
@@ -61,6 +62,30 @@ fn normalize(url: &Url) -> String {
     let mut u = url.clone();
     u.set_fragment(None);
     u.to_string()
+}
+
+/// Drops queued URLs that the current scope excludes from a resumed frontier (the
+/// patterns may have changed since the crawl was stopped). The start URL is always kept.
+/// Dropped URLs are removed from `visited` too, and the number dropped is returned so the
+/// caller can release their slots in `scheduled_count`.
+fn retain_in_scope(
+    frontier: &mut VecDeque<(Url, usize, bool)>,
+    visited: &mut HashSet<String>,
+    scope: &UrlScope,
+    start_url: &Url,
+) -> usize {
+    let start_key = normalize(start_url);
+    let before = frontier.len();
+    frontier.retain(|(url, _, _)| {
+        let key = normalize(url);
+        if key == start_key || scope.allows(url) {
+            true
+        } else {
+            visited.remove(&key);
+            false
+        }
+    });
+    before - frontier.len()
 }
 
 async fn wait_for_cancellation(cancel: Arc<AtomicBool>) {
@@ -662,6 +687,15 @@ pub async fn run_crawl<R: Runtime>(
             return Vec::new();
         }
     };
+    // `start_crawl` already rejects invalid patterns before touching state; this
+    // compile only fails when `run_crawl` is called directly (tests).
+    let scope = match UrlScope::new(&config.include_patterns, &config.exclude_patterns) {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = app.emit("crawl://error", e);
+            return Vec::new();
+        }
+    };
 
     // `client` auto-follows redirects (used for every auxiliary fetch: robots.txt,
     // sitemap, tech detection, resource checks) so those keep working exactly as
@@ -849,13 +883,16 @@ pub async fn run_crawl<R: Runtime>(
     // off instead of restarting at just `start_url` — see `CrawlResumeState`.
     let (mut visited, mut frontier, mut scheduled_count, mut crawled_count, mut linked_urls) =
         match resume {
-            Some(r) => (
-                r.visited,
-                r.frontier,
-                r.scheduled_count,
-                r.crawled_count,
-                r.linked_urls,
-            ),
+            Some(mut r) => {
+                let dropped = retain_in_scope(&mut r.frontier, &mut r.visited, &scope, &start_url);
+                (
+                    r.visited,
+                    r.frontier,
+                    r.scheduled_count.saturating_sub(dropped),
+                    r.crawled_count,
+                    r.linked_urls,
+                )
+            }
             None => {
                 let mut visited: HashSet<String> = HashSet::new();
                 let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
@@ -868,7 +905,7 @@ pub async fn run_crawl<R: Runtime>(
     if config.use_sitemap {
         let sitemap_urls = sitemap::fetch_sitemap_urls(&client, &start_url).await;
         for su in sitemap_urls {
-            if su.host_str() != start_url.host_str() {
+            if su.host_str() != start_url.host_str() || !scope.allows(&su) {
                 continue;
             }
             let key = normalize(&su);
@@ -999,7 +1036,10 @@ pub async fn run_crawl<R: Runtime>(
                         for link in &discovered_internal {
                             let key = normalize(link);
                             linked_urls.insert(key.clone());
-                            if !visited.contains(&key) && scheduled_count < max_pages {
+                            // Out-of-scope URLs still count as linked (orphan detection)
+                            // but are never scheduled, so they are not recorded as pages.
+                            // `allows` ignores the fragment, so it sees `key`'s form.
+                            if !visited.contains(&key) && scheduled_count < max_pages && scope.allows(link) {
                                 visited.insert(key);
                                 scheduled_count += 1;
                                 frontier.push_back((link.clone(), result.depth + 1, false));
