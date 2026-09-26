@@ -249,3 +249,20 @@ export function compareCrawls(
 
   return { added, removed, changed, issueDeltas };
 }
+
+/** One changed field of one URL, the row shape of the Compare view's Changed table. */
+export interface ChangedFieldRow {
+  url: string;
+  field: string;
+  before: ComparedValue;
+  after: ComparedValue;
+}
+
+/** Flattens `changed` to one row per changed field, in URL then field order. */
+export function changedFieldRows(changed: readonly ChangedUrl[]): ChangedFieldRow[] {
+  const rows: ChangedFieldRow[] = [];
+  for (const { url, fields } of changed) {
+    for (const f of fields) rows.push({ url, field: COMPARED_FIELD_LABELS[f.name], before: f.before, after: f.after });
+  }
+  return rows;
+}

@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CompareView } from "@/components/CompareView";
 import { UrlCombobox } from "@/components/url-combobox";
 import { CrawlActions } from "@/components/crawl-actions";
 import { CrawlOptionsSheet } from "@/components/crawl-options-sheet";
@@ -96,7 +97,7 @@ import {
   reconcileExtractionIds,
 } from "./lib/extraction";
 
-type Tab = "overview" | "pages" | "resources" | "sitemap";
+type Tab = "overview" | "pages" | "resources" | "sitemap" | "compare";
 
 /** How often link scores are recomputed while a crawl is running. PageRank is a whole-graph
  * computation, so it is not redone on every ~150 ms flush of new pages. */
@@ -1287,6 +1288,7 @@ function App() {
             <TabsTrigger value="pages">Pages ({pages.length})</TabsTrigger>
             <TabsTrigger value="resources">Links & Images ({resources.length})</TabsTrigger>
             <TabsTrigger value="sitemap">Site Map</TabsTrigger>
+            <TabsTrigger value="compare">Compare</TabsTrigger>
           </TabsList>
           {filter !== "all" && (
             <Badge variant="secondary" className="h-auto gap-1.5 py-1">
@@ -1396,6 +1398,12 @@ function App() {
             onSelectPage={setSelectedPage}
             onViewInPages={handleViewInPages}
           />
+        </TabsContent>
+
+        {/* Kept mounted so the chosen files and results survive switching tabs. It reads its
+            own crawl files and never touches the crawl on screen. */}
+        <TabsContent value="compare" forceMount className="min-h-0 flex-1 flex-col data-[state=active]:flex data-[state=inactive]:hidden">
+          <CompareView />
         </TabsContent>
       </Tabs>
 

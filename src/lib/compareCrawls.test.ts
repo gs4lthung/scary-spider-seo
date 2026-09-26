@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PageResult, ResourceResult } from "../types";
-import { COMPARED_FIELD_LABELS, buildCrawlFilterContext, comparisonUrl, compareCrawls } from "./compareCrawls";
+import {
+  COMPARED_FIELD_LABELS,
+  buildCrawlFilterContext,
+  changedFieldRows,
+  comparisonUrl,
+  compareCrawls,
+} from "./compareCrawls";
 import { countIssues } from "./filters";
 
 function makePage(overrides: Partial<PageResult> = {}): PageResult {
@@ -218,5 +224,15 @@ describe("compareCrawls", () => {
     expect(ctx.linkedUrls).toEqual(new Set(["https://example.com/a"]));
     expect(ctx.pageByUrl.size).toBe(3);
     expect(ctx.listMode).toBe(false);
+  });
+
+  it("flattens changes to one row per field", () => {
+    const rows = changedFieldRows([
+      { url: "https://example.com/a", fields: [{ name: "status", before: 200, after: 404 }, { name: "h1", before: "A", after: null }] },
+    ]);
+    expect(rows).toEqual([
+      { url: "https://example.com/a", field: "Status", before: 200, after: 404 },
+      { url: "https://example.com/a", field: "H1", before: "A", after: null },
+    ]);
   });
 });
