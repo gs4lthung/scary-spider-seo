@@ -1403,8 +1403,9 @@ fn gen_links_reach_every_page() {
 }
 
 /// Wall-time budget for one 2000-page crawl. Generous (debug builds, shared CI runners,
-/// parallel test threads); it exists to catch large regressions such as an accidental
-/// O(n^2) step, not to benchmark. See ADR-0021 for the retry design.
+/// parallel test threads): about 40 times the measured time, so it only trips on a
+/// roughly 40x slowdown at this size, not on smaller regressions or every O(n^2) step.
+/// A tripwire, not a benchmark. See ADR-0021 for the retry design.
 const LARGE_SITE_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 /// Timed attempts before the budget check fails: one slow run on a busy machine is
 /// retried, a consistently slow crawler is not.
