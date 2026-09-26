@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 3,
     "startedAt": "2026-09-26T03:51:03.737Z",
-    "lastProgressAt": "2026-09-26T06:19:41.801Z"
+    "lastProgressAt": "2026-09-26T06:42:50.264Z"
   },
   "tasks": {
     "T1.1": {
@@ -250,10 +250,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.016Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "614a80c",
+      "updatedAt": "2026-09-26T06:42:50.262Z"
     },
     "T4.1": {
       "title": "Split App.tsx into columns, event hook and session hook",
