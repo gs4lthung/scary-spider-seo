@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -13,12 +15,53 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { formatPatternLines, parsePatternLines } from "@/lib/urlPatterns";
 import type { CrawlConfig } from "@/types";
 
 interface CrawlOptionsSheetProps {
   config: CrawlConfig;
   running: boolean;
   onChange: (config: CrawlConfig) => void;
+}
+
+interface PatternFieldProps {
+  label: string;
+  hint: string;
+  placeholder: string;
+  patterns: string[] | undefined;
+  disabled: boolean;
+  onChange: (patterns: string[]) => void;
+}
+
+/** A one-pattern-per-line textarea. The raw text is kept locally so blank lines the
+ * user is typing survive; the parent only ever sees the parsed, non-blank patterns. */
+function PatternField({ label, hint, placeholder, patterns, disabled, onChange }: PatternFieldProps) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const [text, setText] = useState(() => formatPatternLines(patterns));
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Textarea
+        id={id}
+        aria-describedby={hintId}
+        className="min-h-16 font-mono text-xs"
+        placeholder={placeholder}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        value={text}
+        disabled={disabled}
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(parsePatternLines(e.target.value));
+        }}
+      />
+      <p id={hintId} className="text-xs text-muted-foreground">
+        {hint}
+      </p>
+    </div>
+  );
 }
 
 export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsSheetProps) {
@@ -219,6 +262,27 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
                 onCheckedChange={(checked) => set("lookupHosting", checked)}
               />
             </div>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-4">
+            <PatternField
+              label="Include URL patterns"
+              hint="Regular expressions, one per line, matched against the full URL. When any are set, only matching URLs are crawled. The start URL is always crawled."
+              placeholder="/blog/"
+              patterns={config.includePatterns}
+              disabled={running}
+              onChange={(patterns) => set("includePatterns", patterns)}
+            />
+            <PatternField
+              label="Exclude URL patterns"
+              hint="Regular expressions, one per line. Matching URLs are skipped, even if they match an include pattern."
+              placeholder={String.raw`\?sort=` + "\n/tag/"}
+              patterns={config.excludePatterns}
+              disabled={running}
+              onChange={(patterns) => set("excludePatterns", patterns)}
+            />
           </div>
 
           <Separator />
