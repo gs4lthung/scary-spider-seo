@@ -35,6 +35,14 @@ pub struct CrawlConfig {
     pub run_accessibility_audit: bool,
     #[serde(default)]
     pub run_mobile_usability_audit: bool,
+    /// Regular expressions matched against the full URL: when any are given, a
+    /// discovered URL must match at least one to be crawled. The start URL is exempt.
+    #[serde(default)]
+    pub include_patterns: Vec<String>,
+    /// Regular expressions matched against the full URL: a discovered URL matching any
+    /// of them is not crawled. Wins over `include_patterns`.
+    #[serde(default)]
+    pub exclude_patterns: Vec<String>,
 }
 
 fn default_max_pages() -> usize {

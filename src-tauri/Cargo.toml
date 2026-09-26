@@ -31,6 +31,7 @@ dashmap = "6"
 csv = "1"
 quick-xml = "0.41"
 headless_chrome = "1"
+regex = "1"
 
 [dev-dependencies]
 # `test` enables tauri::test::mock_app(), so crawl tests run without a window.

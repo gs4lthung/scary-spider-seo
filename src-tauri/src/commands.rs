@@ -1,4 +1,5 @@
 use crate::crawler::crawl;
+use crate::crawler::scope::UrlScope;
 use crate::crawler::types::{CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult, ResourceResult};
 use crate::export;
 use crate::state::AppState;
@@ -22,6 +23,10 @@ pub async fn start_crawl(
     if state.running.load(Ordering::SeqCst) {
         return Err("A crawl is already running".to_string());
     }
+
+    // Reject bad include/exclude patterns up front, before any state is touched, so
+    // the user can fix them without losing the current results or resume state.
+    UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
 
     // A stopped crawl left queued URLs behind for this exact start URL — continue from
     // there instead of clearing everything and starting over. A resume state for a
