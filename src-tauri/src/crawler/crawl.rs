@@ -238,6 +238,16 @@ async fn fetch_and_parse(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
     let hsts = resp.headers().get("strict-transport-security").is_some();
+    let header_string = |name: &str| {
+        resp.headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+    };
+    let content_security_policy = header_string("content-security-policy");
+    let x_frame_options = header_string("x-frame-options");
+    let x_content_type_options = header_string("x-content-type-options");
+    let referrer_policy = header_string("referrer-policy");
     let x_robots_tag = resp
         .headers()
         .get("x-robots-tag")
@@ -264,6 +274,11 @@ async fn fetch_and_parse(
         content_type: content_type.clone(),
         redirect_url: redirect_url.clone(),
         hsts,
+        content_security_policy: content_security_policy.clone(),
+        x_frame_options: x_frame_options.clone(),
+        x_content_type_options: x_content_type_options.clone(),
+        referrer_policy: referrer_policy.clone(),
+        security_headers_captured: true,
         x_robots_tag: x_robots_tag.clone(),
         redirect_chain: redirect_chain.clone(),
         is_minified: true,
@@ -408,6 +423,12 @@ async fn fetch_and_parse(
         is_minified: parsed.is_minified,
         rendered,
         hsts,
+        content_security_policy,
+        x_frame_options,
+        x_content_type_options,
+        referrer_policy,
+        security_headers_captured: true,
+        mixed_content_count: parsed.mixed_content_count,
         insecure_link_count: parsed.insecure_link_count,
         missing_alt_count: parsed.missing_alt_count,
         lang: parsed.lang,

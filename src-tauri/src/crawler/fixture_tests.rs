@@ -75,6 +75,17 @@ fn http_response(status: &str, headers: &[(&str, &str)], body: &[u8], head_only:
     bytes
 }
 
+/// Response headers `/secure-headers.html` is served with, on top of `Content-Type`.
+const SECURITY_HEADERS: &[(&str, &str)] = &[
+    (
+        "Content-Security-Policy",
+        "default-src 'self'; frame-ancestors 'none'",
+    ),
+    ("X-Frame-Options", "DENY"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "strict-origin-when-cross-origin"),
+];
+
 /// Routes that can't be static files (redirects, images) are handled here; everything
 /// else is read from the fixture directory, with `{{ORIGIN}}` substituted.
 fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Vec<u8> {
@@ -107,12 +118,11 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
     match std::fs::read_to_string(root.join(file)) {
         Ok(text) => {
             let body = text.replace("{{ORIGIN}}", origin);
-            http_response(
-                "200 OK",
-                &[("Content-Type", content_type)],
-                body.as_bytes(),
-                head,
-            )
+            let mut headers = vec![("Content-Type", content_type)];
+            if path == "/secure-headers.html" {
+                headers.extend_from_slice(SECURITY_HEADERS);
+            }
+            http_response("200 OK", &headers, body.as_bytes(), head)
         }
         Err(_) => http_response(
             "404 Not Found",
@@ -212,6 +222,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/paged-2.html",
         "/private/secret.html",
         "/redirect-to-gone",
+        "/secure-headers.html",
         "/title-equals-h1.html",
     ]
     .iter()
@@ -242,7 +253,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 22);
+    assert_eq!(home.internal_link_count, 23);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -426,6 +437,34 @@ async fn directive_and_canonical_fixtures() {
         Some(site.url("/old-page").as_str())
     );
     assert!(out.page(&site.url("/old-page")).redirect_url.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn captures_security_headers() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    let secure = out.page(&site.url("/secure-headers.html"));
+    assert!(secure.security_headers_captured);
+    assert_eq!(
+        secure.content_security_policy.as_deref(),
+        Some("default-src 'self'; frame-ancestors 'none'")
+    );
+    assert_eq!(secure.x_frame_options.as_deref(), Some("DENY"));
+    assert_eq!(secure.x_content_type_options.as_deref(), Some("nosniff"));
+    assert_eq!(
+        secure.referrer_policy.as_deref(),
+        Some("strict-origin-when-cross-origin")
+    );
+    // The fixture server is plain HTTP, so nothing counts as mixed content.
+    assert_eq!(secure.mixed_content_count, 0);
+
+    let home = out.page(&site.url("/"));
+    assert!(home.security_headers_captured);
+    assert_eq!(home.content_security_policy, None);
+    assert_eq!(home.x_frame_options, None);
+    assert_eq!(home.x_content_type_options, None);
+    assert_eq!(home.referrer_policy, None);
 }
 
 #[tokio::test(flavor = "multi_thread")]

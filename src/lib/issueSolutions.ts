@@ -284,6 +284,51 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security",
     },
   },
+  mixedContent: {
+    title: "Mixed content: HTTP scripts, styles, frames or media on an HTTPS page",
+    problem: "The page is served over HTTPS but loads scripts, stylesheets, iframes, video or audio over plain HTTP. Browsers block these requests (scripts, styles and frames) or upgrade them, so parts of the page can break, and anything fetched over HTTP can be read or altered in transit.",
+    fix: "Change each http:// subresource URL to https:// (or a relative URL) and confirm the host serves it over HTTPS. If it does not, host the file yourself. A Content-Security-Policy with upgrade-insecure-requests is a temporary safety net, not a fix.",
+    source: {
+      label: "web.dev: Fixing mixed content",
+      url: "https://web.dev/articles/fixing-mixed-content",
+    },
+  },
+  missingCsp: {
+    title: "Missing Content-Security-Policy header",
+    problem: "Without a Content-Security-Policy, the browser runs any script that ends up in the page, so a single cross-site scripting (XSS) bug or compromised third-party script can steal sessions or deface the site.",
+    fix: "Send a Content-Security-Policy response header that allows only the sources the page needs, e.g. default-src 'self'; script-src 'self' https://trusted.cdn.example. Roll it out with Content-Security-Policy-Report-Only first to find what would break.",
+    source: {
+      label: "MDN: Content-Security-Policy header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy",
+    },
+  },
+  missingFrameOptions: {
+    title: "Missing X-Frame-Options header (and no CSP frame-ancestors)",
+    problem: "Any other site can load this page in an invisible frame and trick visitors into clicking buttons on it (clickjacking), because nothing tells the browser which sites may embed it.",
+    fix: "Add Content-Security-Policy: frame-ancestors 'self' (the modern control) or X-Frame-Options: SAMEORIGIN, or DENY if the page should never be framed. Either one satisfies this check.",
+    source: {
+      label: "MDN: X-Frame-Options header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options",
+    },
+  },
+  missingContentTypeOptions: {
+    title: "Missing X-Content-Type-Options: nosniff header",
+    problem: "Without nosniff, browsers may guess (sniff) a response's type instead of trusting its Content-Type, so an uploaded file or mislabelled response can be run as a script or stylesheet.",
+    fix: "Send X-Content-Type-Options: nosniff on every response, and make sure each response has the correct Content-Type. The only valid value is nosniff.",
+    source: {
+      label: "MDN: X-Content-Type-Options header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options",
+    },
+  },
+  missingReferrerPolicy: {
+    title: "Missing Referrer-Policy header",
+    problem: "Without a Referrer-Policy the page relies on each browser's default, which may send the full URL of this page (including paths and query strings that can hold private data) to the sites it links to or loads resources from.",
+    fix: "Send Referrer-Policy: strict-origin-when-cross-origin (a good default), or a stricter value such as no-referrer or same-origin if cross-site referral data is not needed.",
+    source: {
+      label: "MDN: Referrer-Policy header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy",
+    },
+  },
   missingLang: {
     title: "Missing <html lang> attribute",
     problem: "This is a WCAG Level A requirement (the baseline conformance level). Without it, screen readers can't select the correct pronunciation/voice, and browsers/translation tools can't reliably detect the page's language.",

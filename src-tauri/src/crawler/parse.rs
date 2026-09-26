@@ -27,6 +27,14 @@ static IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img[src]"
 static ANY_IMG_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img").unwrap());
 static HEAD_LINK_SEL: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("head link[href]").unwrap());
+/// Subresources a browser loads (and blocks or warns about) when requested over plain
+/// HTTP from an HTTPS page. `srcset` and `<img>` are covered by `insecure_link_count`.
+static MIXED_CONTENT_SEL: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(
+        r#"script[src], link[rel~="stylesheet" i][href], iframe[src], video[src], audio[src], source[src]"#,
+    )
+    .unwrap()
+});
 
 /// Namespace of HTML elements; `<title>` inside inline SVG is in the SVG namespace and is
 /// an accessible name for the graphic, not a page title.
@@ -73,6 +81,9 @@ pub struct ParsedPage {
     pub minify_savings_pct: f64,
     pub is_minified: bool,
     pub insecure_link_count: usize,
+    /// On an HTTPS page, the number of scripts, stylesheets, iframes and media
+    /// sources that resolve to plain `http:`. Always 0 on a non-HTTPS page.
+    pub mixed_content_count: usize,
     pub missing_alt_count: usize,
     pub lang: Option<String>,
     pub hreflang_values: Vec<String>,
@@ -263,6 +274,27 @@ fn hash_content(text: &str) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+/// Counts subresources (see `MIXED_CONTENT_SEL`) that resolve to `http:` when the page
+/// itself was served over `https:`.
+fn count_mixed_content(document: &Html, base: &Url) -> usize {
+    if base.scheme() != "https" {
+        return 0;
+    }
+    document
+        .select(&MIXED_CONTENT_SEL)
+        .filter_map(|el| {
+            let attr = if el.value().name() == "link" {
+                "href"
+            } else {
+                "src"
+            };
+            el.value().attr(attr)
+        })
+        .filter_map(|src| resolve_url(base, src))
+        .filter(|u| u.scheme() == "http")
+        .count()
+}
+
 pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
     let mut html = Html::parse_document(body);
 
@@ -280,6 +312,9 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
             Err(e) => structured_data_errors.push(format!("Invalid JSON-LD: {e}")),
         }
     }
+
+    // Counted before <script> subtrees are stripped below.
+    let mixed_content_count = count_mixed_content(&html, base);
 
     // Strip script/style/noscript/template subtrees so word-count and text
     // extraction only reflect visible content, not embedded code or CSS.
@@ -497,6 +532,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         minify_savings_pct,
         is_minified,
         insecure_link_count,
+        mixed_content_count,
         missing_alt_count,
         lang,
         hreflang_values,
@@ -822,6 +858,38 @@ mod tests {
         assert_eq!(parse(html).insecure_link_count, 3);
         let http_base = Url::parse("http://example.com/").unwrap();
         assert_eq!(parse_page(html, &http_base).insecure_link_count, 0);
+    }
+
+    #[test]
+    fn counts_http_subresources_on_https_page() {
+        let html = r#"<html><head>
+            <script src="http://cdn.example.com/a.js"></script>
+            <script src="https://cdn.example.com/ok.js"></script>
+            <script>inline()</script>
+            <link rel="stylesheet" href="http://cdn.example.com/a.css">
+            <link rel="preload stylesheet" href="http://cdn.example.com/b.css">
+            <link rel="icon" href="http://cdn.example.com/favicon.ico">
+            <link rel="stylesheet" href="/relative.css">
+            </head><body>
+            <iframe src="http://embed.example.com/"></iframe>
+            <video src="http://media.example.com/v.mp4"></video>
+            <audio><source src="http://media.example.com/a.mp3"></audio>
+            <a href="http://example.com/page">not a subresource</a>
+            </body></html>"#;
+        assert_eq!(parse(html).mixed_content_count, 6);
+    }
+
+    #[test]
+    fn ignores_mixed_content_on_http_page() {
+        let html = r#"<script src="http://cdn.example.com/a.js"></script>
+            <link rel="stylesheet" href="http://cdn.example.com/a.css">
+            <iframe src="http://embed.example.com/"></iframe>"#;
+        let http_base = Url::parse("http://example.com/").unwrap();
+        assert_eq!(parse_page(html, &http_base).mixed_content_count, 0);
+        assert_eq!(
+            parse(r#"<script src="/a.js"></script>"#).mixed_content_count,
+            0
+        );
     }
 
     #[test]
