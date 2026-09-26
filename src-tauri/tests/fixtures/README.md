@@ -39,6 +39,7 @@ must produce.
 | `/noindex-in-sitemap.html` | not linked; listed in `sitemap.xml` and noindex (non-indexable URL in the sitemap) |
 | `/gone-in-sitemap.html` | not linked; listed in `sitemap.xml`, file intentionally absent so it answers 404 |
 | `/private/in-sitemap.html` | not linked; listed in `sitemap.xml` and disallowed by `robots.txt` (never fetched, so no file) |
+| `/gen/<n>` (n in 0..2000) | not linked from `/`; the synthetic large site, generated in memory by the test server (`respond_generated`). Unique title, 10 links to `/gen/<(n * 7 + k) % 2000>` for k in 1..=10, images `/gen/img/<n>.png` and `/gen/img/shared.png`. Crawled from `/gen/0` by `large_site_crawl_completes_within_budget` (ADR-0021) |
 
 `{{ORIGIN}}` in any served file is replaced with the server's `http://127.0.0.1:<port>`.
 

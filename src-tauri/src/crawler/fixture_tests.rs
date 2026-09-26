@@ -89,6 +89,60 @@ const SECURITY_HEADERS: &[(&str, &str)] = &[
 /// Body size of `/img/large.png`, over the frontend's 100 KB `largeImage` threshold.
 const LARGE_IMAGE_BYTES: usize = 150_000;
 
+/// Number of pages in the synthetic large site served under `/gen/<n>`.
+const GEN_PAGES: usize = 2000;
+/// Outlinks per generated page.
+const GEN_LINKS_PER_PAGE: usize = 10;
+
+/// Targets of `/gen/<n>`'s outlinks: `(n * 7 + k) % GEN_PAGES` for k in 1..=10.
+/// 7 is coprime with 2000, which is why every page is reachable from `/gen/0`
+/// (checked by `gen_links_reach_every_page`).
+fn gen_link_targets(n: usize) -> impl Iterator<Item = usize> {
+    (1..=GEN_LINKS_PER_PAGE).map(move |k| (n * 7 + k) % GEN_PAGES)
+}
+
+/// The synthetic large site (T4.5): `/gen/<n>` for n in 0..2000 is an HTML page with a
+/// unique title, 10 links to other generated pages and 2 images: `/gen/img/<n>.png`
+/// (unique to the page) and `/gen/img/shared.png` (on every page). Everything is
+/// generated in memory, so the throughput test measures the crawler, not disk reads.
+/// Returns `None` for any path outside `/gen/`.
+fn respond_generated(path: &str, head: bool) -> Option<Vec<u8>> {
+    let rest = path.strip_prefix("/gen/")?;
+    let not_found = || http_response("404 Not Found", &[], b"", head);
+    if let Some(image) = rest.strip_prefix("img/") {
+        let valid = image
+            .strip_suffix(".png")
+            .is_some_and(|stem| stem == "shared" || stem.parse::<usize>().is_ok());
+        return Some(if valid {
+            http_response("200 OK", &[("Content-Type", "image/png")], b"\x89PNG", head)
+        } else {
+            not_found()
+        });
+    }
+    let Some(n) = rest.parse::<usize>().ok().filter(|n| *n < GEN_PAGES) else {
+        return Some(not_found());
+    };
+    let links: String = gen_link_targets(n)
+        .map(|t| format!("<li><a href=\"/gen/{t}\">Generated page {t}</a></li>"))
+        .collect();
+    let body = format!(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\
+         <title>Generated page {n}</title>\
+         <meta name=\"description\" content=\"Synthetic page {n} of the large fixture site.\">\
+         </head><body><h1>Generated page {n}</h1>\
+         <p>Filler text for generated page number {n}, used to measure crawl throughput.</p>\
+         <img src=\"/gen/img/{n}.png\" alt=\"Image {n}\" width=\"4\" height=\"4\">\
+         <img src=\"/gen/img/shared.png\" alt=\"Shared image\" width=\"4\" height=\"4\">\
+         <ul>{links}</ul></body></html>"
+    );
+    Some(http_response(
+        "200 OK",
+        &[("Content-Type", "text/html; charset=utf-8")],
+        body.as_bytes(),
+        head,
+    ))
+}
+
 /// Routes that can't be static files (redirects, images) are handled here; everything
 /// else is read from the fixture directory, with `{{ORIGIN}}` substituted.
 fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Vec<u8> {
@@ -112,6 +166,9 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
             )
         }
         _ => {}
+    }
+    if let Some(response) = respond_generated(path, head) {
+        return response;
     }
     let file = if path == "/" {
         "index.html"
@@ -1151,4 +1208,128 @@ async fn js_rendering_changes_are_captured() {
     )
     .await;
     assert!(plain.page(&site.url("/js-title.html")).raw.is_none());
+}
+
+/// Breadth-first link depth of every `/gen/<n>` page from `/gen/0` (`None` if unreachable).
+fn gen_link_depths() -> Vec<Option<usize>> {
+    let mut depths = vec![None; GEN_PAGES];
+    depths[0] = Some(0);
+    let mut queue = std::collections::VecDeque::from([0usize]);
+    while let Some(n) = queue.pop_front() {
+        let next_depth = depths[n].map(|d| d + 1);
+        for target in gen_link_targets(n) {
+            if depths[target].is_none() {
+                depths[target] = next_depth;
+                queue.push_back(target);
+            }
+        }
+    }
+    depths
+}
+
+/// `maxDepth` the large-site crawl runs with: comfortably above the deepest page, so the
+/// depth limit never decides the page count.
+const GEN_MAX_DEPTH: usize = 100;
+
+#[test]
+fn gen_links_reach_every_page() {
+    let depths = gen_link_depths();
+    let unreachable: Vec<usize> = (0..GEN_PAGES).filter(|n| depths[*n].is_none()).collect();
+    assert!(unreachable.is_empty(), "unreachable: {unreachable:?}");
+    let deepest = depths.iter().flatten().max().copied().unwrap_or(0);
+    assert!(
+        deepest < GEN_MAX_DEPTH,
+        "deepest page is at depth {deepest}"
+    );
+}
+
+/// Wall-time budget for one 2000-page crawl. Generous (debug builds, shared CI runners,
+/// parallel test threads); it exists to catch large regressions such as an accidental
+/// O(n^2) step, not to benchmark. See ADR-0021 for the retry design.
+const LARGE_SITE_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+/// Timed attempts before the budget check fails: one slow run on a busy machine is
+/// retried, a consistently slow crawler is not.
+const LARGE_SITE_ATTEMPTS: usize = 3;
+/// Hard ceiling for any single attempt, so a hung crawl fails instead of stalling
+/// `cargo test`.
+const LARGE_SITE_HARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Deterministic checks on a finished large-site crawl, independent of timing.
+fn assert_large_site_complete(site: &FixtureServer, out: &CrawlOutput) {
+    assert_eq!(out.pages.len(), GEN_PAGES, "page count");
+    let expected: std::collections::BTreeSet<String> = (0..GEN_PAGES)
+        .map(|n| site.url(&format!("/gen/{n}")))
+        .collect();
+    let crawled: std::collections::BTreeSet<String> =
+        out.pages.iter().map(|p| p.url.clone()).collect();
+    assert_eq!(crawled, expected, "crawled URL set");
+    let not_ok: Vec<(&str, Option<u16>)> = out
+        .pages
+        .iter()
+        .filter(|p| p.status != Some(200))
+        .map(|p| (p.url.as_str(), p.status))
+        .collect();
+    assert!(not_ok.is_empty(), "pages not answering 200: {not_ok:?}");
+    let titles: std::collections::HashSet<Option<&str>> =
+        out.pages.iter().map(|p| p.title.as_deref()).collect();
+    assert_eq!(titles.len(), GEN_PAGES, "every generated title is unique");
+
+    // One unique image per page plus the shared one, each checked exactly once.
+    assert_eq!(out.resources.len(), GEN_PAGES + 1, "image resource count");
+    assert!(
+        out.resources.iter().all(|r| r.status == Some(200)),
+        "every generated image answers 200"
+    );
+    assert_eq!(out.linked_urls.len(), GEN_PAGES, "linked internal URLs");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn large_site_crawl_completes_within_budget() {
+    let site = FixtureServer::start().await;
+    let config = json!({
+        "maxPages": GEN_PAGES,
+        "maxDepth": GEN_MAX_DEPTH,
+        "concurrency": 16,
+        "checkImages": true,
+        "timeoutSecs": 30,
+    });
+
+    // Warm-up: a short untimed crawl pays one-off costs (lazy statics, HTTP client
+    // setup, first-touch allocations) outside the measured runs.
+    let warm_up = crawl(
+        &site.url("/gen/0"),
+        json!({ "maxPages": 50, "concurrency": 16 }),
+    )
+    .await;
+    assert_eq!(warm_up.pages.len(), 50, "warm-up page count");
+
+    let mut timings = Vec::new();
+    for attempt in 1..=LARGE_SITE_ATTEMPTS {
+        let started = std::time::Instant::now();
+        let out = tokio::time::timeout(
+            LARGE_SITE_HARD_TIMEOUT,
+            crawl(&site.url("/gen/0"), config.clone()),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!("large-site crawl attempt {attempt} hung past {LARGE_SITE_HARD_TIMEOUT:?}")
+        });
+        let elapsed = started.elapsed();
+        // Correctness is checked on every attempt: a retry never hides a wrong result.
+        assert_large_site_complete(&site, &out);
+
+        let pages_per_sec = GEN_PAGES as f64 / elapsed.as_secs_f64();
+        eprintln!(
+            "large_site: attempt {attempt}: {GEN_PAGES} pages + {} images in {:.2}s ({pages_per_sec:.1} pages/s)",
+            out.resources.len(),
+            elapsed.as_secs_f64()
+        );
+        timings.push(elapsed);
+        if elapsed <= LARGE_SITE_BUDGET {
+            return;
+        }
+    }
+    panic!(
+        "large-site crawl exceeded the {LARGE_SITE_BUDGET:?} budget on all {LARGE_SITE_ATTEMPTS} attempts: {timings:?}"
+    );
 }
