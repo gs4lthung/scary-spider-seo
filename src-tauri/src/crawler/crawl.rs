@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Runtime};
-use tokio::sync::Semaphore;
+use tokio::sync::{OnceCell, Semaphore};
 use tokio::task::JoinSet;
 use url::Url;
 
@@ -102,6 +102,10 @@ fn list_mode_seeds(list_urls: &[String]) -> Vec<Url> {
         .take(MAX_LIST_URLS)
         .collect()
 }
+
+/// One origin's robots.txt rules, fetched at most once and shared by every page task that
+/// needs them; tasks for the same origin that start before the fetch finishes wait on it.
+type RobotsCell = Arc<OnceCell<RobotsRules>>;
 
 /// Key robots.txt rules are cached under: one robots.txt applies per scheme, host and port.
 fn robots_key(url: &Url) -> String {
@@ -760,15 +764,13 @@ pub async fn run_crawl<R: Runtime>(
     };
 
     // robots.txt rules per origin. A spider crawl only ever consults the start URL's
-    // (fetched here); list mode can span hosts, so it fetches each other origin's rules the
-    // first time one of its URLs is dispatched.
+    // (fetched here); list mode can span hosts, so each other origin's rules are fetched
+    // by the first page task that needs them (see `RobotsCell`), never on the dispatch path.
     let start_robots_key = robots_key(&start_url);
-    let mut robots_by_origin: HashMap<String, RobotsRules> = HashMap::new();
+    let mut robots_by_origin: HashMap<String, RobotsCell> = HashMap::new();
     if config.respect_robots {
-        robots_by_origin.insert(
-            start_robots_key.clone(),
-            RobotsRules::fetch(&client, &start_url).await,
-        );
+        let rules = RobotsRules::fetch(&client, &start_url).await;
+        robots_by_origin.insert(start_robots_key.clone(), Arc::new(OnceCell::from(rules)));
     }
 
     {
@@ -994,17 +996,14 @@ pub async fn run_crawl<R: Runtime>(
                 } else {
                     start_robots_key.clone()
                 };
-                if config.respect_robots && !robots_by_origin.contains_key(&origin_key) {
-                    let rules = tokio::select! {
-                        rules = RobotsRules::fetch(&client, &url) => rules,
-                        _ = wait_for_cancellation(cancel.clone()) => {
-                            frontier.push_front((url, depth, via_sitemap));
-                            break;
-                        }
-                    };
-                    robots_by_origin.insert(origin_key.clone(), rules);
-                }
-                let robots = robots_by_origin.get(&origin_key);
+                let robots_cell: Option<RobotsCell> = config
+                    .respect_robots
+                    .then(|| robots_by_origin.entry(origin_key).or_default().clone());
+                // Rules already fetched are checked here, so a blocked URL never takes a page
+                // slot or waits out the politeness delay. Rules not fetched yet are resolved
+                // inside the page task below, off the dispatch path.
+                let robots = robots_cell.as_ref().and_then(|cell| cell.get());
+                let pending_robots = robots_cell.clone().filter(|cell| !cell.initialized());
 
                 if let Some(robots) = robots {
                     if !robots.is_allowed(url.path()) {
@@ -1054,18 +1053,30 @@ pub async fn run_crawl<R: Runtime>(
                 let render_semaphore = render_semaphore.clone();
                 let run_mobile_usability_audit = config.run_mobile_usability_audit;
                 let task_cancel = cancel.clone();
+                let robots_client = client.clone();
                 page_tasks.spawn(async move {
                     tokio::select! {
                         _ = wait_for_cancellation(task_cancel) => None,
-                        outcome = fetch_and_parse(
-                            &page_client,
-                            browser,
-                            axe_source,
-                            render_semaphore,
-                            url,
-                            depth,
-                            run_mobile_usability_audit,
-                        ) => {
+                        outcome = async {
+                            if let Some(cell) = pending_robots {
+                                let rules = cell
+                                    .get_or_init(|| RobotsRules::fetch(&robots_client, &url))
+                                    .await;
+                                if !rules.is_allowed(url.path()) {
+                                    return empty_outcome(robots_blocked_result(&url, depth));
+                                }
+                            }
+                            fetch_and_parse(
+                                &page_client,
+                                browser,
+                                axe_source,
+                                render_semaphore,
+                                url,
+                                depth,
+                                run_mobile_usability_audit,
+                            )
+                            .await
+                        } => {
                             let mut outcome = outcome;
                             outcome.result.discovered_via_sitemap = via_sitemap;
                             Some(outcome)
