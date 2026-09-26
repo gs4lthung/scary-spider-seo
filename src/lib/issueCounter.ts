@@ -82,6 +82,13 @@ export class IssueCounter {
     return this.counts;
   }
 
+  /** True when the last update skipped a cross-page recount because of the throttle, so the
+   * cross-page counts it returned may be behind; an update once the interval has passed (or
+   * a not-live one) catches up. */
+  hasPendingRecount(): boolean {
+    return this.crossStale;
+  }
+
   private ingestPages(pages: readonly PageResult[], ctx: FilterContext): boolean {
     if (!isAppendOf(pages, this.pagesIngested, this.lastPage)) {
       for (const def of LOCAL_PAGE_DEFS) this.local[def.key] = 0;

@@ -62,35 +62,61 @@ describe("IssueCounter", () => {
 
   it("recomputes cross-page counts on finish", () => {
     const pages = randomPages(600, 31);
-    let clock = 0;
-    const counter = new IssueCounter({ now: () => clock });
+    const noResources: ResourceResult[] = [];
     const snapshots: Array<{ pages: PageResult[]; ctx: FilterContext }> = [];
     crawlInBatches(pages, [], 50, (pageSlice, _resources, ctx) => snapshots.push({ pages: pageSlice, ctx }));
+    const [start, later] = [snapshots[0], snapshots[snapshots.length - 1]];
+    const expected = countIssues(later.pages, noResources, later.ctx);
 
-    // The first live update recounts; the next ones within the interval keep those counts.
-    const first = counter.update(snapshots[0].pages, [], snapshots[0].ctx, true);
-    expect(first).toEqual(countIssues(snapshots[0].pages, [], snapshots[0].ctx));
-    const later = snapshots[snapshots.length - 1];
+    let clock = 0;
+    const counter = new IssueCounter({ now: () => clock });
+    // The first live update recounts; a later one within the interval keeps those counts.
+    const first = counter.update(start.pages, noResources, start.ctx, true);
+    expect(first).toEqual(countIssues(start.pages, noResources, start.ctx));
     clock = CROSS_PAGE_RECOUNT_MS - 1;
-    const throttled = counter.update(later.pages, [], later.ctx, true);
-    const expected = countIssues(later.pages, [], later.ctx);
+    const throttled = counter.update(later.pages, noResources, later.ctx, true);
     expect(throttled.duplicateTitles).toBe(first.duplicateTitles);
     expect(throttled.duplicateTitles).not.toBe(expected.duplicateTitles);
     // Page-local counts are never held back.
     expect(throttled.missingTitle).toBe(expected.missingTitle);
+    expect(counter.hasPendingRecount()).toBe(true);
 
-    // A second later a live update recounts again.
+    // The crawl finishes (or pauses) right after that last flush: same arrays and context, same
+    // clock, only `live` turns false. The skipped recount must happen now.
+    expect(counter.update(later.pages, noResources, later.ctx, false)).toEqual(expected);
+    expect(counter.hasPendingRecount()).toBe(false);
+  });
+
+  it("recounts on a live update once the interval has passed", () => {
+    const pages = randomPages(600, 32);
+    const noResources: ResourceResult[] = [];
+    const snapshots: Array<{ pages: PageResult[]; ctx: FilterContext }> = [];
+    crawlInBatches(pages, [], 50, (pageSlice, _resources, ctx) => snapshots.push({ pages: pageSlice, ctx }));
+    const [start, later] = [snapshots[0], snapshots[snapshots.length - 1]];
+    let clock = 0;
+    const counter = new IssueCounter({ now: () => clock });
+    counter.update(start.pages, noResources, start.ctx, true);
+    clock = CROSS_PAGE_RECOUNT_MS - 1;
+    counter.update(later.pages, noResources, later.ctx, true);
+    // A stalled crawl: nothing new arrives, but a second after the last recount the same
+    // inputs are updated again (what useIssueCounts' trailing timer does) and are recounted.
     clock = CROSS_PAGE_RECOUNT_MS;
-    expect(counter.update(later.pages, [], later.ctx, true)).toEqual(expected);
+    expect(counter.update(later.pages, noResources, later.ctx, true)).toEqual(
+      countIssues(later.pages, noResources, later.ctx),
+    );
+  });
 
-    // Finishing recounts at once, whatever the clock says.
-    const extra = randomPages(620, 31);
-    let state = syncDerivedCrawlState(createDerivedCrawlState(), extra);
-    state = syncDerivedCrawlState(state, extra);
-    const finishedCtx = buildFilterContext(state.trackers, later.ctx.linkedUrls, false);
-    const counter2 = new IssueCounter({ now: () => clock });
-    counter2.update(later.pages, [], later.ctx, true);
-    expect(counter2.update(extra, [], finishedCtx, false)).toEqual(countIssues(extra, [], finishedCtx));
+  it("recounts at once when a finished crawl's pages replace a live one", () => {
+    const clock = 0;
+    const live = randomPages(600, 33);
+    const liveState = syncDerivedCrawlState(createDerivedCrawlState(), live);
+    const liveCtx = buildFilterContext(liveState.trackers, new Set(), false);
+    const finished = randomPages(620, 33);
+    const finishedState = syncDerivedCrawlState(createDerivedCrawlState(), finished);
+    const finishedCtx = buildFilterContext(finishedState.trackers, new Set(), false);
+    const counter = new IssueCounter({ now: () => clock });
+    counter.update(live, [], liveCtx, true);
+    expect(counter.update(finished, [], finishedCtx, false)).toEqual(countIssues(finished, [], finishedCtx));
   });
 
   it("starts over when pages are replaced", () => {

@@ -25,6 +25,11 @@ avoided, and what clock the "50k pages in 100 page batches under 2 s" test runs 
   reads it in (the Overview between cross-page recounts) never pays for it.
 - **Live means running and not paused.** `useIssueCounts` passes `running && !paused`; a paused,
   finished or loaded crawl always gets exact cross-page counts, equal to `countIssues`.
+- **Trailing recount timer.** When a live update skipped the cross-page recount
+  (`IssueCounter.hasPendingRecount()`), `useIssueCounts` sets one `setTimeout` of
+  `CROSS_PAGE_RECOUNT_MS` that re-runs the update with the same inputs. Every newer flush
+  clears it and sets its own, and unmounting clears it, so a stalled crawl still catches up
+  about a second after its last flush.
 - **Deterministic perf test clock.** `IssueCounter` takes an injectable `now`. The 50k test feeds
   batches back to back with a clock that advances as if the feed took exactly the 2 s budget,
   so the throttle allows a live recount at 0 ms and 1000 ms, then the final full recount. The
@@ -33,9 +38,9 @@ avoided, and what clock the "50k pages in 100 page batches under 2 s" test runs 
 ## Consequences
 
 - While a crawl runs, cross-page counts (duplicates, canonical targets, link graph, hreflang,
-  near duplicates, sitemap, orphan) can lag the page-local counts by up to a second, and until
-  the next flush if the crawl stalls right after a skipped recount. They are exact once the
-  crawl pauses or finishes.
+  near duplicates, sitemap, orphan) can lag the page-local counts by about a second at most,
+  also when the crawl stalls right after a skipped recount (the trailing timer). They are
+  exact once the crawl pauses or finishes.
 - A cross-page recount is still O(pages x cross-page issues). At the real 150 ms flush rate and
   50k pages it costs well over 100 ms per second of crawling on a busy machine; making the
   duplicate and URL-set counts incremental would remove most of that if it becomes a problem.
