@@ -1932,3 +1932,35 @@ describe("raw vs rendered HTML (T3.6)", () => {
     for (const key of JS_KEYS) expect(ISSUE_SOLUTIONS[key].source.url).toContain("javascript-seo-basics");
   });
 });
+
+describe("ISSUE_DEFS crossPage flag", () => {
+  // A context that fails the test on any read, so a page-local predicate that starts reading
+  // the FilterContext without being marked crossPage is caught.
+  const forbiddenContext = new Proxy({} as FilterContext, {
+    get(_target, prop) {
+      throw new Error(`page-local predicate read FilterContext.${String(prop)}`);
+    },
+  });
+  const pages = [
+    makePage(),
+    makePage({ status: null, htmlSizeBytes: 0, title: null, metaDescription: null }),
+    makePage({ status: 301, redirectChain: ["https://example.com/a"], redirectUrl: "https://example.com/b" }),
+    makePage({ url: "https://example.com/A_b//c?x=1", canonical: "https://example.com/other", h1: null, h1Count: 0 }),
+    makePage({ paginationNext: "https://example.com/p2", discoveredViaSitemap: false, depth: 4 }),
+  ];
+
+  it("page-local predicates never read the FilterContext", () => {
+    for (const def of ISSUE_DEFS) {
+      if (def.crossPage) continue;
+      if (def.scope === "page") for (const p of pages) def.test(p, forbiddenContext);
+      else def.test(makeResource(), forbiddenContext);
+    }
+  });
+
+  it("marks the context-reading predicates as crossPage", () => {
+    const crossKeys = ISSUE_DEFS.filter((d) => d.crossPage).map((d) => d.key);
+    expect(crossKeys).toContain("duplicateTitles");
+    expect(crossKeys).toContain("orphanPage");
+    expect(crossKeys).not.toContain("missingTitle");
+  });
+});

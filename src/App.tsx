@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCrawlEvents } from "@/hooks/useCrawlEvents";
 import { type CrawlSource, useCrawlSession } from "@/hooks/useCrawlSession";
 import { useDerivedCrawlState } from "@/hooks/useDerivedCrawlState";
+import { useIssueCounts } from "@/hooks/useIssueCounts";
 import { useThrottledValue } from "@/hooks/useThrottledValue";
 import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
@@ -114,8 +115,9 @@ function App() {
     activeStartUrlRef,
   });
 
-  const { filterContext, linkGraph, customSearchTracker, extractionIds, resetDerivedTrackers } =
+  const { derived, filterContext, linkGraph, extractionIds, resetDerivedTrackers } =
     useDerivedCrawlState(pages, linkedUrls, shownSource.listMode);
+  const issueCounts = useIssueCounts(pages, resources, filterContext, running && !paused);
 
   const {
     handleStart,
@@ -173,8 +175,9 @@ function App() {
   // Rules of the crawl on screen (live or from its snapshot), plus rule ids only found on its
   // pages (a crawl saved before snapshots stored rules), labelled with the bare id.
   const customSearchStats = useMemo<CustomSearchStat[]>(
-    () => getCustomSearchStats(customSearchTracker, shownSource.customSearches),
-    [customSearchTracker, shownSource.customSearches],
+    // The tracker's counts grow in place; `derived` is new whenever they change.
+    () => getCustomSearchStats(derived.trackers.customSearch, shownSource.customSearches),
+    [derived, shownSource.customSearches],
   );
   // Keyed on ids and labels only, so the columns are not rebuilt on every count change.
   const customSearchColumnsKey = JSON.stringify(customSearchStats.map((s) => [s.id, s.label]));
@@ -358,8 +361,7 @@ function App() {
           {siteInfo && <SiteInfoPanel siteInfo={siteInfo} />}
           <Overview
             pages={pages}
-            resources={resources}
-            filterContext={filterContext}
+            issueCounts={issueCounts}
             progress={progress}
             running={running}
             paused={paused}
