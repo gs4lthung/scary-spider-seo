@@ -362,7 +362,8 @@ fn count_mixed_content(document: &Html, base: &Url) -> usize {
         .count()
 }
 
-/// `parse_page_with` without custom extraction rules.
+/// `parse_page_with` without custom extraction rules (the crawl always passes its rules).
+#[cfg(test)]
 pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
     parse_page_with(body, base, &Extraction::default())
 }
