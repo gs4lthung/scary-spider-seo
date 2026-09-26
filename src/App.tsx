@@ -42,17 +42,16 @@ import {
   filterResources,
   filterTab,
   getCustomSearchStats,
-  getMetaPixelWidth,
   getPageIssueKeys,
-  getTitlePixelWidth,
   getResourceIssueKeys,
   searchPages,
   searchResources,
 } from "./lib/filters";
-import { MAX_LINK_ROWS, getInlinkCount, getInlinks, getUniqueInlinkCount, linkScore } from "./lib/linkGraph";
+import { MAX_LINK_ROWS, getInlinkCount, getInlinks, linkScore } from "./lib/linkGraph";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { parseUrlList } from "./lib/url";
-import { type ExtractionColumn, extractedCell, getExtractionColumns } from "./lib/extraction";
+import { type ExtractionColumn, getExtractionColumns } from "./lib/extraction";
+import { pageDetailFields, resourceDetailFields } from "./lib/detailFields";
 
 type Tab = "overview" | "pages" | "resources" | "sitemap" | "compare";
 
@@ -411,115 +410,13 @@ function App() {
           onClose={() => setSelectedPage(null)}
           issues={selectedPageIssues}
           links={selectedPageLinks}
-          fields={[
-            { label: "URL", value: selectedPage.url },
-            { label: "Status", value: selectedPage.status },
-            { label: "Status Text", value: selectedPage.statusText },
-            { label: "Indexability", value: selectedPage.indexability },
-            { label: "Error", value: selectedPage.error, isError: true },
-            { label: "Redirect URL", value: selectedPage.redirectUrl },
-            { label: "Title", value: selectedPage.title },
-            { label: "Title Length", value: selectedPage.titleLength },
-            { label: "Title Width (px)", value: selectedPage.title ? getTitlePixelWidth(selectedPage) : null },
-            { label: "Meta Description", value: selectedPage.metaDescription },
-            { label: "Meta Description Length", value: selectedPage.metaDescriptionLength },
-            { label: "Meta Description Width (px)", value: selectedPage.metaDescription ? getMetaPixelWidth(selectedPage) : null },
-            { label: "H1", value: selectedPage.h1 },
-            { label: "H1 Count", value: selectedPage.h1Count },
-            { label: "Word Count", value: selectedPage.wordCount },
-            ...customSearchColumns.map(({ id, label }) => ({
-              label: `Custom search: ${label}`,
-              value: selectedPage.customSearchCounts[id] ?? null,
-            })),
-            ...extractionColumns.map(({ id, label }) => ({
-              label: `Extraction: ${label}`,
-              value: extractedCell(selectedPage, id),
-            })),
-            { label: "Canonical", value: selectedPage.canonical },
-            { label: "Meta Robots", value: selectedPage.metaRobots },
-            { label: "Content Type", value: selectedPage.contentType },
-            { label: "Response Time (ms)", value: selectedPage.responseTimeMs },
-            { label: "Inlinks", value: getInlinkCount(linkGraph, selectedPage.url) },
-            { label: "Unique Inlinks", value: getUniqueInlinkCount(linkGraph, selectedPage.url) },
-            { label: "Link Score", value: linkScores.get(selectedPage.url) ?? null },
-            { label: "Internal Links", value: selectedPage.internalLinkCount },
-            { label: "External Links", value: selectedPage.externalLinkCount },
-            { label: "Images", value: selectedPage.imageCount },
-            { label: "Size (bytes)", value: selectedPage.htmlSizeBytes },
-            { label: "Minified", value: selectedPage.htmlSizeBytes ? (selectedPage.isMinified ? "Yes" : "No") : null },
-            {
-              label: "Minify Savings",
-              value: selectedPage.htmlSizeBytes ? `${selectedPage.minifySavingsPct.toFixed(0)}%` : null,
-            },
-            { label: "Depth", value: selectedPage.depth },
-            { label: "JS Rendered", value: selectedPage.rendered ? "Yes" : "No" },
-            // Raw (pre-JavaScript) values, only for pages compared with "Compare raw and rendered HTML".
-            ...(selectedPage.raw
-              ? [
-                  { label: "Raw Title", value: selectedPage.raw.title },
-                  { label: "Raw Canonical", value: selectedPage.raw.canonical },
-                  { label: "Raw Meta Robots", value: selectedPage.raw.metaRobots },
-                  { label: "Raw Word Count", value: selectedPage.raw.wordCount },
-                  { label: "Raw Internal Links", value: selectedPage.raw.internalLinkCount },
-                ]
-              : []),
-            {
-              label: "HSTS",
-              value: selectedPage.url.startsWith("https:") ? (selectedPage.hsts ? "Yes" : "No") : null,
-            },
-            { label: "Insecure Links", value: selectedPage.insecureLinkCount },
-            { label: "Missing Alt Images", value: selectedPage.missingAltCount },
-            { label: "Lang Attribute", value: selectedPage.htmlSizeBytes ? selectedPage.lang : null },
-            {
-              label: "Hreflang",
-              value: selectedPage.hreflangValues.length > 0 ? selectedPage.hreflangValues.join(", ") : null,
-            },
-            { label: "Internal Nofollow Links", value: selectedPage.internalNofollowCount },
-            {
-              label: "Text/HTML Ratio",
-              value: selectedPage.htmlSizeBytes ? `${selectedPage.textRatioPct.toFixed(1)}%` : null,
-            },
-            { label: "Content Simhash", value: selectedPage.contentSimhash || null },
-            {
-              label: "Near-Duplicate Cluster Size",
-              value: filterContext.nearDuplicates.get(selectedPage.url)?.size ?? null,
-            },
-            { label: "X-Robots-Tag", value: selectedPage.xRobotsTag },
-            { label: "Viewport", value: selectedPage.viewport },
-            { label: "Open Graph Tags", value: selectedPage.hasOpenGraph ? "Yes" : "No" },
-            { label: "Twitter Card Tags", value: selectedPage.hasTwitterCard ? "Yes" : "No" },
-            { label: "Canonical Tag Count", value: selectedPage.canonicalCount },
-            { label: "Discovered Via Sitemap", value: selectedPage.discoveredViaSitemap ? "Yes" : "No" },
-            {
-              label: "Redirect Chain",
-              value: selectedPage.redirectChain.length > 0 ? selectedPage.redirectChain.join(" → ") : null,
-            },
-            {
-              label: "Structured Data Types",
-              value: selectedPage.structuredDataTypes.length > 0 ? selectedPage.structuredDataTypes.join(", ") : null,
-            },
-            {
-              label: "Structured Data Errors",
-              value: selectedPage.structuredDataErrors.length > 0 ? selectedPage.structuredDataErrors.join("; ") : null,
-              isError: true,
-            },
-            {
-              label: "Accessibility Violations",
-              value:
-                selectedPage.accessibilityViolations.length > 0
-                  ? selectedPage.accessibilityViolations.map((v) => `${v.id} (${v.nodeCount} nodes)`).join("; ")
-                  : null,
-              isError: true,
-            },
-            {
-              label: "Mobile Usability Violations",
-              value:
-                selectedPage.mobileUsabilityViolations.length > 0
-                  ? selectedPage.mobileUsabilityViolations.map((v) => `${v.id} (${v.nodeCount} nodes)`).join("; ")
-                  : null,
-              isError: true,
-            },
-          ]}
+          fields={pageDetailFields(selectedPage, {
+            customSearchColumns,
+            extractionColumns,
+            linkGraph,
+            linkScores,
+            nearDuplicates: filterContext.nearDuplicates,
+          })}
         />
       )}
 
@@ -528,17 +425,7 @@ function App() {
           title={selectedResource.url}
           onClose={() => setSelectedResource(null)}
           issues={selectedResourceIssues}
-          fields={[
-            { label: "URL", value: selectedResource.url },
-            { label: "Type", value: selectedResource.resourceType },
-            { label: "Status", value: selectedResource.status },
-            { label: "Status Text", value: selectedResource.statusText },
-            { label: "Source Page", value: selectedResource.sourcePage },
-            { label: "Internal", value: selectedResource.isInternal ? "Yes" : "No" },
-            { label: "Alt Text", value: selectedResource.altText },
-            { label: "Insecure", value: selectedResource.isInsecure ? "Yes" : "No" },
-            { label: "Error", value: selectedResource.error, isError: true },
-          ]}
+          fields={resourceDetailFields(selectedResource)}
         />
       )}
     </div>
