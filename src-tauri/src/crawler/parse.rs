@@ -1,4 +1,4 @@
-use crate::crawler::types::{LinkRef, MAX_OUTLINKS_PER_PAGE};
+use crate::crawler::types::{HreflangLink, LinkRef, MAX_HREFLANG_LINKS, MAX_OUTLINKS_PER_PAGE};
 use scraper::{ElementRef, Html, Selector};
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -87,6 +87,8 @@ pub struct ParsedPage {
     pub missing_alt_count: usize,
     pub lang: Option<String>,
     pub hreflang_values: Vec<String>,
+    /// Hreflang annotations with resolvable hrefs, capped at `MAX_HREFLANG_LINKS`.
+    pub hreflang_links: Vec<HreflangLink>,
     pub internal_nofollow_count: usize,
     pub text_ratio_pct: f64,
     pub content_hash: String,
@@ -436,6 +438,18 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         .filter_map(|e| e.value().attr("hreflang"))
         .map(|s| s.to_string())
         .collect();
+    let hreflang_links: Vec<HreflangLink> = html
+        .select(&HREFLANG_SEL)
+        .filter_map(|e| {
+            let lang = e.value().attr("hreflang")?.trim();
+            let href = resolve_url(base, e.value().attr("href")?)?;
+            (!lang.is_empty()).then(|| HreflangLink {
+                lang: lang.to_string(),
+                href: href.to_string(),
+            })
+        })
+        .take(MAX_HREFLANG_LINKS)
+        .collect();
 
     let body_text = html
         .select(&BODY_SEL)
@@ -536,6 +550,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         missing_alt_count,
         lang,
         hreflang_values,
+        hreflang_links,
         internal_nofollow_count,
         text_ratio_pct,
         content_hash,
@@ -726,6 +741,41 @@ mod tests {
         assert_eq!(page.lang.as_deref(), Some("en-GB"));
         assert_eq!(page.hreflang_values, vec!["en", "x-default"]);
         assert_eq!(parse(r#"<html lang=" "></html>"#).lang, None);
+    }
+
+    #[test]
+    fn collects_hreflang_pairs() {
+        let page = parse(
+            r#"<html><head>
+            <link rel="alternate" hreflang="en" href="/en#top">
+            <link rel="alternate" hreflang="fr-FR" href="https://other.example/fr">
+            <link rel="alternate" hreflang="x-default" href="/">
+            <link rel="alternate" hreflang="de">
+            <link rel="alternate" hreflang=" " href="/blank">
+            </head></html>"#,
+        );
+        let pairs: Vec<(&str, &str)> = page
+            .hreflang_links
+            .iter()
+            .map(|l| (l.lang.as_str(), l.href.as_str()))
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                ("en", "https://example.com/en"),
+                ("fr-FR", "https://other.example/fr"),
+                ("x-default", "https://example.com/"),
+            ]
+        );
+        // hreflang_values keeps every declared code, as before.
+        assert_eq!(page.hreflang_values.len(), 5);
+    }
+
+    #[test]
+    fn hreflang_links_are_capped() {
+        let html =
+            r#"<link rel="alternate" hreflang="en" href="/x">"#.repeat(MAX_HREFLANG_LINKS + 5);
+        assert_eq!(parse(&html).hreflang_links.len(), MAX_HREFLANG_LINKS);
     }
 
     #[test]

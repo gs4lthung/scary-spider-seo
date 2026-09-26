@@ -52,6 +52,7 @@ pub fn export_pages_csv(
         "Missing Alt Images",
         "Lang",
         "Hreflang Values",
+        "Hreflang Links",
         "Internal Nofollow Links",
         "Text/HTML Ratio (%)",
         "Content Hash",
@@ -118,6 +119,11 @@ pub fn export_pages_csv(
             p.missing_alt_count.to_string(),
             p.lang.clone().unwrap_or_default(),
             p.hreflang_values.join(", "),
+            p.hreflang_links
+                .iter()
+                .map(|l| format!("{} {}", l.lang, l.href))
+                .collect::<Vec<_>>()
+                .join(", "),
             p.internal_nofollow_count.to_string(),
             format!("{:.1}", p.text_ratio_pct),
             p.content_hash.clone(),

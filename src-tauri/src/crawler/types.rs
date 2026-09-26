@@ -173,6 +173,11 @@ pub struct PageResult {
     pub lang: Option<String>,
     #[serde(default)]
     pub hreflang_values: Vec<String>,
+    /// `<link rel="alternate" hreflang>` annotations with their hrefs resolved to
+    /// absolute URLs (fragment stripped), in document order, capped at
+    /// `MAX_HREFLANG_LINKS`. Empty for crawls saved before this field existed.
+    #[serde(default)]
+    pub hreflang_links: Vec<HreflangLink>,
     #[serde(default)]
     pub internal_nofollow_count: usize,
     /// Every internal `<a href>` on the page in document order, duplicates kept,
@@ -229,6 +234,18 @@ pub struct LinkRef {
     /// The link has no text and wraps an `<img>`.
     #[serde(default)]
     pub is_image_link: bool,
+}
+
+/// Most hreflang annotations stored per page.
+pub const MAX_HREFLANG_LINKS: usize = 300;
+
+/// One hreflang annotation: the declared language/region code as written and
+/// its absolute target URL.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HreflangLink {
+    pub lang: String,
+    pub href: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,5 +363,6 @@ mod tests {
         assert_eq!(home.pagination_next, None);
         assert_eq!(home.pagination_prev, None);
         assert!(home.outlinks.is_empty());
+        assert!(home.hreflang_links.is_empty());
     }
 }

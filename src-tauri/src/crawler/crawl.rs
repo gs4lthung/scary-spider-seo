@@ -387,6 +387,14 @@ async fn fetch_and_parse(
         .filter(|u| u.host_str() == final_url.host_str())
         .cloned()
         .collect();
+    // Same-host hreflang alternates are queued too, so their status and
+    // indexability are known for the return-link and target checks.
+    let hreflang_targets: Vec<Url> = parsed
+        .hreflang_links
+        .iter()
+        .filter_map(|l| Url::parse(&l.href).ok())
+        .filter(|u| u.host_str() == final_url.host_str())
+        .collect();
 
     let result = PageResult {
         url: url.to_string(),
@@ -433,6 +441,7 @@ async fn fetch_and_parse(
         missing_alt_count: parsed.missing_alt_count,
         lang: parsed.lang,
         hreflang_values: parsed.hreflang_values,
+        hreflang_links: parsed.hreflang_links,
         internal_nofollow_count: parsed.internal_nofollow_count,
         outlinks: parsed.internal_outlinks,
         text_ratio_pct: parsed.text_ratio_pct,
@@ -457,6 +466,7 @@ async fn fetch_and_parse(
             .internal_links
             .into_iter()
             .chain(pagination_links)
+            .chain(hreflang_targets)
             .collect(),
         discovered_external: parsed.external_links,
         discovered_images: parsed.images,
