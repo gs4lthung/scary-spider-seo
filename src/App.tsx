@@ -114,7 +114,7 @@ function App() {
     activeStartUrlRef,
   });
 
-  const { filterContext, linkGraph, customSearchTracker, extractionIds, resetDerivedTrackers } =
+  const { derived, filterContext, linkGraph, extractionIds, resetDerivedTrackers } =
     useDerivedCrawlState(pages, linkedUrls, shownSource.listMode);
 
   const {
@@ -172,8 +172,9 @@ function App() {
   // Rules of the crawl on screen (live or from its snapshot), plus rule ids only found on its
   // pages (a crawl saved before snapshots stored rules), labelled with the bare id.
   const customSearchStats = useMemo<CustomSearchStat[]>(
-    () => getCustomSearchStats(customSearchTracker, shownSource.customSearches),
-    [customSearchTracker, shownSource.customSearches],
+    // The tracker's counts grow in place; `derived` is new whenever they change.
+    () => getCustomSearchStats(derived.trackers.customSearch, shownSource.customSearches),
+    [derived, shownSource.customSearches],
   );
   // Keyed on ids and labels only, so the columns are not rebuilt on every count change.
   const customSearchColumnsKey = JSON.stringify(customSearchStats.map((s) => [s.id, s.label]));
