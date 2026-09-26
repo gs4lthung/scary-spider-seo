@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UrlCombobox } from "@/components/url-combobox";
 import { CrawlActions } from "@/components/crawl-actions";
 import { CrawlOptionsSheet } from "@/components/crawl-options-sheet";
+import { CrawlModeToggle, ListModeDialog, type CrawlMode } from "@/components/list-mode-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
@@ -77,7 +78,7 @@ import { createNearDuplicateTracker, getNearDuplicateClusters, ingestNearDuplica
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
-import { withScheme } from "./lib/url";
+import { MAX_LIST_URLS, parseUrlList, withScheme } from "./lib/url";
 
 type Tab = "overview" | "pages" | "resources" | "sitemap";
 
@@ -594,6 +595,12 @@ function App() {
   // Which scheme to assume for a start URL typed without one (e.g. "example.com") — a
   // URL that already specifies http:// or https:// is never overridden by this.
   const [preferHttps, setPreferHttps] = useState(true);
+  // Spider follows links from `config.startUrl`; List crawls exactly the URLs in `listText`.
+  const [crawlMode, setCrawlMode] = useState<CrawlMode>("spider");
+  const [listText, setListText] = useState("");
+  // Deferred so re-parsing a very long pasted list never blocks typing in the dialog.
+  const deferredListText = useDeferredValue(listText);
+  const parsedList = useMemo(() => parseUrlList(deferredListText), [deferredListText]);
   const pagesBufRef = useRef<PageResult[]>([]);
   const resourcesBufRef = useRef<ResourceResult[]>([]);
   // Backs the duplicate-title/meta/content and canonical-status derivations below with
@@ -759,16 +766,32 @@ function App() {
   }, []);
 
   const handleStart = useCallback(async () => {
+    const listMode = crawlMode === "list";
+    // Parsed here rather than read from `parsedList`, which may lag behind the text.
+    const listUrls = listMode ? parseUrlList(listText).valid : [];
+    if (listMode && listUrls.length === 0) {
+      toast.error("Paste at least one http:// or https:// URL to crawl in list mode.");
+      return;
+    }
+    if (listUrls.length > MAX_LIST_URLS) {
+      toast.error(
+        `List mode accepts at most ${MAX_LIST_URLS.toLocaleString()} URLs; this list has ${listUrls.length.toLocaleString()}.`,
+      );
+      return;
+    }
     // A URL typed without a scheme (e.g. "example.com") gets the checkbox's preferred
-    // one; a URL that already specifies http:// or https:// is left untouched.
-    const startUrl = withScheme(config.startUrl, preferHttps);
-    const nextConfig = { ...config, startUrl };
+    // one; a URL that already specifies http:// or https:// is left untouched. In list
+    // mode the first listed URL stands in as the start URL (site info, saved crawls).
+    const startUrl = listMode ? listUrls[0] : withScheme(config.startUrl, preferHttps);
+    const nextConfig = { ...config, startUrl, listUrls };
 
     // Continuing a crawl stopped with URLs still queued (the backend kept its frontier
     // for this exact start URL — see AppState.resume_state): keep the results gathered
     // so far instead of wiping them, since the backend will append to them, not replace
     // them. A different start URL (or a crawl that ran to completion) always starts fresh.
-    const continuing = resumableStartUrl === startUrl;
+    // List mode never continues: the backend neither stores nor consumes resume state
+    // for it, and discards a spider crawl's leftover state when a list crawl starts.
+    const continuing = !listMode && resumableStartUrl === startUrl;
     activeStartUrlRef.current = startUrl;
     // Cleared up front rather than after `invoke` resolves, because crawl events can
     // arrive before it does; restored below if the backend rejects the start.
@@ -796,6 +819,8 @@ function App() {
       // view must match it again. Resetting the trackers makes them re-ingest every
       // restored page on the next derivation.
       setProgress(previous.progress);
+      // Keep the spider start URL the user typed (a list start replaced it above).
+      if (listMode) setConfig(config);
       if (!continuing) {
         resetDerivedTrackers();
         setPages(previous.pages);
@@ -804,7 +829,7 @@ function App() {
         setLinkedUrls(previous.linkedUrls);
       }
     }
-  }, [config, preferHttps, resumableStartUrl, resetDerivedTrackers]);
+  }, [config, crawlMode, listText, preferHttps, resumableStartUrl, resetDerivedTrackers]);
 
   const handleStop = useCallback(async () => {
     try {
@@ -1065,19 +1090,24 @@ function App() {
         <h1>
           <img src="/logo-wordmark.png" alt="Scary Spider SEO" className="h-24 w-auto" />
         </h1>
-        <UrlCombobox
-          value={config.startUrl}
-          disabled={running}
-          onChange={(startUrl) => setConfig((c) => ({ ...c, startUrl }))}
-          onSubmit={handleStart}
-          preferHttps={preferHttps}
-          onToggleScheme={() => setPreferHttps((v) => !v)}
-        />
+        <CrawlModeToggle mode={crawlMode} disabled={running} onChange={setCrawlMode} />
+        {crawlMode === "list" ? (
+          <ListModeDialog text={listText} parsed={parsedList} disabled={running} onTextChange={setListText} />
+        ) : (
+          <UrlCombobox
+            value={config.startUrl}
+            disabled={running}
+            onChange={(startUrl) => setConfig((c) => ({ ...c, startUrl }))}
+            onSubmit={handleStart}
+            preferHttps={preferHttps}
+            onToggleScheme={() => setPreferHttps((v) => !v)}
+          />
+        )}
         <CrawlActions
           running={running}
           paused={paused}
-          canStart={!!config.startUrl}
-          continuing={resumableStartUrl === config.startUrl}
+          canStart={crawlMode === "list" ? parsedList.valid.length > 0 : !!config.startUrl}
+          continuing={crawlMode === "spider" && resumableStartUrl === config.startUrl}
           onStart={handleStart}
           onStop={handleStop}
           onPause={handlePause}
