@@ -103,6 +103,10 @@ pub struct ParsedPage {
     /// 64-bit simhash of the body text as 16 lowercase hex chars; empty for pages
     /// under `SIMHASH_MIN_WORDS` words. See `content_simhash`.
     pub content_simhash: String,
+    /// Visible body text (scripts, styles, noscript and template stripped), the text
+    /// `word_count` and the content hashes are computed from. Custom search rules
+    /// with the text scope run over it so it is not rebuilt.
+    pub body_text: String,
     pub viewport: Option<String>,
     pub has_open_graph: bool,
     pub has_twitter_card: bool,
@@ -617,6 +621,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         text_ratio_pct,
         content_hash,
         content_simhash,
+        body_text,
         viewport,
         has_open_graph,
         has_twitter_card,

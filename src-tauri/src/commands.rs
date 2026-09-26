@@ -1,4 +1,5 @@
 use crate::crawler::crawl;
+use crate::crawler::custom::CustomSearch;
 use crate::crawler::scope::UrlScope;
 use crate::crawler::types::{
     CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult, ResourceResult, MAX_LIST_URLS,
@@ -26,10 +27,9 @@ pub async fn start_crawl(
         return Err("A crawl is already running".to_string());
     }
 
-    // Reject bad include/exclude patterns up front, before any state is touched, so
+    // Reject bad include/exclude patterns and custom searches up front, before any state is touched, so
     // the user can fix them without losing the current results or resume state.
-    UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
-    check_list_size(&config)?;
+    validate_config(&config)?;
 
     // A stopped crawl left queued URLs behind for this exact start URL — continue from
     // there instead of clearing everything and starting over. A resume state for a
@@ -111,6 +111,14 @@ pub async fn start_crawl(
     });
 
     Ok(())
+}
+
+/// Every check `start_crawl` runs before touching state: include/exclude patterns,
+/// custom search rules and the list size.
+fn validate_config(config: &CrawlConfig) -> Result<(), String> {
+    UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
+    CustomSearch::new(&config.custom_searches)?;
+    check_list_size(config)
 }
 
 /// Rejects a list-mode crawl over `MAX_LIST_URLS` entries before any state is touched.
@@ -232,8 +240,8 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_list_size, save_text_file};
-    use crate::crawler::types::{CrawlConfig, MAX_LIST_URLS};
+    use super::{check_list_size, save_text_file, validate_config};
+    use crate::crawler::types::{CrawlConfig, CustomSearchRule, MAX_LIST_URLS};
 
     fn list_config(len: usize) -> CrawlConfig {
         let mut config: CrawlConfig =
@@ -254,6 +262,21 @@ mod tests {
         let err = check_list_size(&list_config(MAX_LIST_URLS + 1)).unwrap_err();
         assert!(err.contains("50000"), "{err}");
         assert!(err.contains(&(MAX_LIST_URLS + 1).to_string()), "{err}");
+    }
+
+    #[test]
+    fn invalid_custom_search_is_rejected_before_the_crawl() {
+        let mut config = list_config(0);
+        assert!(validate_config(&config).is_ok());
+        config.custom_searches = vec![CustomSearchRule {
+            id: "cs1".to_string(),
+            name: "Prices".to_string(),
+            pattern: "[0-9".to_string(),
+            is_regex: true,
+            ..Default::default()
+        }];
+        let err = validate_config(&config).unwrap_err();
+        assert!(err.contains("\"Prices\""), "{err}");
     }
 
     #[test]

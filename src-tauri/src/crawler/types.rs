@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +49,37 @@ pub struct CrawlConfig {
     /// `MAX_LIST_URLS` entries are accepted by `start_crawl`.
     #[serde(default)]
     pub list_urls: Vec<String>,
+    /// Custom search rules (at most `custom::MAX_CUSTOM_SEARCHES`), counted on every
+    /// HTML page into `PageResult::custom_search_counts`.
+    #[serde(default)]
+    pub custom_searches: Vec<CustomSearchRule>,
+}
+
+/// One custom search rule: a literal text (matched case-insensitively) or a regular
+/// expression, searched in the raw HTML or the visible body text.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomSearchRule {
+    /// Stable key of the rule's count in `PageResult::custom_search_counts`.
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    pub pattern: String,
+    #[serde(default)]
+    pub is_regex: bool,
+    #[serde(default)]
+    pub scope: CustomSearchScope,
+}
+
+/// What a custom search rule is matched against.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CustomSearchScope {
+    /// The raw response body, markup and scripts included.
+    #[default]
+    Html,
+    /// The visible body text: scripts, styles and tags stripped.
+    Text,
 }
 
 /// Largest list `start_crawl` accepts in list mode.
@@ -241,6 +273,11 @@ pub struct PageResult {
     pub accessibility_violations: Vec<AccessibilityViolation>,
     #[serde(default)]
     pub mobile_usability_violations: Vec<MobileUsabilityViolation>,
+    /// Match count of every custom search rule of the crawl, keyed by rule id, for
+    /// parsed HTML pages (0 included). Empty for other URLs, crawls without rules and
+    /// crawls saved before custom search existed.
+    #[serde(default)]
+    pub custom_search_counts: BTreeMap<String, u32>,
     #[serde(default)]
     pub error: Option<String>,
 }
@@ -402,6 +439,7 @@ mod tests {
         assert!(home.hreflang_links.is_empty());
         assert_eq!(home.images_missing_dimensions, 0);
         assert_eq!(home.content_simhash, "");
+        assert!(home.custom_search_counts.is_empty());
         assert_eq!(snapshot.resources[0].content_length, None);
     }
 
@@ -421,5 +459,25 @@ mod tests {
             serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
         assert!(config.list_urls.is_empty());
         assert!(!config.is_list_mode());
+    }
+
+    /// A config sent without the T3.3 `customSearches` field searches nothing, and a
+    /// rule without `isRegex`/`scope` is a plain text search over the raw HTML.
+    #[test]
+    fn config_custom_searches_default() {
+        let config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
+        assert!(config.custom_searches.is_empty());
+        let config: CrawlConfig = serde_json::from_str(
+            r#"{"startUrl":"https://example.com/","customSearches":[
+                {"id":"a","pattern":"x"},
+                {"id":"b","name":"B","pattern":"y","isRegex":true,"scope":"text"}]}"#,
+        )
+        .expect("config");
+        assert_eq!(config.custom_searches.len(), 2);
+        assert!(!config.custom_searches[0].is_regex);
+        assert_eq!(config.custom_searches[0].scope, CustomSearchScope::Html);
+        assert!(config.custom_searches[1].is_regex);
+        assert_eq!(config.custom_searches[1].scope, CustomSearchScope::Text);
     }
 }
