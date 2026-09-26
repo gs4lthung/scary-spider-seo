@@ -1103,3 +1103,52 @@ async fn seeds_orphans_from_the_sitemap() {
     assert!(blocked.discovered_via_sitemap);
     assert_eq!(blocked.indexability, "Non-Indexable (robots.txt)");
 }
+
+/// Without JS rendering there is no rendered HTML to compare, so `compareRawHtml` alone
+/// records nothing and the page is fetched and parsed exactly as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn compare_raw_html_without_rendering_records_nothing() {
+    let site = FixtureServer::start().await;
+    let out = crawl(
+        &site.url("/js-title.html"),
+        json!({ "compareRawHtml": true, "maxPages": 1 }),
+    )
+    .await;
+    let page = out.page(&site.url("/js-title.html"));
+    assert!(!page.rendered);
+    assert!(page.raw.is_none(), "{:?}", page.raw);
+    assert_eq!(page.title.as_deref(), Some("Raw title before JavaScript"));
+    assert_eq!(page.internal_link_count, 1);
+}
+
+/// Needs a local Chrome/Chromium, which CI and the gate do not have.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires Chrome; run with `cargo test -- --ignored`"]
+async fn js_rendering_changes_are_captured() {
+    let site = FixtureServer::start().await;
+    let out = crawl(
+        &site.url("/js-title.html"),
+        json!({ "renderJs": true, "compareRawHtml": true, "maxPages": 1, "checkImages": false }),
+    )
+    .await;
+    let page = out.page(&site.url("/js-title.html"));
+    assert!(page.rendered, "Chrome did not render the page: {page:?}");
+    assert_eq!(
+        page.title.as_deref(),
+        Some("Rendered title set by JavaScript")
+    );
+    assert_eq!(page.internal_link_count, 11);
+    let raw = page.raw.as_ref().expect("raw signals recorded");
+    assert_eq!(raw.title.as_deref(), Some("Raw title before JavaScript"));
+    assert_eq!(raw.h1.as_deref(), Some("JavaScript changes this page"));
+    assert_eq!(raw.internal_link_count, 1);
+    assert!(raw.word_count < page.word_count);
+
+    // Rendering without the comparison option leaves `raw` unset.
+    let plain = crawl(
+        &site.url("/js-title.html"),
+        json!({ "renderJs": true, "maxPages": 1, "checkImages": false }),
+    )
+    .await;
+    assert!(plain.page(&site.url("/js-title.html")).raw.is_none());
+}
