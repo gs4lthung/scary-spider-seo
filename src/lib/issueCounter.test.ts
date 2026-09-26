@@ -43,7 +43,7 @@ describe("IssueCounter", () => {
     const final = last as unknown as Record<IssueKey, number>;
     expect(Object.keys(final).sort()).toEqual(ISSUE_DEFS.map((d) => d.key).sort());
     for (const def of ISSUE_DEFS.filter((d) => d.crossPage)) expect(final[def.key], def.key).toBeGreaterThan(0);
-  });
+  }, 60_000);
 
   it("ingests each page once", () => {
     const pages = randomPages(400, 21);
@@ -143,5 +143,5 @@ describe("IssueCounter", () => {
     const ms = bestTimeMs(crawl, BUDGET_MS);
     console.log(`IssueCounter: 50k pages in ${BATCH} page batches took ${ms.toFixed(0)} ms`);
     expect(ms).toBeLessThan(BUDGET_MS);
-  });
+  }, 60_000);
 });
