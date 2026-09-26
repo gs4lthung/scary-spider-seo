@@ -4,7 +4,7 @@
 //! tests need no network, no browser and no window.
 
 use super::crawl::{run_crawl, CrawlState};
-use super::types::{CrawlConfig, PageResult, ResourceResult};
+use super::types::{CrawlConfig, LinkRef, PageResult, ResourceResult};
 use dashmap::DashMap;
 use serde_json::json;
 use std::path::PathBuf;
@@ -86,7 +86,7 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
         "/redirect-to-gone" => return redirect("/gone.html"),
         "/loop-a" => return redirect("/loop-b"),
         "/loop-b" => return redirect("/loop-a"),
-        "/img/ok.png" | "/img/decorative.png" => {
+        "/img/ok.png" | "/img/decorative.png" | "/img/logo.png" => {
             return http_response("200 OK", &[("Content-Type", "image/png")], b"\x89PNG", head)
         }
         _ => {}
@@ -192,6 +192,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/",
         "/URL_Page.html?ref=nav",
         "/a//b.html",
+        "/anchors.html",
         "/bad-jsonld.html",
         "/canonical-to-noindex.html",
         "/canonical-to-redirect.html",
@@ -241,7 +242,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 21);
+    assert_eq!(home.internal_link_count, 22);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -339,6 +340,43 @@ async fn multi_meta_fixture() {
     assert_eq!(home.meta_description_count, 1);
     assert_eq!(home.meta_refresh, None);
     assert_eq!(home.pagination_next, None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn anchors_fixture() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    // Raw signals for the frontend's link analysis: every internal link in document
+    // order with its anchor and rel flags, duplicates kept, external links left out.
+    let page = out.page(&site.url("/anchors.html"));
+    assert_eq!(page.status, Some(200));
+    let link = |path: &str, anchor: &str, nofollow: bool, is_image_link: bool| LinkRef {
+        url: site.url(path),
+        anchor: anchor.to_string(),
+        nofollow,
+        is_image_link,
+    };
+    assert_eq!(
+        page.outlinks,
+        vec![
+            link("/", "Fixture home", false, false),
+            link("/dup-a.html", "Duplicate page A", false, true),
+            link("/dup-b.html", "", false, false),
+            link("/headings.html", "click here", false, false),
+            link("/nofollow.html", "User submitted link", true, false),
+            link("/", "Home again", false, false),
+        ]
+    );
+    assert_eq!(page.internal_link_count, 6);
+    assert_eq!(page.internal_nofollow_count, 1);
+
+    let home = out.page(&site.url("/"));
+    assert_eq!(home.outlinks.len(), home.internal_link_count);
+    assert!(home
+        .outlinks
+        .iter()
+        .any(|l| l.url == site.url("/anchors.html") && l.anchor == "Anchor text and rel values"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
