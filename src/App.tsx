@@ -578,6 +578,12 @@ const resourceColumns: ColumnDef<ResourceResult, any>[] = [
   },
 ];
 
+/** Where the crawl results on screen came from (see `shownSource` in `App`). */
+interface CrawlSource {
+  startUrl: string;
+  listMode: boolean;
+}
+
 function App() {
   const [config, setConfig] = useState<CrawlConfig>(DEFAULT_CONFIG);
   const [pages, setPages] = useState<PageResult[]>([]);
@@ -601,6 +607,10 @@ function App() {
   // Deferred so re-parsing a very long pasted list never blocks typing in the dialog.
   const deferredListText = useDeferredValue(listText);
   const parsedList = useMemo(() => parseUrlList(deferredListText), [deferredListText]);
+  // Where the results on screen came from: the start URL they are saved under (the first
+  // listed URL in list mode) and whether they are a list crawl. Kept apart from `config`
+  // so a list crawl never overwrites the Spider start URL box.
+  const [shownSource, setShownSource] = useState<CrawlSource>({ startUrl: "", listMode: false });
   const pagesBufRef = useRef<PageResult[]>([]);
   const resourcesBufRef = useRef<ResourceResult[]>([]);
   // Backs the duplicate-title/meta/content and canonical-status derivations below with
@@ -783,6 +793,7 @@ function App() {
     // one; a URL that already specifies http:// or https:// is left untouched. In list
     // mode the first listed URL stands in as the start URL (site info, saved crawls).
     const startUrl = listMode ? listUrls[0] : withScheme(config.startUrl, preferHttps);
+    // Only sent to the backend: `config` keeps the Spider box's URL and no list.
     const nextConfig = { ...config, startUrl, listUrls };
 
     // Continuing a crawl stopped with URLs still queued (the backend kept its frontier
@@ -796,6 +807,8 @@ function App() {
     // Cleared up front rather than after `invoke` resolves, because crawl events can
     // arrive before it does; restored below if the backend rejects the start.
     const previous = shownCrawlRef.current;
+    const previousSource = shownSource;
+    setShownSource({ startUrl, listMode });
     if (!continuing) {
       setPages([]);
       setResources([]);
@@ -805,7 +818,7 @@ function App() {
       pagesBufRef.current = [];
       resourcesBufRef.current = [];
     }
-    setConfig(nextConfig);
+    if (!listMode) setConfig((c) => ({ ...c, startUrl }));
     setProgress(null);
     setFilter("all");
     setPaused(false);
@@ -819,8 +832,7 @@ function App() {
       // view must match it again. Resetting the trackers makes them re-ingest every
       // restored page on the next derivation.
       setProgress(previous.progress);
-      // Keep the spider start URL the user typed (a list start replaced it above).
-      if (listMode) setConfig(config);
+      setShownSource(previousSource);
       if (!continuing) {
         resetDerivedTrackers();
         setPages(previous.pages);
@@ -829,7 +841,7 @@ function App() {
         setLinkedUrls(previous.linkedUrls);
       }
     }
-  }, [config, crawlMode, listText, preferHttps, resumableStartUrl, resetDerivedTrackers]);
+  }, [config, crawlMode, listText, preferHttps, resumableStartUrl, shownSource, resetDerivedTrackers]);
 
   const handleStop = useCallback(async () => {
     try {
@@ -879,11 +891,11 @@ function App() {
         defaultPath: "crawl.json",
       });
       if (!path) return;
-      await invoke("save_crawl", { path, startUrl: config.startUrl });
+      await invoke("save_crawl", { path, startUrl: shownSource.startUrl || config.startUrl });
     } catch (err) {
       toast.error(String(err));
     }
-  }, [config.startUrl]);
+  }, [shownSource.startUrl, config.startUrl]);
 
   const handleOpenCrawl = useCallback(async () => {
     try {
@@ -901,6 +913,8 @@ function App() {
       setRunning(false);
       setFilter("all");
       setConfig((prev) => ({ ...prev, startUrl: snapshot.startUrl }));
+      // Saved crawls don't record their mode; they are classified as spider crawls.
+      setShownSource({ startUrl: snapshot.startUrl, listMode: false });
     } catch (err) {
       toast.error(String(err));
     }
@@ -987,6 +1001,7 @@ function App() {
       hreflangMissingReturn,
       hreflangTargetError,
       nearDuplicates,
+      listMode: shownSource.listMode,
     }),
     [
       duplicateTitleSet,
@@ -1003,6 +1018,7 @@ function App() {
       hreflangMissingReturn,
       hreflangTargetError,
       nearDuplicates,
+      shownSource.listMode,
     ],
   );
   // Link scores rank the whole graph, so while a crawl runs they refresh on a timer instead
