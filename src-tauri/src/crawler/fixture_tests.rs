@@ -228,6 +228,8 @@ async fn crawls_every_linked_page_exactly_once() {
         "/loop-a",
         "/missing-title.html",
         "/multi-meta.html",
+        "/near-dup-a.html",
+        "/near-dup-b.html",
         "/nofollow.html",
         "/noindex.html",
         "/old-page",
@@ -266,7 +268,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 24);
+    assert_eq!(home.internal_link_count, 26);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -459,6 +461,30 @@ async fn hreflang_fixtures() {
             ("fr-XX".to_string(), site.url("/fr.html")),
         ]
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn near_duplicate_fixtures() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    let a = out.page(&site.url("/near-dup-a.html"));
+    let b = out.page(&site.url("/near-dup-b.html"));
+    assert_eq!(a.content_simhash.len(), 16);
+    assert_eq!(b.content_simhash.len(), 16);
+    let fingerprint = |p: &PageResult| u64::from_str_radix(&p.content_simhash, 16).unwrap();
+    let distance = (fingerprint(a) ^ fingerprint(b)).count_ones();
+    assert!(distance <= 3, "near-duplicate distance {distance}");
+    assert_ne!(a.content_hash, b.content_hash);
+
+    // The home page is short but over the word minimum; a different page is far away.
+    let home = out.page(&site.url("/"));
+    assert_eq!(home.content_simhash.len(), 16);
+    assert!((fingerprint(a) ^ fingerprint(home)).count_ones() > 3);
+    // Pages under 20 words carry no fingerprint.
+    assert_eq!(out.page(&site.url("/en.html")).content_simhash, "");
+    // Non-HTML and failed URLs carry no fingerprint.
+    assert_eq!(out.page(&site.url("/gone.html")).content_simhash, "");
 }
 
 #[tokio::test(flavor = "multi_thread")]

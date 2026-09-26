@@ -32,6 +32,7 @@ must produce.
 | `/secure-headers.html` | served with `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options` and `Referrer-Policy` (headers added by the test server); `/` sends none of them |
 | `/en.html` | hreflang `en` (self), `fr` and `x-default` (`/`) |
 | `/fr.html` | not linked; reached only through the hreflang annotation on `/en.html`. Annotates `fr` (self) and an invalid `fr-XX`, with no return link to `/en.html` |
+| `/near-dup-a.html`, `/near-dup-b.html` | about 60 words of body text differing by one word: near duplicates (simhash within distance 3) with different content hashes |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
 | `/noindex-in-sitemap.html` | not linked; listed in `sitemap.xml` and noindex (non-indexable URL in the sitemap) |
 | `/gone-in-sitemap.html` | not linked; listed in `sitemap.xml`, file intentionally absent so it answers 404 |
