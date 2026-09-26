@@ -2,25 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import type { CrawlProgress, PageResult, ResourceResult } from "../types";
+import type { CrawlProgress, PageResult } from "../types";
 import {
   type CustomSearchStat,
-  type FilterContext,
   type FilterKey,
   type IssueKey,
   type OverviewSection,
   ISSUE_DEFS,
-  countIssues,
   customSearchFilterKey,
   parseCustomSearchFilter,
 } from "../lib/filters";
 
 interface OverviewProps {
   pages: PageResult[];
-  resources: ResourceResult[];
-  // Built once per `pages` change in App (it also drives table filtering), so the duplicate
-  // sets and canonical map are not rebuilt here on every crawl update.
-  filterContext: FilterContext;
+  /** Affected pages or resources per issue, from App's `IssueCounter` (updated per flush in
+   * proportion to the new pages, never recounted here). */
+  issueCounts: Record<IssueKey, number>;
   progress: CrawlProgress | null;
   running: boolean;
   paused: boolean;
@@ -90,8 +87,7 @@ function StatTile({
 
 export function Overview({
   pages,
-  resources,
-  filterContext,
+  issueCounts,
   progress,
   running,
   paused,
@@ -107,8 +103,6 @@ export function Overview({
     }
     return counts;
   }, [pages]);
-
-  const issueCounts = useMemo(() => countIssues(pages, resources, filterContext), [pages, resources, filterContext]);
 
   const totalIssues = SECTIONS.flatMap((g) => g.items).reduce((sum, i) => sum + issueCounts[i.key], 0);
 

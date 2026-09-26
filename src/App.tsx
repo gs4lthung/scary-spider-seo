@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCrawlEvents } from "@/hooks/useCrawlEvents";
 import { type CrawlSource, useCrawlSession } from "@/hooks/useCrawlSession";
 import { useDerivedCrawlState } from "@/hooks/useDerivedCrawlState";
+import { useIssueCounts } from "@/hooks/useIssueCounts";
 import { useThrottledValue } from "@/hooks/useThrottledValue";
 import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
@@ -116,6 +117,7 @@ function App() {
 
   const { derived, filterContext, linkGraph, extractionIds, resetDerivedTrackers } =
     useDerivedCrawlState(pages, linkedUrls, shownSource.listMode);
+  const issueCounts = useIssueCounts(pages, resources, filterContext, running && !paused);
 
   const {
     handleStart,
@@ -358,8 +360,7 @@ function App() {
           {siteInfo && <SiteInfoPanel siteInfo={siteInfo} />}
           <Overview
             pages={pages}
-            resources={resources}
-            filterContext={filterContext}
+            issueCounts={issueCounts}
             progress={progress}
             running={running}
             paused={paused}
