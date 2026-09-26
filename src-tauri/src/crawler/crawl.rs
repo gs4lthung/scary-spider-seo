@@ -27,6 +27,49 @@ const RENDER_MAX_CONCURRENCY: usize = 4;
 /// Tighter cap when the accessibility and/or mobile-usability audit is running, since
 /// each adds real CPU time inside the tab on top of the render itself.
 const RENDER_AUDIT_MAX_CONCURRENCY: usize = 2;
+/// Minimum gap between two unforced `crawl://progress` events. A fast crawl finishes
+/// pages and resource checks far more often than the UI can usefully repaint.
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Rate-limits `crawl://progress`: an event goes out when `interval` has passed since the
+/// last one, or when forced (pause state changed, crawl finished).
+struct ProgressThrottle {
+    last: Option<Instant>,
+    interval: Duration,
+}
+
+impl ProgressThrottle {
+    fn new(interval: Duration) -> Self {
+        Self {
+            last: None,
+            interval,
+        }
+    }
+
+    /// Whether to emit at `now`; records `now` as the last emit when it returns true.
+    fn should_emit(&mut self, now: Instant, force: bool) -> bool {
+        let due = force
+            || self
+                .last
+                .is_none_or(|last| now.saturating_duration_since(last) >= self.interval);
+        if due {
+            self.last = Some(now);
+        }
+        due
+    }
+
+    /// Emits the progress `snapshot` builds, if `should_emit` allows it right now.
+    fn emit<R: Runtime>(
+        &mut self,
+        app: &AppHandle<R>,
+        force: bool,
+        snapshot: impl FnOnce() -> CrawlProgress,
+    ) {
+        if self.should_emit(Instant::now(), force) {
+            let _ = app.emit("crawl://progress", snapshot());
+        }
+    }
+}
 
 struct PageFetchOutcome {
     result: PageResult,
@@ -757,6 +800,18 @@ pub async fn run_crawl<R: Runtime>(
     state: CrawlState,
     resume: Option<CrawlResumeState>,
 ) -> Vec<String> {
+    run_crawl_with_progress_interval(app, config, state, resume, PROGRESS_INTERVAL).await
+}
+
+/// `run_crawl` with the progress throttle interval passed in, so tests can make the
+/// number of `crawl://progress` events independent of wall-clock speed.
+pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
+    app: AppHandle<R>,
+    config: CrawlConfig,
+    state: CrawlState,
+    resume: Option<CrawlResumeState>,
+    progress_interval: Duration,
+) -> Vec<String> {
     let CrawlState {
         cancel,
         paused,
@@ -1054,12 +1109,30 @@ pub async fn run_crawl<R: Runtime>(
 
     let mut last_dispatch: Option<Instant> = None;
 
+    let mut progress_throttle = ProgressThrottle::new(progress_interval);
+    // Pause state the frontend last heard about; a change is always reported at once.
+    let mut reported_paused = false;
+    let progress = |crawled: usize, queued: usize, running: bool, paused: bool| CrawlProgress {
+        crawled,
+        queued,
+        resources_checked: resources_checked.load(Ordering::Relaxed),
+        resources_total: resources.len(),
+        running,
+        paused,
+    };
+
     loop {
         if cancel.load(Ordering::SeqCst) {
             break;
         }
 
         let is_paused = paused.load(Ordering::SeqCst);
+        if is_paused != reported_paused {
+            reported_paused = is_paused;
+            progress_throttle.emit(&app, true, || {
+                progress(crawled_count, frontier.len(), true, is_paused)
+            });
+        }
 
         if !is_paused {
             while page_tasks.len() < page_concurrency && !frontier.is_empty() {
@@ -1164,17 +1237,9 @@ pub async fn run_crawl<R: Runtime>(
 
         if page_tasks.is_empty() && resource_tasks.is_empty() {
             if is_paused && !frontier.is_empty() {
-                let _ = app.emit(
-                    "crawl://progress",
-                    CrawlProgress {
-                        crawled: crawled_count,
-                        queued: frontier.len(),
-                        resources_checked: resources_checked.load(Ordering::Relaxed),
-                        resources_total: resources.len(),
-                        running: true,
-                        paused: true,
-                    },
-                );
+                progress_throttle.emit(&app, false, || {
+                    progress(crawled_count, frontier.len(), true, true)
+                });
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 continue;
             }
@@ -1255,13 +1320,8 @@ pub async fn run_crawl<R: Runtime>(
                         }
                     }
 
-                    let _ = app.emit("crawl://progress", CrawlProgress {
-                        crawled: crawled_count,
-                        queued: frontier.len(),
-                        resources_checked: resources_checked.load(Ordering::Relaxed),
-                        resources_total: resources.len(),
-                        running: true,
-                        paused: is_paused,
+                    progress_throttle.emit(&app, false, || {
+                        progress(crawled_count, frontier.len(), true, is_paused)
                     });
                 }
             }
@@ -1269,19 +1329,16 @@ pub async fn run_crawl<R: Runtime>(
                 if let Some(Err(error)) = res {
                     let _ = app.emit("crawl://error", format!("Resource check task failed: {error}"));
                 }
-                let _ = app.emit("crawl://progress", CrawlProgress {
-                    crawled: crawled_count,
-                    queued: frontier.len(),
-                    resources_checked: resources_checked.load(Ordering::Relaxed),
-                    resources_total: resources.len(),
-                    running: true,
-                    paused: is_paused,
+                progress_throttle.emit(&app, false, || {
+                    progress(crawled_count, frontier.len(), true, is_paused)
                 });
             }
         }
     }
 
     let cancelled = cancel.load(Ordering::SeqCst);
+    // Read before the frontier may move into the resume state below.
+    let queued_at_end = frontier.len();
     if cancelled {
         page_tasks.abort_all();
         resource_tasks.abort_all();
@@ -1325,5 +1382,55 @@ pub async fn run_crawl<R: Runtime>(
         );
     }
 
+    // Always sent, whatever ended the loop, so the last counts the frontend sees are the
+    // final ones even when the throttle swallowed the most recent updates. `start_crawl`
+    // emits `crawl://done` only after this function returns.
+    progress_throttle.emit(&app, true, || {
+        progress(crawled_count, queued_at_end, false, false)
+    });
+
     linked_urls.into_iter().collect()
+}
+
+#[cfg(test)]
+mod progress_throttle_tests {
+    use super::*;
+
+    #[test]
+    fn progress_throttle_limits_rate() {
+        let start = Instant::now();
+        let mut throttle = ProgressThrottle::new(Duration::from_millis(100));
+        assert!(
+            throttle.should_emit(start, false),
+            "first event always goes out"
+        );
+        assert!(!throttle.should_emit(start + Duration::from_millis(1), false));
+        assert!(!throttle.should_emit(start + Duration::from_millis(99), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(100), false));
+        // The window restarts at the last emit, not at the first.
+        assert!(!throttle.should_emit(start + Duration::from_millis(150), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(200), false));
+        // 1000 events 1 ms apart over one second let through one per 100 ms.
+        let mut throttle = ProgressThrottle::new(Duration::from_millis(100));
+        let emitted = (0..1000u64)
+            .filter(|ms| throttle.should_emit(start + Duration::from_millis(*ms), false))
+            .count();
+        assert_eq!(emitted, 10);
+    }
+
+    #[test]
+    fn progress_throttle_forces_through() {
+        let start = Instant::now();
+        let mut throttle = ProgressThrottle::new(Duration::from_secs(3600));
+        assert!(throttle.should_emit(start, false));
+        assert!(!throttle.should_emit(start + Duration::from_millis(5), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(5), true));
+        assert!(throttle.should_emit(start + Duration::from_millis(5), true));
+        // A forced emit restarts the window.
+        let mut throttle = ProgressThrottle::new(Duration::from_millis(100));
+        assert!(throttle.should_emit(start, false));
+        assert!(throttle.should_emit(start + Duration::from_millis(90), true));
+        assert!(!throttle.should_emit(start + Duration::from_millis(150), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(190), false));
+    }
 }

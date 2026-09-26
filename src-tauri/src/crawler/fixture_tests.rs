@@ -3,7 +3,7 @@
 //! in-process on 127.0.0.1, and `run_crawl` runs on Tauri's mock runtime, so these
 //! tests need no network, no browser and no window.
 
-use super::crawl::{run_crawl, CrawlResumeState, CrawlState};
+use super::crawl::{run_crawl, run_crawl_with_progress_interval, CrawlResumeState, CrawlState};
 use super::types::{CrawlConfig, LinkRef, PageResult, ResourceResult};
 use dashmap::DashMap;
 use serde_json::json;
@@ -1332,4 +1332,214 @@ async fn large_site_crawl_completes_within_budget() {
     panic!(
         "large-site crawl exceeded the {LARGE_SITE_BUDGET:?} budget on all {LARGE_SITE_ATTEMPTS} attempts: {timings:?}"
     );
+}
+
+/// What a crawl reported through `crawl://progress`, in emit order.
+struct ProgressRun {
+    pages: usize,
+    progress: Vec<serde_json::Value>,
+    left_behind: Option<CrawlResumeState>,
+}
+
+/// How `crawl_recording_progress` starts the crawl.
+#[derive(Clone, Copy, PartialEq)]
+enum StartAs {
+    Running,
+    /// Already stopped: the loop exits before fetching anything.
+    Stopped,
+    /// Paused before anything is fetched, then stopped shortly after.
+    PausedThenStopped,
+}
+
+/// Crawls like `crawl_resumable`, with an explicit progress throttle interval, and records
+/// every `crawl://progress` payload. A huge interval lets only forced emits and the very
+/// first emit through, so the event count does not depend on how fast the machine is.
+async fn crawl_recording_progress(
+    start_url: &str,
+    overrides: serde_json::Value,
+    resume: Option<CrawlResumeState>,
+    start_as: StartAs,
+    progress_interval: std::time::Duration,
+) -> ProgressRun {
+    use tauri::Listener;
+
+    let mut config = json!({
+        "startUrl": start_url,
+        "concurrency": 4,
+        "timeoutSecs": 5,
+        "checkExternalLinks": false,
+        "respectRobots": true,
+    });
+    config
+        .as_object_mut()
+        .unwrap()
+        .extend(overrides.as_object().unwrap().clone());
+    let config: CrawlConfig = serde_json::from_value(config).expect("valid crawl config");
+
+    let app = tauri::test::mock_app();
+    let recorded: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = recorded.clone();
+    app.listen_any("crawl://progress", move |event| {
+        let payload = serde_json::from_str(event.payload()).expect("progress payload is JSON");
+        sink.lock().unwrap().push(payload);
+    });
+
+    let resume_slot = Arc::new(Mutex::new(None));
+    let pages = Arc::new(Mutex::new(Vec::new()));
+    let cancel = Arc::new(AtomicBool::new(start_as == StartAs::Stopped));
+    let paused = Arc::new(AtomicBool::new(start_as == StartAs::PausedThenStopped));
+    if start_as == StartAs::PausedThenStopped {
+        // Only bounds how long the paused loop idles; no assertion depends on it.
+        let cancel = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+    }
+    let state = CrawlState {
+        cancel,
+        paused,
+        pages: pages.clone(),
+        resources: Arc::new(DashMap::new()),
+        resources_checked: Arc::new(AtomicUsize::new(0)),
+        resume_slot: resume_slot.clone(),
+    };
+    run_crawl_with_progress_interval(
+        app.handle().clone(),
+        config,
+        state,
+        resume,
+        progress_interval,
+    )
+    .await;
+
+    let pages = pages.lock().unwrap().len();
+    let progress = recorded.lock().unwrap().clone();
+    let left_behind = resume_slot.lock().unwrap().take();
+    ProgressRun {
+        pages,
+        progress,
+        left_behind,
+    }
+}
+
+/// Never elapses during a test crawl, so only forced emits and the first emit get through.
+const NEVER: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+#[tokio::test(flavor = "multi_thread")]
+async fn progress_events_are_throttled() {
+    let site = FixtureServer::start().await;
+    let run = crawl_recording_progress(
+        &site.url("/"),
+        json!({ "concurrency": 1, "delayMs": 0 }),
+        None,
+        StartAs::Running,
+        NEVER,
+    )
+    .await;
+    eprintln!(
+        "progress_events_are_throttled: {} pages, {} progress events",
+        run.pages,
+        run.progress.len()
+    );
+    assert!(run.pages > 0);
+    assert!(
+        run.progress.len() <= run.pages + 2,
+        "{} progress events for {} pages",
+        run.progress.len(),
+        run.pages
+    );
+    let last = run.progress.last().expect("a final progress event");
+    assert_eq!(last["crawled"], json!(run.pages));
+    assert_eq!(last["queued"], json!(0));
+    assert_eq!(last["running"], json!(false));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unthrottled_progress_reports_every_page_and_resource() {
+    // The same crawl with no throttle: one event per finished page and resource check,
+    // plus the final one. Shows what `progress_events_are_throttled` saves.
+    let site = FixtureServer::start().await;
+    let run = crawl_recording_progress(
+        &site.url("/"),
+        json!({ "concurrency": 1, "delayMs": 0 }),
+        None,
+        StartAs::Running,
+        std::time::Duration::ZERO,
+    )
+    .await;
+    eprintln!(
+        "unthrottled: {} pages, {} progress events",
+        run.pages,
+        run.progress.len()
+    );
+    assert!(run.progress.len() > run.pages + 2);
+    let last = run.progress.last().expect("a final progress event");
+    assert_eq!(last["crawled"], json!(run.pages));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn final_progress_counts_survive_stop_and_resume() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    // Stopped before fetching: the only event is the final one, reporting the queue.
+    let stopped = crawl_recording_progress(&start, json!({}), None, StartAs::Stopped, NEVER).await;
+    let resume = stopped
+        .left_behind
+        .expect("stopped crawl leaves resume state");
+    assert_eq!(stopped.progress.len(), 1);
+    let last = &stopped.progress[0];
+    assert_eq!(last["crawled"], json!(0));
+    assert_eq!(last["queued"], json!(resume.frontier.len()));
+    assert_eq!(last["running"], json!(false));
+
+    // Resumed to the end: the final event reports every page of the crawl.
+    let resumed =
+        crawl_recording_progress(&start, json!({}), Some(resume), StartAs::Running, NEVER).await;
+    assert!(resumed.left_behind.is_none());
+    let last = resumed.progress.last().expect("a final progress event");
+    assert_eq!(last["crawled"], json!(resumed.pages));
+    assert_eq!(last["queued"], json!(0));
+    assert!(resumed.progress.len() <= 2, "{:?}", resumed.progress);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pausing_forces_a_progress_event() {
+    let site = FixtureServer::start().await;
+    let run = crawl_recording_progress(
+        &site.url("/"),
+        json!({}),
+        None,
+        StartAs::PausedThenStopped,
+        NEVER,
+    )
+    .await;
+    // The pause is reported at once, then the stop sends the final counts.
+    assert_eq!(run.progress.len(), 2, "{:?}", run.progress);
+    assert_eq!(run.progress[0]["paused"], json!(true));
+    assert_eq!(run.progress[0]["running"], json!(true));
+    let last = &run.progress[1];
+    assert_eq!(last["paused"], json!(false));
+    assert_eq!(last["running"], json!(false));
+    assert_eq!(last["crawled"], json!(0));
+    assert!(run.left_behind.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_final_progress_counts_listed_pages() {
+    let site = FixtureServer::start().await;
+    let listed = vec![site.url("/noindex.html"), site.url("/gone.html")];
+    let run = crawl_recording_progress(
+        &listed[0],
+        json!({ "listUrls": &listed }),
+        None,
+        StartAs::Running,
+        NEVER,
+    )
+    .await;
+    assert_eq!(run.pages, 2);
+    let last = run.progress.last().expect("a final progress event");
+    assert_eq!(last["crawled"], json!(2));
+    assert_eq!(last["queued"], json!(0));
+    assert!(run.left_behind.is_none());
 }
