@@ -2,7 +2,8 @@ use crate::crawler::crawl;
 use crate::crawler::custom::CustomSearch;
 use crate::crawler::scope::UrlScope;
 use crate::crawler::types::{
-    CrawlConfig, CrawlSnapshot, CrawlSummary, PageResult, ResourceResult, MAX_LIST_URLS,
+    CrawlConfig, CrawlSnapshot, CrawlSummary, CustomSearchRule, PageResult, ResourceResult,
+    MAX_LIST_URLS,
 };
 use crate::export;
 use crate::state::AppState;
@@ -160,12 +161,20 @@ pub fn get_resources(state: State<'_, AppState>) -> Result<Vec<ResourceResult>, 
     Ok(state.resources.iter().map(|r| r.value().clone()).collect())
 }
 
+/// `custom_searches` are the rules of the results on screen (sent by the frontend, which
+/// keeps them for live and loaded crawls); they name the pages CSV's custom search columns.
 #[tauri::command]
-pub fn export_csv(state: State<'_, AppState>, path: String, what: String) -> Result<(), String> {
+pub fn export_csv(
+    state: State<'_, AppState>,
+    path: String,
+    what: String,
+    custom_searches: Option<Vec<CustomSearchRule>>,
+) -> Result<(), String> {
     match what.as_str() {
         "pages" => {
             let pages = lock_state(&state.pages)?;
-            export::export_pages_csv(&pages, &path).map_err(|e| e.to_string())
+            export::export_pages_csv(&pages, &custom_searches.unwrap_or_default(), &path)
+                .map_err(|e| e.to_string())
         }
         "resources" => {
             let resources: Vec<ResourceResult> =
@@ -185,6 +194,7 @@ pub fn save_crawl(
     state: State<'_, AppState>,
     path: String,
     start_url: String,
+    custom_searches: Option<Vec<CustomSearchRule>>,
 ) -> Result<(), String> {
     let pages = lock_state(&state.pages)?.clone();
     let resources: Vec<ResourceResult> =
@@ -199,6 +209,7 @@ pub fn save_crawl(
         saved_at_unix_ms,
         pages,
         resources,
+        custom_searches: custom_searches.unwrap_or_default(),
     };
 
     let json = serde_json::to_string_pretty(&snapshot).map_err(|e| e.to_string())?;

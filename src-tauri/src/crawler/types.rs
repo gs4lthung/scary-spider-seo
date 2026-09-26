@@ -409,6 +409,10 @@ pub struct CrawlSnapshot {
     pub saved_at_unix_ms: u64,
     pub pages: Vec<PageResult>,
     pub resources: Vec<ResourceResult>,
+    /// Custom search rules the crawl ran with, so a loaded crawl can name the ids in
+    /// `PageResult::custom_search_counts`. Empty for crawls saved before T3.3.
+    #[serde(default)]
+    pub custom_searches: Vec<CustomSearchRule>,
 }
 
 #[cfg(test)]
@@ -441,6 +445,7 @@ mod tests {
         assert_eq!(home.content_simhash, "");
         assert!(home.custom_search_counts.is_empty());
         assert_eq!(snapshot.resources[0].content_length, None);
+        assert!(snapshot.custom_searches.is_empty());
     }
 
     /// A config sent without the T3.1 pattern fields means "no restriction".
