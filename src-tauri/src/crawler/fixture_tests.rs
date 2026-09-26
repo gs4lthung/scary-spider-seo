@@ -370,6 +370,93 @@ async fn resumed_crawl_drops_queued_urls_the_new_scope_excludes() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn list_mode_crawls_only_the_listed_urls() {
+    let site = FixtureServer::start().await;
+    let noindex = site.url("/noindex.html");
+    let gone = site.url("/gone.html");
+    let dup_a = site.url("/dup-a.html");
+    let out = crawl(
+        &noindex,
+        json!({
+            // Duplicates, a fragment variant and unparsable entries are ignored.
+            "listUrls": [&noindex, &gone, &dup_a, format!("{dup_a}#top"), "not a url", "ftp://x/"],
+            "useSitemap": true,
+        }),
+    )
+    .await;
+
+    // Every listed page links to `/`, which is not crawled; no sitemap URL is either.
+    let mut expected = vec![dup_a.clone(), gone.clone(), noindex.clone()];
+    expected.sort();
+    assert_eq!(out.urls(), expected);
+    assert!(out.pages.iter().all(|p| p.depth == 0));
+    assert_eq!(out.page(&gone).status, Some(404));
+    // Links are still recorded as linked even though they are not followed.
+    assert!(
+        out.linked_urls.contains(&site.url("/")),
+        "{:?}",
+        out.linked_urls
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_checks_images_of_listed_pages() {
+    let site = FixtureServer::start().await;
+    let page = site.url("/h1-and-images.html");
+    let out = crawl(&page, json!({ "listUrls": [&page] })).await;
+    assert_eq!(out.urls(), vec![page.as_str()]);
+    let image = out.resource(&site.url("/img/ok.png"));
+    assert_eq!(image.status, Some(200));
+    assert!(image.is_internal);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_respects_robots_per_host() {
+    // Two servers are two origins, each with its own robots.txt that disallows `/private/`.
+    // The second origin's rules can only apply if list mode fetches robots.txt per host.
+    let first = FixtureServer::start().await;
+    let second = FixtureServer::start().await;
+    let listed = vec![
+        first.url("/noindex.html"),
+        second.url("/private/secret.html"),
+        second.url("/dup-a.html"),
+    ];
+    let out = crawl(&listed[0], json!({ "listUrls": &listed })).await;
+
+    assert_eq!(out.pages.len(), 3);
+    let blocked = out.page(&second.url("/private/secret.html"));
+    assert_eq!(blocked.status_text, "Blocked");
+    assert_eq!(blocked.indexability, "Non-Indexable (robots.txt)");
+    assert_eq!(out.page(&second.url("/dup-a.html")).status, Some(200));
+    assert_eq!(out.page(&first.url("/noindex.html")).status, Some(200));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_never_uses_or_leaves_resume_state() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    let (_, spider_resume) = crawl_resumable(&start, json!({}), None, true).await;
+    let spider_resume = spider_resume.expect("stopped spider crawl leaves resume state");
+
+    let listed = vec![start.clone(), site.url("/noindex.html")];
+    // A stopped list crawl leaves nothing to resume.
+    let (_, left) = crawl_resumable(&start, json!({ "listUrls": &listed }), None, true).await;
+    assert!(left.is_none());
+    // A resume state handed to a list crawl is ignored: the list is crawled from scratch.
+    let (out, left) = crawl_resumable(
+        &start,
+        json!({ "listUrls": &listed }),
+        Some(spider_resume),
+        false,
+    )
+    .await;
+    assert!(left.is_none());
+    let mut expected = listed.clone();
+    expected.sort();
+    assert_eq!(out.urls(), expected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn extracts_on_page_signals() {
     let site = FixtureServer::start().await;
     let out = crawl(&site.url("/"), json!({})).await;

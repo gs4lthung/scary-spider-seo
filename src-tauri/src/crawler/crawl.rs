@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use headless_chrome::Browser;
 use reqwest::Client;
 use reqwest::Method;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
@@ -86,6 +86,26 @@ fn retain_in_scope(
         }
     });
     before - frontier.len()
+}
+
+/// The URLs a list-mode crawl seeds its frontier with: every entry that parses as an
+/// http(s) URL, deduplicated on the same fragment-less key the crawler dedups by, in list
+/// order and capped at `MAX_LIST_URLS`. The frontend only sends valid URLs; this still
+/// ignores anything unparsable defensively.
+fn list_mode_seeds(list_urls: &[String]) -> Vec<Url> {
+    let mut seen = HashSet::new();
+    list_urls
+        .iter()
+        .filter_map(|raw| Url::parse(raw.trim()).ok())
+        .filter(|u| matches!(u.scheme(), "http" | "https"))
+        .filter(|u| seen.insert(normalize(u)))
+        .take(MAX_LIST_URLS)
+        .collect()
+}
+
+/// Key robots.txt rules are cached under: one robots.txt applies per scheme, host and port.
+fn robots_key(url: &Url) -> String {
+    url.origin().ascii_serialization()
 }
 
 async fn wait_for_cancellation(cancel: Arc<AtomicBool>) {
@@ -680,13 +700,26 @@ pub async fn run_crawl<R: Runtime>(
         resources_checked,
         resume_slot,
     } = state;
+    // List mode crawls exactly the listed URLs: no link following, no sitemap, no resume.
+    let list_mode = config.is_list_mode();
+    let list_seeds = list_mode_seeds(&config.list_urls);
+    if list_mode && list_seeds.is_empty() {
+        let _ = app.emit(
+            "crawl://error",
+            "The URL list has no valid http or https URLs.".to_string(),
+        );
+        return Vec::new();
+    }
     let start_url = match Url::parse(&config.start_url) {
         Ok(u) => u,
+        // The frontend sets `start_url` to the first listed URL; fall back to it here.
+        Err(_) if list_mode => list_seeds[0].clone(),
         Err(e) => {
             let _ = app.emit("crawl://error", format!("Invalid start URL: {e}"));
             return Vec::new();
         }
     };
+    let resume = if list_mode { None } else { resume };
     // `start_crawl` already rejects invalid patterns before touching state; this
     // compile only fails when `run_crawl` is called directly (tests).
     let scope = match UrlScope::new(&config.include_patterns, &config.exclude_patterns) {
@@ -726,11 +759,17 @@ pub async fn run_crawl<R: Runtime>(
         }
     };
 
-    let robots = if config.respect_robots {
-        Some(RobotsRules::fetch(&client, &start_url).await)
-    } else {
-        None
-    };
+    // robots.txt rules per origin. A spider crawl only ever consults the start URL's
+    // (fetched here); list mode can span hosts, so it fetches each other origin's rules the
+    // first time one of its URLs is dispatched.
+    let start_robots_key = robots_key(&start_url);
+    let mut robots_by_origin: HashMap<String, RobotsRules> = HashMap::new();
+    if config.respect_robots {
+        robots_by_origin.insert(
+            start_robots_key.clone(),
+            RobotsRules::fetch(&client, &start_url).await,
+        );
+    }
 
     {
         let llms_txt_found = match start_url.join("/llms.txt") {
@@ -893,6 +932,21 @@ pub async fn run_crawl<R: Runtime>(
                     r.linked_urls,
                 )
             }
+            None if list_mode => {
+                // Every listed URL at depth 0. `max_pages` does not apply: the list
+                // itself (capped at `MAX_LIST_URLS`) is the limit.
+                let visited: HashSet<String> = list_seeds.iter().map(normalize).collect();
+                let scheduled = list_seeds.len();
+                let frontier: VecDeque<(Url, usize, bool)> =
+                    list_seeds.into_iter().map(|u| (u, 0, false)).collect();
+                (
+                    visited,
+                    frontier,
+                    scheduled,
+                    0usize,
+                    HashSet::<String>::new(),
+                )
+            }
             None => {
                 let mut visited: HashSet<String> = HashSet::new();
                 let mut frontier: VecDeque<(Url, usize, bool)> = VecDeque::new();
@@ -902,7 +956,7 @@ pub async fn run_crawl<R: Runtime>(
             }
         };
 
-    if config.use_sitemap {
+    if config.use_sitemap && !list_mode {
         let sitemap_urls = sitemap::fetch_sitemap_urls(&client, &start_url).await;
         for su in sitemap_urls {
             if su.host_str() != start_url.host_str() || !scope.allows(&su) {
@@ -920,15 +974,6 @@ pub async fn run_crawl<R: Runtime>(
     let mut page_tasks: JoinSet<Option<PageFetchOutcome>> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
 
-    // The site's robots.txt Crawl-delay (if any) always wins over a shorter configured
-    // delay — a user can politely ask to go slower than robots.txt requires, but not faster.
-    let politeness_delay = Duration::from_millis(
-        robots
-            .as_ref()
-            .and_then(|r| r.crawl_delay_ms)
-            .unwrap_or(0)
-            .max(config.delay_ms),
-    );
     let mut last_dispatch: Option<Instant> = None;
 
     loop {
@@ -944,7 +989,24 @@ pub async fn run_crawl<R: Runtime>(
                     break;
                 };
 
-                if let Some(robots) = &robots {
+                let origin_key = if list_mode {
+                    robots_key(&url)
+                } else {
+                    start_robots_key.clone()
+                };
+                if config.respect_robots && !robots_by_origin.contains_key(&origin_key) {
+                    let rules = tokio::select! {
+                        rules = RobotsRules::fetch(&client, &url) => rules,
+                        _ = wait_for_cancellation(cancel.clone()) => {
+                            frontier.push_front((url, depth, via_sitemap));
+                            break;
+                        }
+                    };
+                    robots_by_origin.insert(origin_key.clone(), rules);
+                }
+                let robots = robots_by_origin.get(&origin_key);
+
+                if let Some(robots) = robots {
                     if !robots.is_allowed(url.path()) {
                         crawled_count += 1;
                         let mut result = robots_blocked_result(&url, depth);
@@ -964,6 +1026,15 @@ pub async fn run_crawl<R: Runtime>(
                     }
                 }
 
+                // The host's robots.txt Crawl-delay (if any) always wins over a shorter
+                // configured delay: a user can politely ask to go slower than robots.txt
+                // requires, but not faster.
+                let politeness_delay = Duration::from_millis(
+                    robots
+                        .and_then(|r| r.crawl_delay_ms)
+                        .unwrap_or(0)
+                        .max(config.delay_ms),
+                );
                 if politeness_delay > Duration::ZERO {
                     if let Some(last) = last_dispatch {
                         let elapsed = last.elapsed();
@@ -1032,7 +1103,8 @@ pub async fn run_crawl<R: Runtime>(
                     crawled_count += 1;
                     let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images } = outcome;
 
-                    if result.depth < config.max_depth {
+                    // List mode never follows links, but still records them as linked.
+                    if !list_mode && result.depth < config.max_depth {
                         for link in &discovered_internal {
                             let key = normalize(link);
                             linked_urls.insert(key.clone());
@@ -1052,7 +1124,14 @@ pub async fn run_crawl<R: Runtime>(
                     }
 
                     let page_url = result.url.clone();
-                    let page_is_https = Url::parse(&page_url).map(|u| u.scheme() == "https").unwrap_or(false);
+                    let parsed_page_url = Url::parse(&page_url).ok();
+                    let page_is_https = parsed_page_url.as_ref().is_some_and(|u| u.scheme() == "https");
+                    // A list can span hosts, so "internal" means the listed page's own host there.
+                    let site_host = if list_mode {
+                        parsed_page_url.as_ref().and_then(|u| u.host_str().map(str::to_string))
+                    } else {
+                        start_url.host_str().map(str::to_string)
+                    };
                     let _ = app.emit("crawl://page", &result);
                     if let Ok(mut page_state) = pages.lock() {
                         page_state.push(result);
@@ -1076,7 +1155,7 @@ pub async fn run_crawl<R: Runtime>(
                     }
                     if config.check_images {
                         for (img_url, alt) in discovered_images {
-                            let internal = img_url.host_str() == start_url.host_str();
+                            let internal = img_url.host_str() == site_host.as_deref();
                             let insecure = page_is_https && img_url.scheme() == "http";
                             queue_resource_check(&resource_ctx, &mut resource_tasks, ResourceCandidate {
                                 url: img_url,
@@ -1138,7 +1217,7 @@ pub async fn run_crawl<R: Runtime>(
     // stopped, the crawl had nothing left to do anyway. (Pages whose fetch was already
     // in flight at the moment of cancellation are aborted above and not re-queued here —
     // see `CrawlResumeState`'s doc comment.)
-    let resume = if cancelled && !frontier.is_empty() {
+    let resume = if cancelled && !frontier.is_empty() && !list_mode {
         Some(CrawlResumeState {
             start_url: config.start_url.clone(),
             frontier,
