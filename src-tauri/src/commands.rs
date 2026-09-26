@@ -228,9 +228,20 @@ pub fn save_crawl(
 
 #[tauri::command]
 pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnapshot, String> {
-    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let snapshot: CrawlSnapshot = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    let snapshot = parse_snapshot_file(&path)?;
+    apply_snapshot(&state, &snapshot)?;
+    Ok(snapshot)
+}
 
+/// Reads and parses a saved crawl file. Fields missing from crawls saved by older builds
+/// take their `#[serde(default)]` values.
+fn parse_snapshot_file(path: &str) -> Result<CrawlSnapshot, String> {
+    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map_err(|e| e.to_string())
+}
+
+/// Replaces the current crawl in `state` with `snapshot` (what `load_crawl` does after parsing).
+fn apply_snapshot(state: &AppState, snapshot: &CrawlSnapshot) -> Result<(), String> {
     // A loaded snapshot has no in-progress frontier of its own — any leftover resume
     // state from an earlier stopped crawl no longer corresponds to what's in `pages`
     // now, so it must not be silently resumed into on the next start_crawl.
@@ -248,8 +259,17 @@ pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnaps
             .count(),
         Ordering::Relaxed,
     );
+    Ok(())
+}
 
-    Ok(snapshot)
+/// Parses a saved crawl and returns it without touching `AppState` (unlike `load_crawl`), so
+/// the Compare view can read two crawls while the current crawl stays as it is. Async and
+/// parsed on a blocking thread so a large file never stalls the UI thread.
+#[tauri::command]
+pub async fn read_crawl_snapshot(path: String) -> Result<CrawlSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || parse_snapshot_file(&path))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Writes text built by the frontend (e.g. the bulk issues CSV, whose rows come from the
@@ -261,10 +281,15 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_list_size, save_text_file, validate_config};
+    use super::{
+        apply_snapshot, check_list_size, parse_snapshot_file, read_crawl_snapshot, save_text_file,
+        validate_config,
+    };
+    use crate::crawler::types::CrawlSnapshot;
     use crate::crawler::types::{
         CrawlConfig, CustomSearchRule, ExtractionMode, ExtractionRule, MAX_LIST_URLS,
     };
+    use crate::state::AppState;
 
     fn list_config(len: usize) -> CrawlConfig {
         let mut config: CrawlConfig =
@@ -333,6 +358,47 @@ mod tests {
         let dir = std::env::temp_dir();
         // A directory path can't be written as a file.
         let err = save_text_file(dir.to_string_lossy().into_owned(), String::new()).unwrap_err();
+        assert!(!err.is_empty());
+    }
+
+    fn temp_snapshot_file(name: &str, snapshot: &CrawlSnapshot) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("gseo-{name}-{}.json", std::process::id()));
+        std::fs::write(&path, serde_json::to_string(snapshot).unwrap()).unwrap();
+        path
+    }
+
+    #[test]
+    fn read_crawl_snapshot_leaves_state_untouched() {
+        let legacy: CrawlSnapshot =
+            serde_json::from_str(include_str!("../tests/fixtures/legacy-snapshot.json")).unwrap();
+        let state = AppState::default();
+        let mut current = legacy.clone();
+        current.pages.truncate(1);
+        current.resources.clear();
+        apply_snapshot(&state, &current).unwrap();
+
+        let path = temp_snapshot_file("read-snapshot", &legacy);
+        let read = tauri::async_runtime::block_on(read_crawl_snapshot(
+            path.to_string_lossy().into_owned(),
+        ));
+        let _ = std::fs::remove_file(&path);
+
+        let read = read.expect("snapshot reads");
+        assert_eq!(read.pages.len(), legacy.pages.len());
+        assert_eq!(read.resources.len(), legacy.resources.len());
+        let pages = state.pages.lock().unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].url, current.pages[0].url);
+        assert!(state.resources.is_empty());
+    }
+
+    #[test]
+    fn read_crawl_snapshot_reports_parse_errors_as_strings() {
+        let path =
+            std::env::temp_dir().join(format!("gseo-bad-snapshot-{}.json", std::process::id()));
+        std::fs::write(&path, "not json").unwrap();
+        let err = parse_snapshot_file(&path.to_string_lossy()).unwrap_err();
+        let _ = std::fs::remove_file(&path);
         assert!(!err.is_empty());
     }
 }
