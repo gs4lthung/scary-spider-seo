@@ -32,21 +32,32 @@ the final page of a redirect chain) get counts, and they get one for every rule,
 Robots-blocked, errored and non-HTML URLs have no entry, so they are in neither the "contains" nor
 the "does not contain" filter. The text scope runs over the `body_text` that `parse_page` already
 builds for the word count and hashes (scripts, styles, noscript and template stripped), exposed on
-`ParsedPage`. The counts are a `BTreeMap` so the JSON and CSV order are deterministic. To keep
-`fetch_and_parse` under clippy's argument limit, the mobile audit flag and the compiled rules
-travel together in a per-crawl `PageAnalysis`.
+`ParsedPage`. `parse_page` and `count_matches` run together in one `spawn_blocking` call, since
+both are CPU-bound and would otherwise stall the async workers driving other fetches. The counts
+are a `BTreeMap` so the JSON and CSV order are deterministic. To keep `fetch_and_parse` under
+clippy's argument limit, the mobile audit flag and the compiled rules travel together in a
+per-crawl `PageAnalysis`.
 
-**Saved crawls and resume.** The snapshot format is unchanged: rules are not saved. The frontend
-remembers the rules a crawl started with (`shownSource.customSearches`) and labels rows from them;
-for a loaded crawl, rule ids found on the pages are labelled from the options sheet when it has a
-rule with that id, else "Custom search <id>". Older saved crawls load with empty counts
-(`#[serde(default)]`). A resumed crawl counts its remaining pages with the rules it was resumed
-with; pages from before keep their earlier counts.
+**Saved crawls.** `CrawlSnapshot` gains `custom_searches` (`#[serde(default)]`): `save_crawl`
+takes the rules of the results on screen from the frontend and stores them, and a loaded crawl
+labels its rules from them. Snapshots saved before T3.3 still load, with no rules; rule ids found
+on their pages (none, in practice) are labelled "Custom search <id>". Names are never borrowed
+from the options sheet for a loaded crawl, because a rule there with the same id may count
+something else.
 
-**Ids and export.** The editor numbers ids `cs1`, `cs2`, ... one past the highest in use, so a
-removed rule's id is not reused while its counts may still be on screen. The pages CSV gets a
-`Custom Search: <id>` column per id seen in the crawl (the backend does not know the names),
-blank for pages the rule never ran on.
+**Ids and resume.** The editor gives each new rule a random id (`cs-` and 8 hex digits), never
+derived from the rules in the sheet, so removing a rule and adding another cannot reuse an id
+whose counts may still be on screen. Editing a rule keeps its id (so the editor row keeps focus),
+which only matters when a stopped crawl is continued: then `reconcileCustomSearchIds` gives any
+rule whose pattern, regex flag or scope differs from the earlier part of the crawl a fresh id and
+writes it back to the sheet, so one id never stands for two searches across one crawl's pages.
+The rules shown for a continued crawl are the earlier rules merged with the new ones, so earlier
+columns keep their names, and pages crawled before the resume keep their earlier counts.
+
+**Export.** `export_csv` takes the same rules. The pages CSV gets one `Custom Search: <label>`
+column per rule id with a count on at least one page, where the label is the rule's name, else
+its pattern, else (an id with no known rule) the bare id. The crawl's rules come first in rule
+order, then any other id. Cells are blank for pages the rule never ran on.
 
 **Not issues.** Custom search counts are informational: they get their own "Custom search" group in
 the Overview with a "contains" and a "does not contain" tile per rule, a Pages column per rule and
@@ -57,6 +68,7 @@ costs O(new pages x rules), not a rescan.
 ## Consequences
 
 - No new dependency; the `regex` crate from T3.1 is reused.
-- Saved crawls stay readable in both directions; names of rules of a loaded crawl may fall back
-  to ids.
-- The CSV header shows ids rather than names; a later task could pass names to `export_csv`.
+- Saved crawls stay readable in both directions: older snapshots load with no rules, and older
+  builds ignore the extra `customSearches` field.
+- `save_crawl` and `export_csv` take an optional `customSearches` argument; omitting it saves no
+  rules and heads columns with bare ids.
