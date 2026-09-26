@@ -399,11 +399,17 @@ async fn fetch_and_parse(
         )
         .await
         {
-            Ok((html, violations, mobile_violations)) => {
+            Ok(page) => {
                 rendered = true;
-                accessibility_violations = violations;
-                mobile_usability_violations = mobile_violations;
-                html
+                accessibility_violations = page.accessibility_violations;
+                mobile_usability_violations = page.mobile_usability_violations;
+                // A script or meta refresh that navigated the tab to another document
+                // is not "JavaScript changed this page": drop the raw HTML so the
+                // two documents are never compared.
+                if !render::rendered_same_document(&final_url, &page.final_url) {
+                    raw_body = None;
+                }
+                page.html
             }
             // Rendering failed: parse the raw HTML instead, reusing it when already fetched.
             Err(_) if raw_body.is_some() => raw_body.take().unwrap_or_default(),
