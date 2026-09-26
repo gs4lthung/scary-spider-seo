@@ -236,6 +236,7 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
     match path {
         "/old-page" => return redirect("/new-page.html"),
         "/redirect-to-gone" => return redirect("/gone.html"),
+        "/start-redirect" => return redirect("/"),
         "/loop-a" => return redirect("/loop-b"),
         "/loop-b" => return redirect("/loop-a"),
         "/img/ok.png" | "/img/decorative.png" | "/img/logo.png" => {
@@ -449,7 +450,7 @@ async fn site_info_still_reports_technologies() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn resumed_crawl_reports_site_info_without_technologies() {
+async fn resumed_crawl_sends_no_site_info() {
     let site = FixtureServer::start().await;
     let start = site.url("/");
     let queued = site.url("/dup-a.html");
@@ -469,11 +470,68 @@ async fn resumed_crawl_reports_site_info_without_technologies() {
         0,
         "the start page is not refetched"
     );
+    // The first run's site info (with technologies) stays what the user sees.
+    assert!(out.site_info.is_empty(), "{:?}", out.site_info);
+    assert_eq!(
+        site.request_count("GET", "/llms.txt"),
+        0,
+        "no site info lookups"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resumed_crawl_with_the_start_page_queued_reports_technologies() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    // Stopped before anything was fetched, so `/` is still queued.
+    let (_, resume) = crawl_resumable(&start, json!({}), None, true).await;
+    let resume = resume.expect("a stopped crawl leaves resume state");
+    let (out, _) = crawl_resumable(&start, json!({ "maxDepth": 0 }), Some(resume), false).await;
+    assert_eq!(out.urls(), vec![start.as_str()]);
     assert_eq!(out.site_info.len(), 1, "site info is emitted once");
-    let info = &out.site_info[0];
-    assert_eq!(info["server"], serde_json::Value::Null);
-    assert_eq!(info["technologies"], json!([]));
-    assert_eq!(info["llmsTxtUrl"], site.url("/llms.txt"));
+    assert_eq!(out.site_info[0]["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(site.request_count("GET", "/"), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_reports_technologies_when_the_start_url_is_listed() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    let out = crawl(
+        &start,
+        json!({ "listUrls": [&start, site.url("/dup-a.html")] }),
+    )
+    .await;
+    assert_eq!(out.pages.len(), 2);
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    assert_eq!(out.site_info[0]["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(site.request_count("GET", "/"), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_sends_site_info_once_when_the_start_url_is_not_listed() {
+    let site = FixtureServer::start().await;
+    let dup_a = site.url("/dup-a.html");
+    let out = crawl(&site.url("/"), json!({ "listUrls": [&dup_a] })).await;
+    assert_eq!(out.urls(), vec![dup_a.as_str()]);
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    // `/` is neither crawled nor probed, so there is nothing to detect from.
+    assert_eq!(out.site_info[0]["server"], serde_json::Value::Null);
+    assert_eq!(out.site_info[0]["llmsTxtUrl"], site.url("/llms.txt"));
+    assert_eq!(site.request_count("GET", "/"), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn redirecting_start_page_reports_the_target_headers() {
+    let site = FixtureServer::start().await;
+    // `/start-redirect` answers 301 without a `Server` header; its target `/` has one.
+    let start = site.url("/start-redirect");
+    let out = crawl(&start, json!({ "maxDepth": 0 })).await;
+    assert_eq!(out.page(&start).redirect_url, Some(site.url("/")));
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    assert_eq!(out.site_info[0]["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(site.request_count("GET", "/start-redirect"), 1);
+    assert_eq!(site.request_count("GET", "/"), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]

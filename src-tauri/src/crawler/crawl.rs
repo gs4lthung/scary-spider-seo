@@ -322,8 +322,11 @@ async fn fetch_and_parse(
     let started = Instant::now();
 
     // Rendering takes the body from Chrome, so a plain HEAD is enough unless the raw
-    // HTML is wanted too for the raw vs rendered comparison.
-    let fetch_raw_html = browser.is_some() && analysis.compare_raw_html;
+    // HTML is wanted too: for the raw vs rendered comparison, or on the start page, whose
+    // GET headers and raw HTML feed site info exactly like the standalone probe it
+    // replaced (a HEAD may answer with different headers, and the rendered DOM can be a
+    // different document after a script navigation).
+    let fetch_raw_html = browser.is_some() && (analysis.compare_raw_html || detect_site_tech);
     let request_method = if browser.is_some() && !fetch_raw_html {
         Method::HEAD
     } else {
@@ -434,6 +437,8 @@ async fn fetch_and_parse(
     let mut accessibility_violations = Vec::new();
     let mut mobile_usability_violations = Vec::new();
     let mut raw_body: Option<String> = None;
+    // The start page's raw HTML for `detect_from_html` when the parsed body is rendered.
+    let mut site_tech_html: Option<String> = None;
     let body: String = if let Some(browser) = browser {
         if fetch_raw_html {
             match resp.text().await {
@@ -443,6 +448,10 @@ async fn fetch_and_parse(
                     return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                 }
             }
+        }
+        // Kept apart from `raw_body`, which is dropped below when the tab navigated away.
+        if detect_site_tech {
+            site_tech_html = raw_body.clone();
         }
         // A rendered page opens a full Chrome tab — much heavier than a plain fetch —
         // so it's throttled by its own (CPU-core-scaled) semaphore independent of
@@ -509,9 +518,14 @@ async fn fetch_and_parse(
     // workers that drive every other in-flight fetch.
     let parse_url = final_url.clone();
     let parse_analysis = analysis.clone();
-    // Raw signals only mean something next to a rendered body; the fallback path above
-    // already parses the raw HTML as the page itself.
-    let raw_body = if rendered { raw_body } else { None };
+    // Raw signals only mean something next to a rendered body, and only when asked for
+    // (the start page may have fetched its raw HTML for site info alone); the fallback
+    // path above already parses the raw HTML as the page itself.
+    let raw_body = if rendered && analysis.compare_raw_html {
+        raw_body
+    } else {
+        None
+    };
     let detect_html_tech = site_tech.is_some();
     let parse_result = tokio::task::spawn_blocking(move || {
         let parsed = parse_page_with(&body, &parse_url, &parse_analysis.extraction);
@@ -519,9 +533,10 @@ async fn fetch_and_parse(
             .custom_search
             .count_matches(&body, &parsed.body_text);
         let raw = raw_body.map(|raw| parse_raw_signals(&raw, &parse_url));
-        // The parsed body is the rendered HTML when JS rendering is on, the raw HTML
-        // otherwise; either way the markers `detect_from_html` looks for are in it.
-        let html_tech = detect_html_tech.then(|| techdetect::detect_from_html(&body));
+        // Always the raw HTML, as the old standalone probe saw it: the start page's own
+        // GET body when rendering, the parsed body (which is raw) otherwise.
+        let html_tech = detect_html_tech
+            .then(|| techdetect::detect_from_html(site_tech_html.as_deref().unwrap_or(&body)));
         (parsed, counts, raw, html_tech)
     })
     .await;
@@ -925,10 +940,24 @@ pub async fn run_crawl<R: Runtime>(
         robots_by_origin.insert(start_robots_key.clone(), Arc::new(OnceCell::from(rules)));
     }
 
+    // A resumed crawl whose first run already fetched the start page sends no site info
+    // at all: the first run sent the complete one (with technologies) in this same
+    // session, and resume state never survives a different start URL or a loaded crawl,
+    // so re-sending would only replace it with a copy missing the technologies. Only when
+    // the first run stopped before fetching the start page (it is still queued) is site
+    // info gathered again, and then completed from that fetch as usual.
+    let start_key = normalize(&start_url);
+    let is_start_page = |url: &Url| normalize(url) == start_key;
+    let send_site_info = resume
+        .as_ref()
+        .is_none_or(|r| r.frontier.iter().any(|(url, _, _)| is_start_page(url)));
+
     // Everything site info needs except the technologies, which come from the start
     // page's own crawl fetch (see `PageTarget::detect_site_tech`), so the start URL is
     // requested once. Emitted by `emit_site_info` when that page's outcome arrives.
-    let mut pending_site_info = {
+    let mut pending_site_info = if !send_site_info {
+        None
+    } else {
         let llms_txt_found = match start_url.join("/llms.txt") {
             Ok(llms_txt_url) => matches!(
                 client.get(llms_txt_url).send().await,
@@ -1107,11 +1136,8 @@ pub async fn run_crawl<R: Runtime>(
     }
 
     // Site info waits for the start page's outcome, which brings the technologies. When
-    // this crawl will never fetch the start page, emit it now without them: a resumed
-    // crawl already fetched the start page before it was stopped (its frontier only
-    // holds the rest), and list mode may not list the start URL at all.
-    let start_key = normalize(&start_url);
-    let is_start_page = |url: &Url| normalize(url) == start_key;
+    // this crawl will never fetch the start page (list mode need not list the start
+    // URL), emit it now without them.
     if !frontier.iter().any(|(url, _, _)| is_start_page(url)) {
         emit_site_info(&app, &mut pending_site_info, None);
     }
