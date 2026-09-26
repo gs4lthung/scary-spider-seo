@@ -1129,7 +1129,7 @@ function App() {
           onPause={handlePause}
           onResume={handleResume}
         />
-        <CrawlOptionsSheet config={config} running={running} onChange={setConfig} />
+        <CrawlOptionsSheet config={config} running={running} listMode={crawlMode === "list"} onChange={setConfig} />
         <div className="flex-1" />
         <ThemeToggle />
       </header>

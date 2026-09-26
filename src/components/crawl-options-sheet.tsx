@@ -21,6 +21,8 @@ import type { CrawlConfig } from "@/types";
 interface CrawlOptionsSheetProps {
   config: CrawlConfig;
   running: boolean;
+  /** List mode crawls only the listed URLs, so the include/exclude patterns do not apply. */
+  listMode?: boolean;
   onChange: (config: CrawlConfig) => void;
 }
 
@@ -64,7 +66,7 @@ function PatternField({ label, hint, placeholder, patterns, disabled, onChange }
   );
 }
 
-export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsSheetProps) {
+export function CrawlOptionsSheet({ config, running, listMode = false, onChange }: CrawlOptionsSheetProps) {
   function set<K extends keyof CrawlConfig>(key: K, value: CrawlConfig[K]) {
     onChange({ ...config, [key]: value });
   }
@@ -267,12 +269,17 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
           <Separator />
 
           <div className="flex flex-col gap-4">
+            {listMode && (
+              <p className="text-xs text-muted-foreground">
+                List mode crawls exactly the listed URLs, so include and exclude patterns are not applied.
+              </p>
+            )}
             <PatternField
               label="Include URL patterns"
               hint="Regular expressions, one per line, matched against the full URL. When any are set, only matching URLs are crawled. The start URL is always crawled."
               placeholder="/blog/"
               patterns={config.includePatterns}
-              disabled={running}
+              disabled={running || listMode}
               onChange={(patterns) => set("includePatterns", patterns)}
             />
             <PatternField
@@ -280,7 +287,7 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
               hint="Regular expressions, one per line. Matching URLs are skipped, even if they match an include pattern."
               placeholder={String.raw`\?sort=` + "\n/tag/"}
               patterns={config.excludePatterns}
-              disabled={running}
+              disabled={running || listMode}
               onChange={(patterns) => set("excludePatterns", patterns)}
             />
           </div>
