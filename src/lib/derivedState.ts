@@ -96,10 +96,11 @@ function ingestPage(t: DerivedTrackers, p: PageResult): void {
   ingestExtractionIds(t.extractionIds, p);
 }
 
-/** Whether `pages` still starts with every page `t` has ingested, i.e. it was only appended to. */
-export function isAppendOf(pages: readonly PageResult[], ingested: number, lastPage: PageResult | null): boolean {
-  if (ingested > pages.length) return false;
-  return ingested === 0 || pages[ingested - 1] === lastPage;
+/** Whether `items` still starts with the `ingested` items seen so far (the last of them being
+ * `lastItem`), i.e. it was only appended to since. */
+export function isAppendOf<T>(items: readonly T[], ingested: number, lastItem: T | null): boolean {
+  if (ingested > items.length) return false;
+  return ingested === 0 || items[ingested - 1] === lastItem;
 }
 
 /**
