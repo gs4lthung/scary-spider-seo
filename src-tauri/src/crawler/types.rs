@@ -145,6 +145,26 @@ pub struct PageResult {
     pub rendered: bool,
     #[serde(default)]
     pub hsts: bool,
+    /// Raw `Content-Security-Policy` response header, if sent.
+    #[serde(default)]
+    pub content_security_policy: Option<String>,
+    /// Raw `X-Frame-Options` response header, if sent.
+    #[serde(default)]
+    pub x_frame_options: Option<String>,
+    /// Raw `X-Content-Type-Options` response header, if sent.
+    #[serde(default)]
+    pub x_content_type_options: Option<String>,
+    /// Raw `Referrer-Policy` response header, if sent.
+    #[serde(default)]
+    pub referrer_policy: Option<String>,
+    /// True when the four security header fields above were read from a response.
+    /// False for crawls saved before they existed (and for fetch errors), so the
+    /// frontend does not report every page of an old crawl as missing them.
+    #[serde(default)]
+    pub security_headers_captured: bool,
+    /// Scripts, stylesheets, iframes and media loaded over `http:` from an `https:` page.
+    #[serde(default)]
+    pub mixed_content_count: usize,
     #[serde(default)]
     pub insecure_link_count: usize,
     #[serde(default)]

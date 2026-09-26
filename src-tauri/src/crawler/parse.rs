@@ -886,7 +886,10 @@ mod tests {
             <iframe src="http://embed.example.com/"></iframe>"#;
         let http_base = Url::parse("http://example.com/").unwrap();
         assert_eq!(parse_page(html, &http_base).mixed_content_count, 0);
-        assert_eq!(parse(r#"<script src="/a.js"></script>"#).mixed_content_count, 0);
+        assert_eq!(
+            parse(r#"<script src="/a.js"></script>"#).mixed_content_count,
+            0
+        );
     }
 
     #[test]
