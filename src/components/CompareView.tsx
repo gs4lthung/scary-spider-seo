@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ArrowRightLeft, FileJson, Loader2 } from "lucide-react";
+import { ArrowRightLeft, FileJson, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,7 @@ import { LinkCell } from "@/components/link-cell";
 import { cn } from "@/lib/utils";
 import {
   type ChangedFieldRow,
+  type ComparableCrawl,
   type CompareOptions,
   type CompareUrlRow,
   type ComparedValue,
@@ -28,14 +29,34 @@ import type { CrawlSnapshot } from "../types";
 type Side = "before" | "after";
 type View = "added" | "removed" | "changed" | "issues";
 
+/** A saved crawl chosen for comparison. Only what the comparison and the picker read is kept,
+ * not the rest of the snapshot. */
 interface LoadedCrawl {
+  /** Unique per pick, so a result can be tied to the exact pair it was computed from. */
+  id: number;
   path: string;
-  snapshot: CrawlSnapshot;
+  startUrl: string;
+  savedAtUnixMs: number;
+  crawl: ComparableCrawl;
+}
+
+/** A comparison with the inputs it was computed from. */
+interface ComparisonResult {
+  inputKey: string;
+  comparison: CrawlComparison;
 }
 
 interface IssueDeltaRow extends IssueDelta {
   label: string;
-  change: number;
+  /** Null when the issue is not comparable between the two crawls. */
+  change: number | null;
+}
+
+const INCOMPARABLE_HINT = "One of the crawls was saved before the data for this check was collected.";
+
+function inputKey(before: LoadedCrawl | null, after: LoadedCrawl | null, options: CompareOptions): string | null {
+  if (!before || !after) return null;
+  return JSON.stringify([before.id, after.id, options.mapHostFrom ?? "", options.mapHostTo ?? ""]);
 }
 
 function fileName(path: string): string {
@@ -74,7 +95,7 @@ const CHANGED_COLUMNS: ColumnDef<ChangedFieldRow, ComparedValue>[] = [
   },
 ];
 
-const ISSUE_COLUMNS: ColumnDef<IssueDeltaRow, string | number>[] = [
+const ISSUE_COLUMNS: ColumnDef<IssueDeltaRow, string | number | null>[] = [
   { accessorKey: "label", header: "Issue", size: 320 },
   { accessorKey: "before", header: "Before", size: 100 },
   { accessorKey: "after", header: "After", size: 100 },
@@ -83,7 +104,14 @@ const ISSUE_COLUMNS: ColumnDef<IssueDeltaRow, string | number>[] = [
     header: "Change",
     size: 100,
     cell: (c) => {
-      const change = c.getValue() as number;
+      const change = c.getValue() as number | null;
+      if (change === null) {
+        return (
+          <span className="text-muted-foreground" title={INCOMPARABLE_HINT}>
+            n/a
+          </span>
+        );
+      }
       return (
         <span className={cn(change > 0 && "text-destructive", change < 0 && "text-emerald-600 dark:text-emerald-400")}>
           {change > 0 ? `+${change}` : change}
@@ -122,16 +150,17 @@ interface CrawlPickerProps {
   side: Side;
   crawl: LoadedCrawl | null;
   loading: boolean;
+  disabled: boolean;
   onPick: (side: Side) => void;
 }
 
-function CrawlPicker({ side, crawl, loading, onPick }: CrawlPickerProps) {
+function CrawlPicker({ side, crawl, loading, disabled, onPick }: CrawlPickerProps) {
   const title = side === "before" ? "Earlier crawl" : "Later crawl";
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-lg border bg-card p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground uppercase">{title}</span>
-        <Button variant="outline" size="sm" onClick={() => onPick(side)} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => onPick(side)} disabled={loading || disabled}>
           {loading ? <Loader2 className="animate-spin" /> : <FileJson />}
           {crawl ? "Change…" : "Choose file…"}
         </Button>
@@ -141,12 +170,12 @@ function CrawlPicker({ side, crawl, loading, onPick }: CrawlPickerProps) {
           <div className="truncate font-medium" title={crawl.path}>
             {fileName(crawl.path)}
           </div>
-          <div className="truncate text-xs text-muted-foreground" title={crawl.snapshot.startUrl}>
-            {crawl.snapshot.startUrl}
+          <div className="truncate text-xs text-muted-foreground" title={crawl.startUrl}>
+            {crawl.startUrl}
           </div>
           <div className="text-xs text-muted-foreground">
-            {crawl.snapshot.pages.length.toLocaleString()} pages
-            {crawl.snapshot.savedAtUnixMs > 0 && `, saved ${new Date(crawl.snapshot.savedAtUnixMs).toLocaleString()}`}
+            {crawl.crawl.pages.length.toLocaleString()} pages
+            {crawl.savedAtUnixMs > 0 && `, saved ${new Date(crawl.savedAtUnixMs).toLocaleString()}`}
           </div>
         </div>
       ) : (
@@ -190,73 +219,115 @@ export function CompareView() {
   const [mapHostFrom, setMapHostFrom] = useState("");
   const [mapHostTo, setMapHostTo] = useState("");
   const [comparing, setComparing] = useState(false);
-  const [result, setResult] = useState<CrawlComparison | null>(null);
+  const [result, setResult] = useState<ComparisonResult | null>(null);
   const [view, setView] = useState<View>("changed");
   const [onlyChangedIssues, setOnlyChangedIssues] = useState(true);
-  // Ignores a slow comparison's answer once a newer one has started.
+  // Bumped whenever the chosen files change or a comparison starts, so a slow comparison's
+  // answer is dropped once it no longer matches what is on screen.
   const runIdRef = useRef(0);
+  const nextCrawlIdRef = useRef(1);
 
-  const pick = useCallback(async (side: Side) => {
-    try {
-      const path = await open({
-        multiple: false,
-        filters: [{ name: "Scary Spider SEO Crawl", extensions: ["json"] }],
-      });
-      if (!path || typeof path !== "string") return;
-      setLoadingSide(side);
-      const snapshot = await invoke<CrawlSnapshot>("read_crawl_snapshot", { path });
-      setCrawls((prev) => ({ ...prev, [side]: { path, snapshot } }));
-      setResult(null);
-    } catch (err) {
-      toast.error(String(err));
-    } finally {
-      setLoadingSide(null);
-    }
-  }, []);
-
-  const swap = useCallback(() => {
-    setCrawls((prev) => ({ before: prev.after, after: prev.before }));
+  const invalidate = useCallback(() => {
+    runIdRef.current += 1;
+    setComparing(false);
     setResult(null);
   }, []);
 
+  const pick = useCallback(
+    async (side: Side) => {
+      try {
+        const path = await open({
+          multiple: false,
+          filters: [{ name: "Scary Spider SEO Crawl", extensions: ["json"] }],
+        });
+        if (!path || typeof path !== "string") return;
+        setLoadingSide(side);
+        const snapshot = await invoke<CrawlSnapshot>("read_crawl_snapshot", { path });
+        const loaded: LoadedCrawl = {
+          id: nextCrawlIdRef.current++,
+          path,
+          startUrl: snapshot.startUrl,
+          savedAtUnixMs: snapshot.savedAtUnixMs,
+          crawl: { pages: snapshot.pages, resources: snapshot.resources },
+        };
+        invalidate();
+        setCrawls((prev) => ({ ...prev, [side]: loaded }));
+      } catch (err) {
+        toast.error(String(err));
+      } finally {
+        setLoadingSide(null);
+      }
+    },
+    [invalidate],
+  );
+
+  const swap = useCallback(() => {
+    invalidate();
+    setCrawls((prev) => ({ before: prev.after, after: prev.before }));
+  }, [invalidate]);
+
+  /** Drops both crawls (and the result that references them) so their memory is released. */
+  const clear = useCallback(() => {
+    invalidate();
+    setCrawls({ before: null, after: null });
+  }, [invalidate]);
+
+  const options = useMemo<CompareOptions>(() => ({ mapHostFrom, mapHostTo }), [mapHostFrom, mapHostTo]);
+  const currentKey = inputKey(crawls.before, crawls.after, options);
+
   const compare = useCallback(async () => {
     const { before, after } = crawls;
-    if (!before || !after) return;
+    const key = inputKey(before, after, options);
+    if (!before || !after || !key) return;
     const runId = ++runIdRef.current;
-    const options: CompareOptions = { mapHostFrom, mapHostTo };
     setComparing(true);
     try {
-      const comparison = await runComparison({
-        before: { pages: before.snapshot.pages, resources: before.snapshot.resources },
-        after: { pages: after.snapshot.pages, resources: after.snapshot.resources },
-        options,
-      });
-      if (runId === runIdRef.current) setResult(comparison);
+      const comparison = await runComparison({ before: before.crawl, after: after.crawl, options });
+      if (runId === runIdRef.current) setResult({ inputKey: key, comparison });
     } catch (err) {
       if (runId === runIdRef.current) toast.error(String(err));
     } finally {
       if (runId === runIdRef.current) setComparing(false);
     }
-  }, [crawls, mapHostFrom, mapHostTo]);
+  }, [crawls, options]);
 
-  const changedRows = useMemo(() => (result ? changedFieldRows(result.changed) : []), [result]);
+  // A result for other files or another host mapping is never shown as if it were current.
+  const shown = result !== null && result.inputKey === currentKey ? result.comparison : null;
+  const stale = result !== null && shown === null;
+
+  const changedRows = useMemo(() => (shown ? changedFieldRows(shown.changed) : []), [shown]);
   const issueRows = useMemo<IssueDeltaRow[]>(() => {
-    if (!result) return [];
-    return result.issueDeltas
-      .filter((d) => !onlyChangedIssues || d.before !== d.after)
-      .map((d) => ({ ...d, label: getIssueDef(d.key)?.label ?? d.key, change: d.after - d.before }));
-  }, [result, onlyChangedIssues]);
+    if (!shown) return [];
+    return shown.issueDeltas
+      .filter((d) => !onlyChangedIssues || (d.comparable && d.before !== d.after))
+      .map((d) => ({
+        ...d,
+        label: getIssueDef(d.key)?.label ?? d.key,
+        change: d.comparable ? d.after - d.before : null,
+      }));
+  }, [shown, onlyChangedIssues]);
   const changedIssueCount = useMemo(
-    () => (result ? result.issueDeltas.filter((d) => d.before !== d.after).length : 0),
-    [result],
+    () => (shown ? shown.issueDeltas.filter((d) => d.comparable && d.before !== d.after).length : 0),
+    [shown],
+  );
+  const incomparableIssueCount = useMemo(
+    () => (shown ? shown.issueDeltas.filter((d) => !d.comparable).length : 0),
+    [shown],
   );
 
   const bothChosen = crawls.before !== null && crawls.after !== null;
+  const anyChosen = crawls.before !== null || crawls.after !== null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-stretch gap-2">
-        <CrawlPicker side="before" crawl={crawls.before} loading={loadingSide === "before"} onPick={pick} />
+        <CrawlPicker
+          side="before"
+          crawl={crawls.before}
+          loading={loadingSide === "before"}
+          disabled={comparing}
+          onPick={pick}
+        />
         <Button
           variant="ghost"
           size="icon"
@@ -268,7 +339,13 @@ export function CompareView() {
         >
           <ArrowRightLeft />
         </Button>
-        <CrawlPicker side="after" crawl={crawls.after} loading={loadingSide === "after"} onPick={pick} />
+        <CrawlPicker
+          side="after"
+          crawl={crawls.after}
+          loading={loadingSide === "after"}
+          disabled={comparing}
+          onPick={pick}
+        />
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
@@ -300,29 +377,33 @@ export function CompareView() {
           {comparing && <Loader2 className="animate-spin" />}
           Compare
         </Button>
+        <Button variant="outline" size="sm" onClick={clear} disabled={!anyChosen || loadingSide !== null}>
+          <X />
+          Clear
+        </Button>
         <p className="text-xs text-muted-foreground">
           Optional: map a host in both crawls before matching URLs, for example staging against production.
         </p>
       </div>
 
-      {result ? (
+      {shown ? (
         <>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Comparison results">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Comparison results">
             <SummaryButton
               label="Added URLs"
-              count={result.added.length}
+              count={shown.added.length}
               active={view === "added"}
               onClick={() => setView("added")}
             />
             <SummaryButton
               label="Removed URLs"
-              count={result.removed.length}
+              count={shown.removed.length}
               active={view === "removed"}
               onClick={() => setView("removed")}
             />
             <SummaryButton
               label="Changed URLs"
-              count={result.changed.length}
+              count={shown.changed.length}
               active={view === "changed"}
               onClick={() => setView("changed")}
             />
@@ -333,7 +414,7 @@ export function CompareView() {
               onClick={() => setView("issues")}
             />
             {view === "issues" && (
-              <div className="flex items-center gap-2 self-center pl-2">
+              <div className="flex items-center gap-2 pl-2">
                 <Checkbox
                   id="compare-only-changed"
                   checked={onlyChangedIssues}
@@ -345,10 +426,26 @@ export function CompareView() {
               </div>
             )}
           </div>
+          {(shown.collisions.before > 0 || shown.collisions.after > 0 || incomparableIssueCount > 0) && (
+            <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+              {(shown.collisions.before > 0 || shown.collisions.after > 0) && (
+                <p>
+                  Skipped pages whose URL matched an earlier page after removing fragments and mapping hosts: earlier
+                  crawl {shown.collisions.before.toLocaleString()}, later crawl {shown.collisions.after.toLocaleString()}.
+                </p>
+              )}
+              {incomparableIssueCount > 0 && (
+                <p>
+                  {incomparableIssueCount} issue {incomparableIssueCount === 1 ? "count is" : "counts are"} shown as
+                  n/a because one crawl was saved before the data for them was collected.
+                </p>
+              )}
+            </div>
+          )}
           <div className="min-h-0 flex-1">
             {view === "added" && (
               <DataTable
-                data={result.added}
+                data={shown.added}
                 columns={URL_ROW_COLUMNS}
                 emptyLabel="No URLs were added."
                 storageKey="compare-urls"
@@ -356,7 +453,7 @@ export function CompareView() {
             )}
             {view === "removed" && (
               <DataTable
-                data={result.removed}
+                data={shown.removed}
                 columns={URL_ROW_COLUMNS}
                 emptyLabel="No URLs were removed."
                 storageKey="compare-urls"
@@ -383,9 +480,13 @@ export function CompareView() {
         </>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {bothChosen
-            ? "Press Compare to see what changed between the two crawls."
-            : "Choose two saved crawl files to compare. The crawl on screen is not changed."}
+          {!bothChosen
+            ? "Choose two saved crawl files to compare. The crawl on screen is not changed."
+            : comparing
+              ? "Comparing…"
+              : stale
+                ? "The host mapping changed. Press Compare to update the results."
+                : "Press Compare to see what changed between the two crawls."}
         </p>
       )}
     </div>
