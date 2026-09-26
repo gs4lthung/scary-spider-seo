@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 2,
     "startedAt": "2026-09-25T19:43:46.001Z",
-    "lastProgressAt": "2026-09-26T00:48:05.606Z"
+    "lastProgressAt": "2026-09-26T01:21:09.470Z"
   },
   "tasks": {
     "T1.1": {
@@ -131,10 +131,10 @@
       "deps": [
         "T2.3"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.940Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "f71f2c8",
+      "updatedAt": "2026-09-26T01:21:09.469Z"
     },
     "T2.5": {
       "title": "Security headers and mixed content",
