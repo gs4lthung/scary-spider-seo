@@ -1,9 +1,10 @@
 {
   "run": {
-    "active": true,
+    "active": false,
     "milestone": 4,
     "startedAt": "2026-09-26T06:47:42.306Z",
-    "lastProgressAt": "2026-09-26T07:43:04.574Z"
+    "lastProgressAt": "2026-09-26T09:13:50.029Z",
+    "finishedAt": "2026-09-26T09:13:50.242Z"
   },
   "tasks": {
     "T1.1": {
@@ -274,20 +275,20 @@
       "deps": [
         "T4.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.106Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "2d4df63",
+      "updatedAt": "2026-09-26T09:13:50.028Z"
     },
     "T4.3": {
       "title": "Throttle crawl progress events",
       "milestone": 4,
       "plan": "docs/plan/M4-optimization.md",
       "deps": [],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.106Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "3f43659",
+      "updatedAt": "2026-09-26T08:09:07.574Z"
     },
     "T4.4": {
       "title": "Stream saved crawls instead of cloning and pretty-printing",
@@ -316,10 +317,10 @@
       "deps": [
         "T4.5"
       ],
-      "status": "in_progress",
+      "status": "done",
       "attempts": 1,
-      "note": "",
-      "updatedAt": "2026-09-26T07:27:26.990Z"
+      "note": "83ad26b",
+      "updatedAt": "2026-09-26T08:03:07.461Z"
     }
   }
 }
