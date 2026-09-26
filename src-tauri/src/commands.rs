@@ -200,7 +200,7 @@ pub fn export_csv(
 }
 
 #[tauri::command]
-pub fn save_crawl(
+pub async fn save_crawl(
     state: State<'_, AppState>,
     path: String,
     start_url: String,
@@ -211,29 +211,76 @@ pub fn save_crawl(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
-    let custom_searches = custom_searches.unwrap_or_default();
-    let extractions = extractions.unwrap_or_default();
-
-    // Serialize straight from the locked state: no clone of pages or resources. The
-    // resource guards hold shard read locks only for the duration of the write.
-    let pages = lock_state(&state.pages)?;
-    let resource_guards: Vec<_> = state.resources.iter().collect();
-    let snapshot = CrawlSnapshotRef {
-        start_url: &start_url,
+    let meta = SaveMeta {
+        start_url,
         saved_at_unix_ms,
-        pages: &pages,
-        resources: resource_guards.iter().map(|r| r.value()).collect(),
-        custom_searches: &custom_searches,
-        extractions: &extractions,
+        custom_searches: custom_searches.unwrap_or_default(),
+        extractions: extractions.unwrap_or_default(),
     };
-    snapshot::write_snapshot(Path::new(&path), &snapshot)
+    let state = AppState::clone(&state);
+    // Serializing and writing a large crawl takes a while; keep it off the UI thread.
+    tauri::async_runtime::spawn_blocking(move || save_state(&state, Path::new(&path), &meta))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The parts of a saved crawl that don't come from `AppState`.
+struct SaveMeta {
+    start_url: String,
+    saved_at_unix_ms: u64,
+    custom_searches: Vec<CustomSearchRule>,
+    extractions: Vec<ExtractionRule>,
+}
+
+impl SaveMeta {
+    fn snapshot_ref<'a>(
+        &'a self,
+        pages: &'a [PageResult],
+        resources: Vec<&'a ResourceResult>,
+    ) -> CrawlSnapshotRef<'a> {
+        CrawlSnapshotRef {
+            start_url: &self.start_url,
+            saved_at_unix_ms: self.saved_at_unix_ms,
+            pages,
+            resources,
+            custom_searches: &self.custom_searches,
+            extractions: &self.extractions,
+        }
+    }
+}
+
+/// Writes the crawl in `state` to `path` (what `save_crawl` does off the UI thread).
+///
+/// While a crawl is running, pages and resources are cloned under their locks and the
+/// locks are released before the (slow) serialize, write and fsync, so the crawl loop
+/// never waits on a save. With no crawl running nothing contends for the locks, so the
+/// file is streamed straight from the locked state with no copy.
+fn save_state(state: &AppState, path: &Path, meta: &SaveMeta) -> Result<(), String> {
+    if state.running.load(Ordering::SeqCst) {
+        let pages = lock_state(&state.pages)?.clone();
+        let resources: Vec<ResourceResult> =
+            state.resources.iter().map(|r| r.value().clone()).collect();
+        snapshot::write_snapshot(path, &meta.snapshot_ref(&pages, resources.iter().collect()))
+    } else {
+        let pages = lock_state(&state.pages)?;
+        let guards: Vec<_> = state.resources.iter().collect();
+        let resources = guards.iter().map(|r| r.value()).collect();
+        snapshot::write_snapshot(path, &meta.snapshot_ref(&pages, resources))
+    }
 }
 
 #[tauri::command]
-pub fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnapshot, String> {
-    let snapshot = parse_snapshot_file(&path)?;
-    apply_snapshot(&state, &snapshot)?;
-    Ok(snapshot)
+pub async fn load_crawl(state: State<'_, AppState>, path: String) -> Result<CrawlSnapshot, String> {
+    let state = AppState::clone(&state);
+    // Reading, parsing and copying a large crawl into state takes a while; keep it off the
+    // UI thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        let snapshot = parse_snapshot_file(&path)?;
+        apply_snapshot(&state, &snapshot)?;
+        Ok(snapshot)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Reads and parses a saved crawl file (compact or pretty-printed, any build's format).
@@ -283,14 +330,15 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_snapshot, check_list_size, parse_snapshot_file, read_crawl_snapshot, save_text_file,
-        validate_config,
+        apply_snapshot, check_list_size, parse_snapshot_file, read_crawl_snapshot, save_state,
+        save_text_file, validate_config, SaveMeta,
     };
     use crate::crawler::types::CrawlSnapshot;
     use crate::crawler::types::{
         CrawlConfig, CustomSearchRule, ExtractionMode, ExtractionRule, MAX_LIST_URLS,
     };
     use crate::state::AppState;
+    use std::sync::atomic::Ordering;
 
     fn list_config(len: usize) -> CrawlConfig {
         let mut config: CrawlConfig =
@@ -401,5 +449,60 @@ mod tests {
         let err = parse_snapshot_file(&path.to_string_lossy()).unwrap_err();
         let _ = std::fs::remove_file(&path);
         assert!(!err.is_empty());
+    }
+
+    fn saved_meta(start_url: &str) -> SaveMeta {
+        SaveMeta {
+            start_url: start_url.to_string(),
+            saved_at_unix_ms: 42,
+            custom_searches: Vec::new(),
+            extractions: Vec::new(),
+        }
+    }
+
+    /// Saves the legacy fixture from `AppState` with the crawl flagged running or idle and
+    /// checks the file loads back with the same pages and resources.
+    fn save_state_round_trips(running: bool) {
+        let legacy: CrawlSnapshot =
+            serde_json::from_str(include_str!("../tests/fixtures/legacy-snapshot.json")).unwrap();
+        let state = AppState::default();
+        apply_snapshot(&state, &legacy).unwrap();
+        state.running.store(running, Ordering::SeqCst);
+
+        let dir =
+            std::env::temp_dir().join(format!("gseo-save-state-{running}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("crawl.json");
+        let saved = save_state(&state, &path, &saved_meta(&legacy.start_url));
+        let loaded = parse_snapshot_file(&path.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
+
+        saved.expect("save succeeds");
+        let loaded = loaded.expect("saved file loads");
+        assert_eq!(loaded.start_url, legacy.start_url);
+        assert_eq!(loaded.saved_at_unix_ms, 42);
+        assert_eq!(
+            serde_json::to_value(&loaded.pages).unwrap(),
+            serde_json::to_value(&legacy.pages).unwrap()
+        );
+        assert_eq!(loaded.resources.len(), legacy.resources.len());
+        assert_eq!(loaded.resources[0].url, legacy.resources[0].url);
+        // The save released every lock: the crawl can keep writing afterwards.
+        assert!(state.pages.try_lock().is_ok());
+        assert!(state
+            .resources
+            .try_get_mut(&legacy.resources[0].url)
+            .is_present());
+    }
+
+    #[test]
+    fn save_state_while_crawl_is_running_saves_a_copy() {
+        save_state_round_trips(true);
+    }
+
+    #[test]
+    fn save_state_when_idle_streams_from_state() {
+        save_state_round_trips(false);
     }
 }

@@ -6,23 +6,45 @@ use crate::crawler::types::{CrawlSnapshot, CrawlSnapshotRef};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The sibling file a save is written to before it replaces `path`: `<path>.tmp`.
+/// A fresh temp file name next to `path`, `.<name>.<pid>.<nanos>-<seq>.tmp`, so the rename
+/// stays on one filesystem and never collides with (or deletes) a file the user owns.
 fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.as_os_str().to_os_string();
-    name.push(".tmp");
-    PathBuf::from(name)
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "crawl".to_string());
+    let tmp_name = format!(".{name}.{}.{nanos}-{seq}.tmp", std::process::id());
+    match path.parent() {
+        Some(parent) => parent.join(tmp_name),
+        None => PathBuf::from(tmp_name),
+    }
 }
 
-/// Streams `snapshot` as compact JSON into `<path>.tmp` through a buffered writer, then
-/// renames it over `path`. A failed save (serialization, disk full, unwritable location)
-/// leaves any existing file at `path` untouched and removes the partial temp file.
+/// Streams `snapshot` as compact JSON into a temp file next to `path` through a buffered
+/// writer, then renames it over `path`. A failed save (serialization, disk full, unwritable
+/// location) leaves any existing file at `path` untouched and removes the partial temp file.
 pub fn write_snapshot(path: &Path, snapshot: &CrawlSnapshotRef<'_>) -> Result<(), String> {
-    let tmp = temp_path(path);
-    let result = write_to(&tmp, snapshot).and_then(|()| std::fs::rename(&tmp, path));
+    write_snapshot_via(path, &temp_path(path), snapshot)
+}
+
+fn write_snapshot_via(
+    path: &Path,
+    tmp: &Path,
+    snapshot: &CrawlSnapshotRef<'_>,
+) -> Result<(), String> {
+    let result = write_to(tmp, snapshot).and_then(|()| std::fs::rename(tmp, path));
     if result.is_err() {
         // Best effort: the temp file may not exist (create failed) or may be a directory.
-        let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::remove_file(tmp);
     }
     result.map_err(|e| e.to_string())
 }
@@ -43,7 +65,7 @@ pub fn read_snapshot(path: &Path) -> Result<CrawlSnapshot, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_snapshot, temp_path, write_snapshot};
+    use super::{read_snapshot, temp_path, write_snapshot, write_snapshot_via};
     use crate::crawler::types::{
         CrawlSnapshot, CrawlSnapshotRef, CustomSearchRule, ExtractionMode, ExtractionRule,
     };
@@ -96,7 +118,7 @@ mod tests {
 
         write_snapshot(&path, &as_ref(&original)).unwrap();
         let loaded = read_snapshot(&path).unwrap();
-        let tmp_left = temp_path(&path).exists();
+        let tmp_left = std::fs::read_dir(&dir).unwrap().count() != 1;
         let _ = std::fs::remove_dir_all(&dir);
 
         assert!(!tmp_left, "temp file is renamed away");
@@ -134,11 +156,12 @@ mod tests {
         std::fs::write(&path, LEGACY).unwrap();
         // A directory where the temp file should go makes the save fail before `path` is
         // touched, the same way a full disk or a permissions error would.
-        std::fs::create_dir(temp_path(&path)).unwrap();
+        let tmp = temp_path(&path);
+        std::fs::create_dir(&tmp).unwrap();
 
         let mut other = legacy();
         other.start_url = "https://other.example/".to_string();
-        let err = write_snapshot(&path, &as_ref(&other)).unwrap_err();
+        let err = write_snapshot_via(&path, &tmp, &as_ref(&other)).unwrap_err();
         let kept = std::fs::read_to_string(&path).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
 
@@ -154,6 +177,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         assert!(err.is_err());
         assert!(still_dir);
+    }
+
+    #[test]
+    fn temp_names_are_unique_hidden_siblings() {
+        let path = std::env::temp_dir().join("crawl.json");
+        let a = temp_path(&path);
+        let b = temp_path(&path);
+        assert_ne!(a, b);
+        assert_eq!(a.parent(), path.parent());
+        let name = a.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with(".crawl.json."), "{name}");
+        assert!(name.ends_with(".tmp"), "{name}");
+        assert_ne!(a, PathBuf::from(format!("{}.tmp", path.display())));
     }
 
     #[test]
