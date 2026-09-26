@@ -349,6 +349,17 @@ function resourceIssue<K extends string>(def: Omit<ResourceIssueDef<K>, "scope">
 
 const hasHtml = (p: PageResult) => p.htmlSizeBytes > 0;
 
+/** An HTML page whose response headers were read (false for crawls saved before the
+ * security header fields existed, so those are not all reported as missing). */
+const hasSecurityHeaders = (p: PageResult) => hasHtml(p) && p.securityHeadersCaptured;
+
+const isBlank = (value: string | null | undefined) => !value || value.trim() === "";
+
+/** `X-Frame-Options`, or CSP `frame-ancestors`, which supersedes it in modern browsers. */
+export function hasFrameProtection(p: PageResult): boolean {
+  return !isBlank(p.xFrameOptions) || /(^|;)\s*frame-ancestors\b/i.test(p.contentSecurityPolicy ?? "");
+}
+
 interface UrlParts {
   /** Path as stored by the crawler (percent-encoded). */
   path: string;
@@ -1018,6 +1029,46 @@ export const ISSUE_DEFS = [
     tone: "warn",
     section: "Security",
     test: (p) => p.url.startsWith("https:") && !p.hsts,
+  }),
+  pageIssue({
+    key: "mixedContent",
+    label: "Mixed content",
+    group: "technical",
+    tone: "bad",
+    section: "Security",
+    test: (p) => p.url.startsWith("https:") && p.mixedContentCount > 0,
+  }),
+  pageIssue({
+    key: "missingCsp",
+    label: "Missing CSP",
+    group: "technical",
+    tone: "warn",
+    section: "Security",
+    test: (p) => hasSecurityHeaders(p) && isBlank(p.contentSecurityPolicy),
+  }),
+  pageIssue({
+    key: "missingFrameOptions",
+    label: "Missing X-Frame-Options",
+    group: "technical",
+    tone: "warn",
+    section: "Security",
+    test: (p) => hasSecurityHeaders(p) && !hasFrameProtection(p),
+  }),
+  pageIssue({
+    key: "missingContentTypeOptions",
+    label: "Missing X-Content-Type-Options",
+    group: "technical",
+    tone: "warn",
+    section: "Security",
+    test: (p) => hasSecurityHeaders(p) && p.xContentTypeOptions?.trim().toLowerCase() !== "nosniff",
+  }),
+  pageIssue({
+    key: "missingReferrerPolicy",
+    label: "Missing Referrer-Policy",
+    group: "technical",
+    tone: "warn",
+    section: "Security",
+    test: (p) => hasSecurityHeaders(p) && isBlank(p.referrerPolicy),
   }),
   pageIssue({
     key: "missingLang",

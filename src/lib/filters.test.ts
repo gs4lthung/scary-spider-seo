@@ -89,6 +89,12 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     isMinified: true,
     rendered: false,
     hsts: true,
+    contentSecurityPolicy: "default-src 'self'",
+    xFrameOptions: "DENY",
+    xContentTypeOptions: "nosniff",
+    referrerPolicy: "strict-origin-when-cross-origin",
+    securityHeadersCaptured: true,
+    mixedContentCount: 0,
     insecureLinkCount: 0,
     missingAltCount: 0,
     lang: "en",
@@ -278,6 +284,68 @@ describe("filterPages", () => {
       makePage({ url: "http://example.com/c", hsts: false }),
     ];
     expect(run(pages, "missingHsts")).toEqual([pages[0]]);
+  });
+
+  it("flags mixed content only on https pages", () => {
+    const pages = [
+      makePage({ url: "https://example.com/a", mixedContentCount: 2 }),
+      makePage({ url: "https://example.com/b", mixedContentCount: 0 }),
+      makePage({ url: "http://example.com/c", mixedContentCount: 1 }),
+    ];
+    expect(run(pages, "mixedContent")).toEqual([pages[0]]);
+    expect(getPageIssueKeys(pages[0], emptyFilterContext())).toContain("mixedContent");
+  });
+
+  it("flags a missing or blank Content-Security-Policy", () => {
+    const pages = [
+      makePage({ contentSecurityPolicy: null }),
+      makePage({ contentSecurityPolicy: "  " }),
+      makePage({ contentSecurityPolicy: "default-src 'self'" }),
+    ];
+    expect(run(pages, "missingCsp")).toEqual([pages[0], pages[1]]);
+  });
+
+  it("accepts X-Frame-Options or CSP frame-ancestors for frame protection", () => {
+    const pages = [
+      makePage({ xFrameOptions: null, contentSecurityPolicy: "default-src 'self'" }),
+      makePage({ xFrameOptions: "SAMEORIGIN", contentSecurityPolicy: null }),
+      makePage({ xFrameOptions: null, contentSecurityPolicy: "default-src 'self'; Frame-Ancestors 'none'" }),
+      makePage({ xFrameOptions: null, contentSecurityPolicy: "frame-ancestors 'self'" }),
+    ];
+    expect(run(pages, "missingFrameOptions")).toEqual([pages[0]]);
+  });
+
+  it("requires X-Content-Type-Options to be nosniff", () => {
+    const pages = [
+      makePage({ xContentTypeOptions: null }),
+      makePage({ xContentTypeOptions: "sniff" }),
+      makePage({ xContentTypeOptions: " NoSniff " }),
+    ];
+    expect(run(pages, "missingContentTypeOptions")).toEqual([pages[0], pages[1]]);
+  });
+
+  it("flags a missing Referrer-Policy", () => {
+    const pages = [makePage({ referrerPolicy: null }), makePage({ referrerPolicy: "no-referrer" })];
+    expect(run(pages, "missingReferrerPolicy")).toEqual([pages[0]]);
+  });
+
+  it("skips security header checks for non-HTML pages and crawls saved before the headers were captured", () => {
+    const noHeaders = {
+      contentSecurityPolicy: null,
+      xFrameOptions: null,
+      xContentTypeOptions: null,
+      referrerPolicy: null,
+    };
+    const pages = [
+      makePage({ ...noHeaders }),
+      makePage({ ...noHeaders, securityHeadersCaptured: false }),
+      makePage({ ...noHeaders, htmlSizeBytes: 0 }),
+    ];
+    for (const key of ["missingCsp", "missingFrameOptions", "missingContentTypeOptions", "missingReferrerPolicy"] as const) {
+      expect(run(pages, key)).toEqual([pages[0]]);
+      expect(getPageIssueKeys(pages[0], emptyFilterContext())).toContain(key);
+      expect(getPageIssueKeys(pages[1], emptyFilterContext())).not.toContain(key);
+    }
   });
 
   it("flags title length outside the min/max bounds", () => {
@@ -780,6 +848,13 @@ describe("issue registry", () => {
       at("insecure", { insecureLinkCount: 1 }),
       makePage({ url: "http://example.com/plain", canonical: "http://example.com/plain" }),
       at("no-hsts", { hsts: false }),
+      at("mixed-content", { mixedContentCount: 1 }),
+      at("no-security-headers", {
+        contentSecurityPolicy: null,
+        xFrameOptions: null,
+        xContentTypeOptions: null,
+        referrerPolicy: null,
+      }),
       at("no-lang", { lang: null }),
       at("Upper-Case"),
       at("snake_case"),

@@ -70,6 +70,15 @@ export interface PageResult {
   isMinified: boolean;
   rendered: boolean;
   hsts: boolean;
+  /** Raw response header values; null when the header was not sent. */
+  contentSecurityPolicy: string | null;
+  xFrameOptions: string | null;
+  xContentTypeOptions: string | null;
+  referrerPolicy: string | null;
+  /** False for crawls saved before T2.5 and for fetch errors: the four headers above are unknown. */
+  securityHeadersCaptured: boolean;
+  /** Scripts, stylesheets, iframes and media requested over http: from an https: page. */
+  mixedContentCount: number;
   insecureLinkCount: number;
   missingAltCount: number;
   lang: string | null;
