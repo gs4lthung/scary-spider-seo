@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeUrlForDisplay, withScheme } from "./url";
+import { decodeUrlForDisplay, parseUrlList, withScheme } from "./url";
 
 describe("withScheme", () => {
   it("prepends https:// when preferHttps is true and no scheme is present", () => {
@@ -40,5 +40,35 @@ describe("decodeUrlForDisplay", () => {
 
   it("returns a URL with a malformed escape unchanged", () => {
     expect(decodeUrlForDisplay("https://example.com/%E0%A4%A")).toBe("https://example.com/%E0%A4%A");
+  });
+});
+
+describe("parseUrlList", () => {
+  it("parseUrlList trims, dedupes and rejects non-http lines", () => {
+    const text = [
+      "  https://example.com/a  ",
+      "",
+      "http://example.com/b",
+      "https://example.com/a",
+      "https://example.com/a#section",
+      "ftp://example.com/file",
+      "mailto:someone@example.com",
+      "example.com/no-scheme",
+      "not a url",
+      "   ",
+      "HTTPS://Example.com/C",
+    ].join("\r\n");
+    expect(parseUrlList(text)).toEqual({
+      valid: ["https://example.com/a", "http://example.com/b", "https://example.com/C"],
+      invalid: ["ftp://example.com/file", "mailto:someone@example.com", "example.com/no-scheme", "not a url"],
+    });
+  });
+
+  it("rejects an http URL without a host", () => {
+    expect(parseUrlList("http://").invalid).toEqual(["http://"]);
+  });
+
+  it("returns empty lists for blank input", () => {
+    expect(parseUrlList("\n  \n")).toEqual({ valid: [], invalid: [] });
   });
 });

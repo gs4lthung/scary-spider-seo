@@ -43,6 +43,21 @@ pub struct CrawlConfig {
     /// of them is not crawled. Wins over `include_patterns`.
     #[serde(default)]
     pub exclude_patterns: Vec<String>,
+    /// List mode when non-empty: crawl exactly these URLs (no link following, no sitemap),
+    /// each at depth 0. Unparsable or non-http(s) entries are ignored. At most
+    /// `MAX_LIST_URLS` entries are accepted by `start_crawl`.
+    #[serde(default)]
+    pub list_urls: Vec<String>,
+}
+
+/// Largest list `start_crawl` accepts in list mode.
+pub const MAX_LIST_URLS: usize = 50_000;
+
+impl CrawlConfig {
+    /// True when the crawl runs in list mode (`list_urls` is non-empty).
+    pub fn is_list_mode(&self) -> bool {
+        !self.list_urls.is_empty()
+    }
 }
 
 fn default_max_pages() -> usize {
@@ -397,5 +412,14 @@ mod tests {
             serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
         assert!(config.include_patterns.is_empty());
         assert!(config.exclude_patterns.is_empty());
+    }
+
+    /// A config sent without the T3.2 `listUrls` field is a normal spider crawl.
+    #[test]
+    fn config_without_list_urls_is_spider_mode() {
+        let config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
+        assert!(config.list_urls.is_empty());
+        assert!(!config.is_list_mode());
     }
 }

@@ -19,6 +19,8 @@ export interface CrawlConfig {
   includePatterns: string[];
   /** Regular expressions matched against the full URL; a discovered URL matching any is not crawled (wins over include). */
   excludePatterns: string[];
+  /** List mode when non-empty: crawl exactly these URLs without following links. `startUrl` is the first of them. */
+  listUrls: string[];
 }
 
 /** One internal link found on a page. */
@@ -209,4 +211,5 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   runMobileUsabilityAudit: false,
   includePatterns: [],
   excludePatterns: [],
+  listUrls: [],
 };
