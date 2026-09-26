@@ -15,6 +15,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { CustomSearchEditor } from "@/components/custom-search-editor";
 import { formatPatternLines, parsePatternLines } from "@/lib/urlPatterns";
 import type { CrawlConfig } from "@/types";
 
@@ -291,6 +292,14 @@ export function CrawlOptionsSheet({ config, running, listMode = false, onChange 
               onChange={(patterns) => set("excludePatterns", patterns)}
             />
           </div>
+
+          <Separator />
+
+          <CustomSearchEditor
+            rules={config.customSearches}
+            disabled={running}
+            onChange={(rules) => set("customSearches", rules)}
+          />
 
           <Separator />
 
