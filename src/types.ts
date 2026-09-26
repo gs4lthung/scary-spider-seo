@@ -17,6 +17,15 @@ export interface CrawlConfig {
   runMobileUsabilityAudit: boolean;
 }
 
+/** One internal link found on a page. */
+export interface LinkRef {
+  url: string;
+  /** Whitespace-collapsed link text (max 200 chars), or the wrapped image's alt when the link has no text. */
+  anchor: string;
+  nofollow: boolean;
+  isImageLink: boolean;
+}
+
 export interface PageResult {
   url: string;
   depth: number;
@@ -66,6 +75,8 @@ export interface PageResult {
   lang: string | null;
   hreflangValues: string[];
   internalNofollowCount: number;
+  /** Internal `<a href>` links in document order, duplicates kept, capped at 1000 per page. Empty for crawls saved before T2.3. */
+  outlinks: LinkRef[];
   textRatioPct: number;
   contentHash: string;
   xRobotsTag: string | null;

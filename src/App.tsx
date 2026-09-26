@@ -737,7 +737,7 @@ function App() {
     }
   }, []);
 
-  const handleExport = useCallback(async (what: "pages" | "resources") => {
+  const handleExport = useCallback(async (what: "pages" | "resources" | "links") => {
     try {
       const path = await save({
         filters: [{ name: "CSV", extensions: ["csv"] }],
@@ -1025,6 +1025,7 @@ function App() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => handleExportIssues("issues")}>Export issues…</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => handleExportIssues("summary")}>Export issue summary…</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleExport("links")}>Export all internal links…</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
