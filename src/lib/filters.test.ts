@@ -1548,6 +1548,30 @@ describe("hreflang issues", () => {
     expect(flagged([en], "hreflangMissingReturn")).toEqual([]);
   });
 
+  it("skips a redirected page as a hreflang source", () => {
+    // Stored under the requested URL, while its hrefs resolve against the page it landed on.
+    const redirected = page("old-en", {
+      redirectChain: [url("old-en")],
+      hreflangLinks: [link("en", "en"), link("fr", "fr")],
+    });
+    const fr = page("fr", { hreflangLinks: [link("fr", "fr")] });
+    for (const key of [
+      "hreflangMissingSelf",
+      "hreflangMissingReturn",
+      "hreflangMissingXDefault",
+      "hreflangTargetError",
+    ] as const) {
+      expect(flagged([redirected, fr], key), key).not.toContain(url("old-en"));
+    }
+  });
+
+  it("does not park off-host hreflang targets", () => {
+    const tracker = createHreflangTracker();
+    const en = page("en", { hreflangLinks: [link("en", "en"), { lang: "fr", href: "https://example.fr/" }, link("de", "de")] });
+    ingestHreflangPage(tracker, new Map([[en.url, en]]), en);
+    expect([...tracker.waiting.keys()]).toEqual([url("de")]);
+  });
+
   it("the hreflang tracker gives the same result whichever page arrives first", () => {
     const en = page("en", { hreflangLinks: [link("en", "en"), link("fr", "fr"), link("de", "de")] });
     const fr = page("fr", { hreflangLinks: [link("fr", "fr")] });

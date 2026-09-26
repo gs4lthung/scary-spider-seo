@@ -262,6 +262,31 @@ export function isHreflangTargetError(target: PageResult): boolean {
   return isNon200LinkTarget(target) || target.indexability !== "Indexable";
 }
 
+/** Whether a page's hreflang annotations can be matched against its URL. A redirected page is
+ * stored under the URL it requested while its hrefs resolve against where it landed, so it is
+ * never a hreflang source (it is still checked as a target, where a redirect is an error). */
+const isHreflangSource = (p: PageResult) => p.htmlSizeBytes > 0 && p.redirectChain.length === 0;
+
+// Host of a page URL, cached per page object (pages are immutable once received).
+const hostCache = new WeakMap<PageResult, string | null>();
+
+function pageHost(p: PageResult): string | null {
+  let host = hostCache.get(p);
+  if (host === undefined) {
+    host = hostOf(p.url);
+    hostCache.set(p, host);
+  }
+  return host;
+}
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
 function evaluateHreflangPair(tracker: HreflangTracker, sourceUrl: string, target: PageResult): void {
   if (isHreflangTargetError(target)) {
     tracker.targetError.add(sourceUrl);
@@ -272,7 +297,8 @@ function evaluateHreflangPair(tracker: HreflangTracker, sourceUrl: string, targe
 
 /**
  * Feeds one crawled page into `tracker`. Call it after `page` is in `pageByUrl`. Return links
- * are only checked for targets the crawl reached; links to the page itself are skipped.
+ * are only checked for targets the crawl reached; links to the page itself are skipped, and a
+ * target on another host is dropped rather than parked (the crawler never queues it).
  */
 export function ingestHreflangPage(
   tracker: HreflangTracker,
@@ -284,12 +310,14 @@ export function ingestHreflangPage(
     tracker.waiting.delete(page.url);
     for (const source of waitingSources) evaluateHreflangPair(tracker, source, page);
   }
+  if (!isHreflangSource(page)) return;
+  const host = pageHost(page);
   for (const href of hreflangHrefs(page)) {
     if (href === page.url) continue;
     const target = pageByUrl.get(href);
     if (target) {
       evaluateHreflangPair(tracker, page.url, target);
-    } else {
+    } else if (host !== null && hostOf(href) === host) {
       const sources = tracker.waiting.get(href);
       if (sources) sources.push(page.url);
       else tracker.waiting.set(href, [page.url]);
@@ -317,11 +345,11 @@ interface HreflangFlags {
 const hreflangFlagsCache = new WeakMap<PageResult, HreflangFlags>();
 
 /** Own-page hreflang findings; all false for a page without hreflang links (including pages from
- * crawls saved before the links were collected). */
+ * crawls saved before the links were collected) and for a redirected page. */
 function hreflangFlags(p: PageResult): HreflangFlags {
   let flags = hreflangFlagsCache.get(p);
   if (!flags) {
-    const links = p.htmlSizeBytes > 0 ? p.hreflangLinks : [];
+    const links = isHreflangSource(p) ? p.hreflangLinks : [];
     flags = {
       missingSelf: links.length > 0 && !links.some((l) => l.href === p.url),
       missingXDefault: links.length > 0 && !links.some((l) => isXDefault(l.lang)),

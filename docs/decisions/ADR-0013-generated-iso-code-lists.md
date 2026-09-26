@@ -9,6 +9,7 @@ T2.6 validates hreflang codes "against ISO 639-1 languages and ISO 3166-1 alpha-
 
 - How the static code lists are produced and kept correct. Typing roughly 430 two-letter codes
   by hand is error prone and hard to review.
+- Whether script subtags (`zh-Hant`) are valid.
 - What counts as a self-reference, which targets get the return-link check, and what a target
   "error" is.
 - How the cross-page checks stay cheap while the Overview recounts every ~150 ms flush.
@@ -26,11 +27,27 @@ country (`EU`, `EZ`, `UN`, `QO`, `XA`, `XB`, `XK`, `ZZ` and the exceptionally re
 "generated, do not edit" header; `src/lib/hreflang.ts` imports it. With Node 24 the result is
 183 languages and 249 regions, the sizes of the ISO lists. No new dependency is needed.
 
-**Code syntax.** A valid value is `x-default`, `ll` or `ll-RR` (case-insensitive), with `ll`
-in the language set and `RR` in the region set. Script subtags and underscores are rejected,
-matching the plan's "language plus optional region" rule and Google's documented format.
+**Code syntax.** A valid value is `x-default` or `ll`, `ll-Ssss`, `ll-RR` or `ll-Ssss-RR`
+(case-insensitive), with `ll` in the language set, `Ssss` in the script set and `RR` in the
+region set. Google documents script variants such as `zh-Hant` and `zh-Hans-US`, so script
+subtags are accepted even though the plan only names language and region. Underscores, a
+region before a script, and a region on its own are rejected.
+
+**Script set.** The same script also writes `ISO_SCRIPTS`: every title-case `Aaaa`..`Zzzz`
+code ICU has an English name for, minus the ISO 15924 private-use range (`Q...`) and the
+special `Z...` codes (`Zyyy` common, `Zzzz` unknown, `Zmth` math notation, ...), which are not
+the script of a page's content. With Node 24 that is 204 scripts. Checking against a set,
+rather than accepting any four-letter subtag, keeps typos such as `zh-Hnat` flagged.
 
 **Self-reference** is any hreflang link (including `x-default`) whose href equals the page URL.
+
+**Redirected pages are skipped.** The crawler resolves hrefs against the final URL but stores a
+redirected page under the URL it requested, so self and return matching would be wrong. A page
+with a redirect chain gets none of the own-page checks and is not used as a return-link or
+target-error source (it is still evaluated as a target, where a redirect is a target error).
+
+**Off-host targets are ignored.** The crawler only queues hreflang targets on the page's own
+host, so a target on another host is never crawled; the tracker does not park it in `waiting`.
 
 **Return links and target errors** are evaluated per (source, target) pair only once the target
 was crawled. A target is in error when it was not robots-blocked and it answered non-200, was
@@ -52,5 +69,5 @@ five checks fire for them (the existing `missingHreflang` check still uses `href
 - Regenerating on a newer Node picks up ISO changes from ICU; the diff of `isoCodes.ts` shows
   exactly which codes moved.
 - Off-host hreflang targets are never crawled, so they are neither return-checked nor reported
-  as errors; they stay in the tracker's `waiting` map for the life of the crawl.
+  as errors, and they cost no tracker memory.
 - `FilterContext` gains `hreflangMissingReturn` and `hreflangTargetError` sets.
