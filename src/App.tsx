@@ -57,15 +57,56 @@ import {
   getTitlePixelWidth,
   getResourceIssueKeys,
   ingestDuplicateValue,
+  ingestNon200LinkSources,
   searchPages,
   searchResources,
 } from "./lib/filters";
+import {
+  type LinkGraph,
+  MAX_LINK_ROWS,
+  addPageToLinkGraph,
+  createLinkGraph,
+  getInlinkCount,
+  getInlinks,
+  getUniqueInlinkCount,
+  linkScore,
+} from "./lib/linkGraph";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
 import { withScheme } from "./lib/url";
 
 type Tab = "overview" | "pages" | "resources" | "sitemap";
+
+/** How often link scores are recomputed while a crawl is running. PageRank is a whole-graph
+ * computation, so it is not redone on every ~150 ms flush of new pages. */
+const LINK_SCORE_INTERVAL_MS = 2000;
+
+/**
+ * `value` itself while `throttle` is false; while it is true, the latest `value` sampled at
+ * most once every `intervalMs`.
+ */
+function useThrottledValue<T>(value: T, throttle: boolean, intervalMs: number): T {
+  const [sampled, setSampled] = useState(value);
+  const [wasThrottling, setWasThrottling] = useState(throttle);
+  // When throttling turns on, start from the current value rather than whatever was sampled
+  // during the previous throttled stretch (a previous crawl). Adjusting state while rendering
+  // is React's documented pattern for resetting state when a prop changes.
+  if (throttle !== wasThrottling) {
+    setWasThrottling(throttle);
+    if (throttle) setSampled(value);
+  }
+  const latestRef = useRef(value);
+  useEffect(() => {
+    latestRef.current = value;
+  }, [value]);
+  useEffect(() => {
+    if (!throttle) return;
+    const id = window.setInterval(() => setSampled(latestRef.current), intervalMs);
+    return () => window.clearInterval(id);
+  }, [throttle, intervalMs]);
+  return throttle && wasThrottling ? sampled : value;
+}
 
 /** Wraps a cell's rendered value in destructive styling when `bad` is true — the inline, at-a-glance counterpart to DetailModal's `isError` fields. */
 function flagCell(value: React.ReactNode, bad: boolean) {
@@ -98,7 +139,7 @@ function linkCell(value: string | null | undefined) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
-function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
+function buildPageColumns(ctx: FilterContext, linkScores: Map<string, number>): ColumnDef<PageResult, any>[] {
   // The Issues column's accessorFn runs for every row on every table rebuild (react-table
   // builds the full row model regardless of virtualization), and its cell renderer runs
   // again for visible rows — without this cache that's getPageIssueKeys' 26 sub-filters
@@ -270,15 +311,39 @@ function buildPageColumns(ctx: FilterContext): ColumnDef<PageResult, any>[] {
       meta: { description: "Server response time, in milliseconds." },
     },
     {
-      accessorKey: "internalLinkCount",
+      id: "inlinks",
       header: "Inlinks",
       size: 100,
+      accessorFn: (page) => getInlinkCount(ctx.linkGraph, page.url),
+      meta: { description: "Number of internal links pointing at this page from other crawled pages." },
+    },
+    {
+      id: "uniqueInlinks",
+      header: "Unique Inlinks",
+      size: 130,
+      accessorFn: (page) => getUniqueInlinkCount(ctx.linkGraph, page.url),
+      meta: { description: "Number of distinct crawled pages that link to this page." },
+    },
+    {
+      id: "linkScore",
+      header: "Link Score",
+      size: 110,
+      accessorFn: (page) => linkScores.get(page.url) ?? 0,
+      meta: {
+        description:
+          "Internal link score from 0 to 100: PageRank over the followed internal links, where the best linked page scores 100. Refreshes every 2 seconds during a crawl.",
+      },
+    },
+    {
+      accessorKey: "internalLinkCount",
+      header: "Internal Outlinks",
+      size: 140,
       meta: { description: "Number of internal links found on this page." },
     },
     {
       accessorKey: "externalLinkCount",
-      header: "Outlinks",
-      size: 100,
+      header: "External Outlinks",
+      size: 140,
       meta: { description: "Number of external (off-site) links found on this page." },
     },
     {
@@ -540,6 +605,8 @@ function App() {
   const canonicalStatusRef = useRef(new Map<string, number | null>());
   const pageByUrlRef = useRef(new Map<string, PageResult>());
   const sitemapUsedRef = useRef(false);
+  const linkGraphRef = useRef(createLinkGraph());
+  const non200LinkSourcesRef = useRef(new Set<string>());
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -551,6 +618,8 @@ function App() {
     canonicalStatusRef.current = new Map();
     pageByUrlRef.current = new Map();
     sitemapUsedRef.current = false;
+    linkGraphRef.current = createLinkGraph();
+    non200LinkSourcesRef.current = new Set();
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -798,6 +867,8 @@ function App() {
     canonicalStatusMap,
     pageByUrl,
     sitemapUsed,
+    linkGraph,
+    non200LinkSources,
   } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
@@ -814,6 +885,8 @@ function App() {
       canonicalStatusRef.current.set(p.url, p.status);
       pageByUrlRef.current.set(p.url, p);
       if (p.discoveredViaSitemap) sitemapUsedRef.current = true;
+      addPageToLinkGraph(linkGraphRef.current, p);
+      ingestNon200LinkSources(non200LinkSourcesRef.current, linkGraphRef.current, pageByUrlRef.current, p);
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -826,6 +899,10 @@ function App() {
       canonicalStatusMap: new Map(canonicalStatusRef.current),
       pageByUrl: new Map(pageByUrlRef.current),
       sitemapUsed: sitemapUsedRef.current,
+      // A new wrapper per change (the graph's maps grow in place, which is O(new links)
+      // rather than a copy of every link crawled so far).
+      linkGraph: { ...linkGraphRef.current } satisfies LinkGraph,
+      non200LinkSources: new Set(non200LinkSourcesRef.current),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -843,6 +920,8 @@ function App() {
       linkedUrls: linkedUrlSet,
       pageByUrl,
       sitemapUsed,
+      linkGraph,
+      non200LinkSources,
     }),
     [
       duplicateTitleSet,
@@ -854,8 +933,14 @@ function App() {
       linkedUrlSet,
       pageByUrl,
       sitemapUsed,
+      linkGraph,
+      non200LinkSources,
     ],
   );
+  // Link scores rank the whole graph, so while a crawl runs they refresh on a timer instead
+  // of on every flush; once it stops they follow the graph directly.
+  const scoredLinkGraph = useThrottledValue(linkGraph, running, LINK_SCORE_INTERVAL_MS);
+  const linkScores = useMemo(() => linkScore(scoredLinkGraph), [scoredLinkGraph]);
   const filteredPages = useMemo(
     () => searchPages(filterPages(pages, filter, filterContext), search),
     [pages, filter, search, filterContext],
@@ -887,7 +972,19 @@ function App() {
     [pages, resources, filterContext],
   );
 
-  const pageColumns = useMemo(() => buildPageColumns(filterContext), [filterContext]);
+  const pageColumns = useMemo(() => buildPageColumns(filterContext, linkScores), [filterContext, linkScores]);
+
+  const selectedPageLinks = useMemo(
+    () =>
+      selectedPage
+        ? {
+            inlinks: getInlinks(linkGraph, selectedPage.url, MAX_LINK_ROWS),
+            inlinkTotal: getInlinkCount(linkGraph, selectedPage.url),
+            outlinks: selectedPage.outlinks,
+          }
+        : undefined,
+    [selectedPage, linkGraph],
+  );
 
   const selectedPageIssues = useMemo(() => {
     if (!selectedPage) return [];
@@ -1079,6 +1176,7 @@ function App() {
           title={selectedPage.url}
           onClose={() => setSelectedPage(null)}
           issues={selectedPageIssues}
+          links={selectedPageLinks}
           fields={[
             { label: "URL", value: selectedPage.url },
             { label: "Status", value: selectedPage.status },
@@ -1099,6 +1197,9 @@ function App() {
             { label: "Meta Robots", value: selectedPage.metaRobots },
             { label: "Content Type", value: selectedPage.contentType },
             { label: "Response Time (ms)", value: selectedPage.responseTimeMs },
+            { label: "Inlinks", value: getInlinkCount(linkGraph, selectedPage.url) },
+            { label: "Unique Inlinks", value: getUniqueInlinkCount(linkGraph, selectedPage.url) },
+            { label: "Link Score", value: linkScores.get(selectedPage.url) ?? null },
             { label: "Internal Links", value: selectedPage.internalLinkCount },
             { label: "External Links", value: selectedPage.externalLinkCount },
             { label: "Images", value: selectedPage.imageCount },

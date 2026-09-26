@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PageResult, ResourceResult } from "../types";
+import type { LinkRef, PageResult, ResourceResult } from "../types";
 import { ISSUE_SOLUTIONS } from "./issueSolutions";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 import {
@@ -12,6 +12,7 @@ import {
   LARGE_HTML_BYTES,
   LOW_WORD_COUNT,
   LOW_TEXT_RATIO_THRESHOLD_PCT,
+  NON_DESCRIPTIVE_ANCHORS,
   META_MAX_LENGTH,
   META_MAX_PIXELS,
   META_MIN_LENGTH,
@@ -35,17 +36,22 @@ import {
   getDuplicateMetaSet,
   getDuplicateTitleSet,
   getMetaPixelWidth,
+  getNon200LinkSourceSet,
   getPageByUrlMap,
   getPageIssueKeys,
   getResourceIssueKeys,
   getSitemapUsed,
   getTitlePixelWidth,
   hasHeadingLevelSkip,
+  isNon200LinkTarget,
+  isNonDescriptiveAnchor,
   ingestDuplicateValue,
+  ingestNon200LinkSources,
   parseRobotsDirectives,
   searchPages,
   searchResources,
 } from "./filters";
+import { addPageToLinkGraph, buildLinkGraph, createLinkGraph } from "./linkGraph";
 
 function makePage(overrides: Partial<PageResult> = {}): PageResult {
   return {
@@ -812,6 +818,13 @@ describe("issue registry", () => {
         redirectChain: ["https://example.com/redirect-to-404"],
         redirectUrl: "https://example.com/gone",
       }),
+      at("anchors", {
+        outlinks: [
+          { url: "https://example.com/linked-only", anchor: "Click here", nofollow: false, isImageLink: false },
+          { url: "https://example.com/clean", anchor: "", nofollow: false, isImageLink: true },
+          { url: "https://example.com/redirect-to-404", anchor: "Old page", nofollow: false, isImageLink: false },
+        ],
+      }),
     ];
     const resources = [
       makeResource(),
@@ -829,6 +842,8 @@ describe("issue registry", () => {
       linkedUrls: new Set(["https://example.com/clean", "https://example.com/linked-redirect"]),
       pageByUrl: getPageByUrlMap(pages),
       sitemapUsed: getSitemapUsed(pages),
+      linkGraph: buildLinkGraph(pages),
+      non200LinkSources: getNon200LinkSourceSet(pages),
     };
     return { pages, resources, ctx };
   }
@@ -1269,6 +1284,146 @@ describe("multiple titles, meta descriptions, meta refresh and pagination issues
     );
     const clean = getPageIssueKeys(makePage(), emptyFilterContext());
     for (const key of ["multipleTitles", "multipleMetaDescriptions", "metaRefresh", "paginationTargetError"] as const) {
+      expect(clean).not.toContain(key);
+    }
+  });
+});
+
+describe("link analysis issues", () => {
+  const link = (url: string, overrides: Partial<LinkRef> = {}): LinkRef => ({
+    url,
+    anchor: "Pricing guide",
+    nofollow: false,
+    isImageLink: false,
+    ...overrides,
+  });
+  const run = (key: FilterKey, overrides: Partial<PageResult>, ctx: FilterContext = emptyFilterContext()) =>
+    filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("isNonDescriptiveAnchor matches the list after trimming punctuation and case", () => {
+    for (const anchor of NON_DESCRIPTIVE_ANCHORS) expect(isNonDescriptiveAnchor(anchor), anchor).toBe(true);
+    expect(isNonDescriptiveAnchor("Read more...")).toBe(true);
+    expect(isNonDescriptiveAnchor("  Click   HERE! ")).toBe(true);
+    expect(isNonDescriptiveAnchor("→ Learn more")).toBe(true);
+    expect(isNonDescriptiveAnchor("Read more about pricing")).toBe(false);
+    expect(isNonDescriptiveAnchor("Heretic")).toBe(false);
+    expect(isNonDescriptiveAnchor("")).toBe(false);
+  });
+
+  it("nonDescriptiveAnchors flags a generic anchor, not a descriptive one", () => {
+    expect(run("nonDescriptiveAnchors", { outlinks: [link("https://example.com/a", { anchor: "Read more" })] })).toBe(
+      true,
+    );
+    expect(run("nonDescriptiveAnchors", { outlinks: [link("https://example.com/a")] })).toBe(false);
+    expect(run("nonDescriptiveAnchors", { outlinks: [] })).toBe(false);
+  });
+
+  it("emptyAnchors flags an empty text link or an image link without alt", () => {
+    expect(run("emptyAnchors", { outlinks: [link("https://example.com/a", { anchor: "" })] })).toBe(true);
+    expect(
+      run("emptyAnchors", { outlinks: [link("https://example.com/a", { anchor: " ", isImageLink: true })] }),
+    ).toBe(true);
+    expect(
+      run("emptyAnchors", { outlinks: [link("https://example.com/a", { anchor: "Logo", isImageLink: true })] }),
+    ).toBe(false);
+  });
+
+  describe("singleInlink", () => {
+    const target = "https://example.com/target";
+    const ctxWith = (...sources: string[]): FilterContext => ({
+      ...emptyFilterContext(),
+      linkGraph: buildLinkGraph(sources.map((s) => makePage({ url: s, outlinks: [link(target), link(target)] }))),
+    });
+
+    it("flags a page linked from exactly one other page", () => {
+      expect(run("singleInlink", { url: target, depth: 1 }, ctxWith("https://example.com/"))).toBe(true);
+    });
+
+    it("does not flag two linking pages, no inlinks, the start page or a non-200 page", () => {
+      const one = ctxWith("https://example.com/");
+      expect(run("singleInlink", { url: target, depth: 1 }, ctxWith("https://example.com/", "https://example.com/b"))).toBe(
+        false,
+      );
+      expect(run("singleInlink", { url: target, depth: 1 }, emptyFilterContext())).toBe(false);
+      expect(run("singleInlink", { url: target, depth: 0 }, one)).toBe(false);
+      expect(run("singleInlink", { url: target, depth: 1, status: 404 }, one)).toBe(false);
+    });
+  });
+
+  describe("linksToErrorPages", () => {
+    const at = (path: string, overrides: Partial<PageResult> = {}) =>
+      makePage({ url: `https://example.com/${path}`, ...overrides });
+    const ok = at("ok");
+    const gone = at("gone", { status: 404 });
+    const moved = at("moved", { redirectChain: ["https://example.com/moved"], redirectUrl: ok.url });
+    const failed = at("failed", { status: null, error: "timeout" });
+    const blocked = at("blocked", {
+      status: null,
+      statusText: "Blocked",
+      indexability: "Non-Indexable (robots.txt)",
+      htmlSizeBytes: 0,
+    });
+    const targets = [ok, gone, moved, failed, blocked];
+    /** Whether a source page with these outlinks is flagged, crawled after (or before) the targets. */
+    const flagged = (outlinks: LinkRef[], sourceFirst = false) => {
+      const source = at("source", { outlinks });
+      const pages = sourceFirst ? [source, ...targets] : [...targets, source];
+      const ctx: FilterContext = { ...emptyFilterContext(), non200LinkSources: getNon200LinkSourceSet(pages) };
+      return filterPages(pages, "linksToErrorPages", ctx).includes(source);
+    };
+
+    it("flags links to a crawled 4xx, redirected or failed page", () => {
+      expect(flagged([link(ok.url), link(gone.url)])).toBe(true);
+      expect(flagged([link(moved.url)])).toBe(true);
+      expect(flagged([link(failed.url)])).toBe(true);
+    });
+
+    it("flags the source whichever of source and target is crawled first", () => {
+      expect(flagged([link(gone.url)], true)).toBe(true);
+      expect(flagged([link(ok.url)], true)).toBe(false);
+    });
+
+    it("builds the same set incrementally as in one pass", () => {
+      const pages = [at("a", { outlinks: [link(gone.url)] }), gone, ok, at("b", { outlinks: [link(moved.url)] }), moved];
+      const graph = createLinkGraph();
+      const pageByUrl = new Map<string, PageResult>();
+      const sources = new Set<string>();
+      for (const page of pages) {
+        addPageToLinkGraph(graph, page);
+        pageByUrl.set(page.url, page);
+        ingestNon200LinkSources(sources, graph, pageByUrl, page);
+      }
+      expect(sources).toEqual(getNon200LinkSourceSet(pages));
+      expect([...sources].sort()).toEqual(["https://example.com/a", "https://example.com/b"]);
+    });
+
+    it("does not flag links to 200 pages, robots-blocked pages or URLs the crawl never reached", () => {
+      expect(isNon200LinkTarget(blocked)).toBe(false);
+      expect(flagged([link(ok.url)])).toBe(false);
+      expect(flagged([link(blocked.url)])).toBe(false);
+      expect(flagged([link(blocked.url)], true)).toBe(false);
+      expect(flagged([link("https://example.com/not-crawled")])).toBe(false);
+    });
+  });
+
+  it("the new issues appear in getPageIssueKeys", () => {
+    const target = makePage({ url: "https://example.com/gone", status: 404 });
+    const source = makePage({
+      url: "https://example.com/source",
+      outlinks: [link(target.url, { anchor: "here" }), link("https://example.com/single", { anchor: "" })],
+    });
+    const single = makePage({ url: "https://example.com/single", depth: 2 });
+    const ctx: FilterContext = {
+      ...emptyFilterContext(),
+      linkGraph: buildLinkGraph([target, source, single]),
+      non200LinkSources: getNon200LinkSourceSet([target, source, single]),
+    };
+    expect(getPageIssueKeys(source, ctx)).toEqual(
+      expect.arrayContaining(["nonDescriptiveAnchors", "emptyAnchors", "linksToErrorPages"]),
+    );
+    expect(getPageIssueKeys(single, ctx)).toContain("singleInlink");
+    const clean = getPageIssueKeys(makePage(), ctx);
+    for (const key of ["nonDescriptiveAnchors", "emptyAnchors", "singleInlink", "linksToErrorPages"] as const) {
       expect(clean).not.toContain(key);
     }
   });

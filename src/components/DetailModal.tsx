@@ -7,11 +7,24 @@ import { Button } from "@/components/ui/button";
 import { LinkCell } from "@/components/link-cell";
 import { cn } from "@/lib/utils";
 import type { IssueSolution } from "../lib/issueSolutions";
+import type { Inlink } from "../lib/linkGraph";
+import type { LinkRef } from "../types";
+import { MAX_LINK_ROWS } from "../lib/linkGraph";
+
+interface LinkRow {
+  url: string;
+  anchor: string;
+  nofollow: boolean;
+  isImageLink: boolean;
+}
 
 interface DetailModalProps {
   title: string;
   fields: Array<{ label: string; value: string | number | boolean | null | undefined; isError?: boolean }>;
   issues?: IssueSolution[];
+  /** A page's internal inlinks and outlinks with anchor text. Each list holds at most
+   * `MAX_LINK_ROWS` rows; the totals give the full counts. */
+  links?: { inlinks: Inlink[]; inlinkTotal: number; outlinks: LinkRef[] };
   onClose: () => void;
 }
 
@@ -19,7 +32,67 @@ function isLinkValue(value: string | number | boolean | null | undefined): value
   return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
-export function DetailModal({ title, fields, issues, onClose }: DetailModalProps) {
+interface LinkListProps {
+  title: string;
+  urlLabel: string;
+  rows: LinkRow[];
+  /** Number of links in the full list (`rows` may be the first part of it). */
+  total: number;
+}
+
+/** A collapsible list of links with their anchor text, showing at most `MAX_LINK_ROWS` rows. */
+function LinkList({ title, urlLabel, rows, total }: LinkListProps) {
+  const shown = rows.slice(0, MAX_LINK_ROWS);
+  return (
+    <Collapsible className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
+      <CollapsibleTrigger asChild>
+        <button className="group flex items-center justify-between text-xs font-medium text-muted-foreground uppercase">
+          {title} ({total})
+          <ChevronDownIcon className="size-3.5 transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-2">
+        {shown.length === 0 ? (
+          <p className="text-sm text-muted-foreground">None found in this crawl.</p>
+        ) : (
+          <table className="w-full table-fixed text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th scope="col" className="w-1/2 pb-1 font-medium">
+                  {urlLabel}
+                </th>
+                <th scope="col" className="pb-1 font-medium">
+                  Anchor text
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((row, i) => (
+                <tr key={`${row.url}-${i}`} className="border-t align-top">
+                  <td className="truncate py-1 pr-3">
+                    <LinkCell value={row.url} className="block w-full truncate" />
+                  </td>
+                  <td className="py-1 break-words">
+                    {row.anchor ? row.anchor : <span className="text-destructive">(empty)</span>}
+                    {row.isImageLink && <span className="ml-1.5 text-xs text-muted-foreground">image</span>}
+                    {row.nofollow && <span className="ml-1.5 text-xs text-muted-foreground">nofollow</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {total > shown.length && (
+          <p className="text-xs text-muted-foreground">
+            Showing the first {shown.length} of {total}. Use Export all internal links for the full list.
+          </p>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+export function DetailModal({ title, fields, issues, links, onClose }: DetailModalProps) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -64,6 +137,17 @@ export function DetailModal({ title, fields, issues, onClose }: DetailModalProps
                 );
               })}
             </div>
+            {links && (
+              <>
+                <LinkList
+                  title="Inlinks"
+                  urlLabel="From"
+                  rows={links.inlinks.map((l) => ({ ...l, url: l.source }))}
+                  total={links.inlinkTotal}
+                />
+                <LinkList title="Outlinks" urlLabel="To" rows={links.outlinks} total={links.outlinks.length} />
+              </>
+            )}
             {issues && issues.length > 0 && (
               <Collapsible className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
                 <CollapsibleTrigger asChild>
