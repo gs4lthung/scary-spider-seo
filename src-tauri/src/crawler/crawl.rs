@@ -414,10 +414,30 @@ async fn fetch_and_parse(
     };
 
     let elapsed = started.elapsed().as_millis() as u64;
-    let parsed = parse_page(&body, &final_url);
-    let custom_search_counts = analysis
-        .custom_search
-        .count_matches(&body, &parsed.body_text);
+    // HTML parsing and the custom search regexes are CPU-bound (both linear in the page
+    // size), so they run together on the blocking pool instead of stalling the async
+    // workers that drive every other in-flight fetch.
+    let parse_url = final_url.clone();
+    let parse_analysis = analysis.clone();
+    let parse_result = tokio::task::spawn_blocking(move || {
+        let parsed = parse_page(&body, &parse_url);
+        let counts = parse_analysis
+            .custom_search
+            .count_matches(&body, &parsed.body_text);
+        (parsed, counts)
+    })
+    .await;
+    let (parsed, custom_search_counts) = match parse_result {
+        Ok(result) => result,
+        Err(e) => {
+            return empty_outcome(PageResult {
+                indexability: "Non-Indexable (Error)".to_string(),
+                response_time_ms: elapsed,
+                error: Some(format!("Failed to parse the page: {e}")),
+                ..base
+            });
+        }
+    };
     let indexability = indexability_for(
         status,
         parsed.canonical.as_deref(),
