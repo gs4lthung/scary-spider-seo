@@ -1,4 +1,5 @@
 import type { PageResult, ResourceResult } from "../types";
+import { isValidHreflang, isXDefault } from "./hreflang";
 import { type LinkGraph, buildLinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 
@@ -223,6 +224,115 @@ export function getNon200LinkSourceSet(pages: PageResult[]): Set<string> {
 }
 
 /**
+ * Cross-page hreflang findings, built one page at a time so a live crawl never rescans old
+ * annotations (see ADR-0013). Each (source, target) pair is evaluated exactly once, as soon as
+ * both pages are crawled: a page's own targets are checked against pages already crawled, and a
+ * target not crawled yet parks the source in `waiting` until it arrives.
+ */
+export interface HreflangTracker {
+  /** Pages with a crawled HTML hreflang target that does not annotate them back. */
+  missingReturn: Set<string>;
+  /** Pages with a crawled hreflang target that is non-200, redirected or not indexable. */
+  targetError: Set<string>;
+  /** Target URL not crawled yet -> source pages annotating it. */
+  waiting: Map<string, string[]>;
+}
+
+export function createHreflangTracker(): HreflangTracker {
+  return { missingReturn: new Set(), targetError: new Set(), waiting: new Map() };
+}
+
+// Hreflang href sets are read for every page annotating a target, so each is built once per
+// page object (pages are immutable once received).
+const hreflangHrefCache = new WeakMap<PageResult, Set<string>>();
+
+function hreflangHrefs(p: PageResult): Set<string> {
+  let hrefs = hreflangHrefCache.get(p);
+  if (!hrefs) {
+    hrefs = new Set(p.hreflangLinks.map((l) => l.href));
+    hreflangHrefCache.set(p, hrefs);
+  }
+  return hrefs;
+}
+
+/** A crawled hreflang target that Google cannot use: it answered non-200, redirected, or is not
+ * indexable. A robots-blocked target was never requested, so it is unknown rather than an error. */
+export function isHreflangTargetError(target: PageResult): boolean {
+  if (target.status === null && target.indexability === ROBOTS_BLOCKED_INDEXABILITY) return false;
+  return isNon200LinkTarget(target) || target.indexability !== "Indexable";
+}
+
+function evaluateHreflangPair(tracker: HreflangTracker, sourceUrl: string, target: PageResult): void {
+  if (isHreflangTargetError(target)) {
+    tracker.targetError.add(sourceUrl);
+  } else if (target.htmlSizeBytes > 0 && !hreflangHrefs(target).has(sourceUrl)) {
+    tracker.missingReturn.add(sourceUrl);
+  }
+}
+
+/**
+ * Feeds one crawled page into `tracker`. Call it after `page` is in `pageByUrl`. Return links
+ * are only checked for targets the crawl reached; links to the page itself are skipped.
+ */
+export function ingestHreflangPage(
+  tracker: HreflangTracker,
+  pageByUrl: ReadonlyMap<string, PageResult>,
+  page: PageResult,
+): void {
+  const waitingSources = tracker.waiting.get(page.url);
+  if (waitingSources) {
+    tracker.waiting.delete(page.url);
+    for (const source of waitingSources) evaluateHreflangPair(tracker, source, page);
+  }
+  for (const href of hreflangHrefs(page)) {
+    if (href === page.url) continue;
+    const target = pageByUrl.get(href);
+    if (target) {
+      evaluateHreflangPair(tracker, page.url, target);
+    } else {
+      const sources = tracker.waiting.get(href);
+      if (sources) sources.push(page.url);
+      else tracker.waiting.set(href, [page.url]);
+    }
+  }
+}
+
+/** Hreflang findings for a complete page list (`FilterContext.hreflangMissingReturn` and
+ * `hreflangTargetError`). */
+export function getHreflangTracker(pages: PageResult[]): HreflangTracker {
+  const pageByUrl = getPageByUrlMap(pages);
+  const tracker = createHreflangTracker();
+  for (const page of pages) ingestHreflangPage(tracker, pageByUrl, page);
+  return tracker;
+}
+
+interface HreflangFlags {
+  missingSelf: boolean;
+  missingXDefault: boolean;
+  invalidCode: boolean;
+}
+
+// Per-page hreflang predicates scan the page's annotations on every recount, so the result is
+// cached per page object (pages are immutable once received).
+const hreflangFlagsCache = new WeakMap<PageResult, HreflangFlags>();
+
+/** Own-page hreflang findings; all false for a page without hreflang links (including pages from
+ * crawls saved before the links were collected). */
+function hreflangFlags(p: PageResult): HreflangFlags {
+  let flags = hreflangFlagsCache.get(p);
+  if (!flags) {
+    const links = p.htmlSizeBytes > 0 ? p.hreflangLinks : [];
+    flags = {
+      missingSelf: links.length > 0 && !links.some((l) => l.href === p.url),
+      missingXDefault: links.length > 0 && !links.some((l) => isXDefault(l.lang)),
+      invalidCode: links.some((l) => !isValidHreflang(l.lang)),
+    };
+    hreflangFlagsCache.set(p, flags);
+  }
+  return flags;
+}
+
+/**
  * Counts occurrences of a value (title / meta description / content hash) one page at
  * a time, so duplicate detection can stay incremental during a live crawl.
  *
@@ -276,6 +386,10 @@ export interface FilterContext {
   linkGraph: LinkGraph;
   /** Pages linking to a crawled non-200 page (see `getNon200LinkSourceSet`). */
   non200LinkSources: Set<string>;
+  /** Pages whose crawled hreflang targets do not annotate them back (see `HreflangTracker`). */
+  hreflangMissingReturn: Set<string>;
+  /** Pages with a crawled hreflang target in error (see `isHreflangTargetError`). */
+  hreflangTargetError: Set<string>;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -291,6 +405,8 @@ export function emptyFilterContext(): FilterContext {
     sitemapUsed: false,
     linkGraph: createLinkGraph(),
     non200LinkSources: new Set(),
+    hreflangMissingReturn: new Set(),
+    hreflangTargetError: new Set(),
   };
 }
 
@@ -1083,6 +1199,45 @@ export const ISSUE_DEFS = [
     group: "indexing",
     section: "International",
     test: (p) => hasHtml(p) && p.hreflangValues.length === 0,
+  }),
+  pageIssue({
+    key: "hreflangMissingReturn",
+    label: "Hreflang missing return link",
+    group: "indexing",
+    tone: "warn",
+    section: "International",
+    test: (p, ctx) => ctx.hreflangMissingReturn.has(p.url),
+  }),
+  pageIssue({
+    key: "hreflangMissingSelf",
+    label: "Hreflang missing self-reference",
+    group: "indexing",
+    tone: "warn",
+    section: "International",
+    test: (p) => hreflangFlags(p).missingSelf,
+  }),
+  pageIssue({
+    key: "hreflangMissingXDefault",
+    label: "Hreflang missing x-default",
+    group: "indexing",
+    section: "International",
+    test: (p) => hreflangFlags(p).missingXDefault,
+  }),
+  pageIssue({
+    key: "hreflangInvalidCode",
+    label: "Invalid hreflang code",
+    group: "indexing",
+    tone: "bad",
+    section: "International",
+    test: (p) => hreflangFlags(p).invalidCode,
+  }),
+  pageIssue({
+    key: "hreflangTargetError",
+    label: "Hreflang to non-200/non-indexable",
+    group: "indexing",
+    tone: "bad",
+    section: "International",
+    test: (p, ctx) => ctx.hreflangTargetError.has(p.url),
   }),
   pageIssue({
     key: "urlUppercase",
