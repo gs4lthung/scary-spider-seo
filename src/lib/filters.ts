@@ -1,4 +1,5 @@
 import type { PageResult, ResourceResult } from "../types";
+import { type LinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 
 export const TITLE_MIN_LENGTH = 30;
@@ -26,6 +27,31 @@ export const LOW_WORD_COUNT = 200;
 export const DEEP_PAGE_DEPTH = 3;
 /** HTML documents larger than this (1 MiB) are "large HTML". */
 export const LARGE_HTML_BYTES = 1_048_576;
+
+/** Anchor texts that say nothing about the target (compared lowercase, after trimming
+ * punctuation and collapsing whitespace, by `isNonDescriptiveAnchor`). */
+export const NON_DESCRIPTIVE_ANCHORS: ReadonlySet<string> = new Set([
+  "click here",
+  "here",
+  "read more",
+  "more",
+  "learn more",
+  "this",
+  "link",
+  "this link",
+  "go",
+  "continue",
+  "details",
+]);
+
+const EDGE_PUNCTUATION = /^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/gu;
+
+/** Whether an anchor text is one of `NON_DESCRIPTIVE_ANCHORS` ("Read more..." and "→ Click
+ * here" included). */
+export function isNonDescriptiveAnchor(anchor: string): boolean {
+  const normalized = anchor.replace(EDGE_PUNCTUATION, "").replace(/\s+/g, " ").toLowerCase();
+  return NON_DESCRIPTIVE_ANCHORS.has(normalized);
+}
 
 export function getDuplicateTitleSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
@@ -195,6 +221,8 @@ export interface FilterContext {
   /** True when the crawl read a sitemap, i.e. at least one page has `discoveredViaSitemap`
    * (see `getSitemapUsed`). `notInSitemap` stays silent otherwise. */
   sitemapUsed: boolean;
+  /** Internal link graph of the crawl (see `buildLinkGraph`). */
+  linkGraph: LinkGraph;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -208,6 +236,7 @@ export function emptyFilterContext(): FilterContext {
     linkedUrls: new Set(),
     pageByUrl: new Map(),
     sitemapUsed: false,
+    linkGraph: createLinkGraph(),
   };
 }
 
@@ -227,6 +256,7 @@ export type OverviewSection =
   | "Accessibility"
   | "Security"
   | "International"
+  | "Links"
   | "URL";
 
 interface IssueDefBase<K extends string> {
@@ -372,6 +402,35 @@ function paginationTargets(p: PageResult): string[] {
 function isPaginationTargetError(url: string, ctx: FilterContext): boolean {
   const target = ctx.pageByUrl.get(url);
   return target === undefined || target.status !== 200 || target.redirectChain.length > 0;
+}
+
+interface AnchorFlags {
+  nonDescriptive: boolean;
+  empty: boolean;
+}
+
+// Anchor predicates scan every outlink of a page on every recount, so the result is cached per
+// page object (pages are immutable once received).
+const anchorFlagsCache = new WeakMap<PageResult, AnchorFlags>();
+
+function anchorFlags(p: PageResult): AnchorFlags {
+  let flags = anchorFlagsCache.get(p);
+  if (!flags) {
+    flags = {
+      nonDescriptive: p.outlinks.some((l) => isNonDescriptiveAnchor(l.anchor)),
+      empty: p.outlinks.some((l) => l.anchor.trim() === ""),
+    };
+    anchorFlagsCache.set(p, flags);
+  }
+  return flags;
+}
+
+/** A link target is in error when the crawl saw it answer anything but a plain 200: an error
+ * status, no response, or a redirect (marked by its chain, since the crawler stores the final
+ * status on a redirected URL). Targets the crawl never reached are unknown, not errors. */
+function isCrawledNon200(url: string, ctx: FilterContext): boolean {
+  const target = ctx.pageByUrl.get(url);
+  return target !== undefined && (target.status !== 200 || target.redirectChain.length > 0);
 }
 
 const is2xx = (p: PageResult) => p.status !== null && p.status >= 200 && p.status < 300;
@@ -792,6 +851,40 @@ export const ISSUE_DEFS = [
     // depth 0 but always carry the flag, so `depth > 0` only ever drops the start URL.
     test: (p, ctx) =>
       ctx.sitemapUsed && !p.discoveredViaSitemap && p.depth > 0 && hasHtml(p) && p.indexability === "Indexable",
+  }),
+  pageIssue({
+    key: "nonDescriptiveAnchors",
+    label: "Non-descriptive anchor text",
+    group: "links",
+    tone: "warn",
+    section: "Links",
+    test: (p) => anchorFlags(p).nonDescriptive,
+  }),
+  pageIssue({
+    key: "emptyAnchors",
+    label: "Links with empty anchor text",
+    group: "links",
+    tone: "warn",
+    section: "Links",
+    // An image link's anchor is its alt text, so an image link without alt counts too.
+    test: (p) => anchorFlags(p).empty,
+  }),
+  pageIssue({
+    key: "singleInlink",
+    label: "Only one inlink",
+    group: "links",
+    tone: "warn",
+    section: "Links",
+    // The start page (depth 0) is where the crawl enters, so it needs no inlinks.
+    test: (p, ctx) => is2xx(p) && hasHtml(p) && p.depth > 0 && getUniqueInlinkCount(ctx.linkGraph, p.url) === 1,
+  }),
+  pageIssue({
+    key: "linksToErrorPages",
+    label: "Links to non-200 pages",
+    group: "links",
+    tone: "warn",
+    section: "Links",
+    test: (p, ctx) => p.outlinks.some((l) => isCrawledNon200(l.url, ctx)),
   }),
   pageIssue({
     key: "slowResponse",

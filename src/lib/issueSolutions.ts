@@ -494,6 +494,46 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://victorious.com/blog/orphan-pages/",
     },
   },
+  nonDescriptiveAnchors: {
+    title: "Links with non-descriptive anchor text",
+    problem:
+      "This page links to another internal page with generic text such as \"click here\", \"read more\" or \"learn more\". Google uses anchor text to understand what the linked page is about, and screen reader users who jump between links hear only that text, so a generic anchor tells neither of them where the link goes.",
+    fix: "Rewrite the link text to describe the target page in a few words, for example \"read the pricing guide\" instead of \"read more\". Keep it concise and relevant to the page it points to.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  emptyAnchors: {
+    title: "Links with empty anchor text",
+    problem:
+      "This page has internal links with no anchor text at all: an empty <a> element, or an image link whose image has no alt text. Google has no words to learn about the target from, and assistive technology announces the link without a name.",
+    fix: "Give every link visible text that describes its target. For an image link, add alt text to the image that describes where the link goes; for an icon-only link, add text that is visually hidden or an aria-label.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  singleInlink: {
+    title: "Page has only one internal inlink",
+    problem:
+      "Only one other crawled page links to this page. Internal links are how Google discovers pages and judges how important they are within your site, so a page reachable from a single link is easy to miss and gets little link equity.",
+    fix: "Link to the page from other relevant pages, such as related articles, category or hub pages, and navigation where it fits. Use descriptive anchor text on those links. If the page is not worth linking to, consider whether it should exist at all.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  linksToErrorPages: {
+    title: "Internal links to non-200 pages",
+    problem:
+      "This page links to internal URLs that answered with an error or a redirect instead of 200 OK. Links to broken pages send users and crawlers to a dead end, and links to redirects add a hop that wastes crawl budget and slows users down.",
+    fix: "Update each link to point straight at the final, live URL. Restore or redirect pages that are genuinely gone, and remove links to them that no longer make sense. The page's outlinks in the detail view show which targets are affected.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
   sitemapNonIndexable: {
     title: "Non-indexable URL listed in the sitemap",
     problem:
