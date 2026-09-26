@@ -389,4 +389,13 @@ mod tests {
         assert_eq!(home.content_simhash, "");
         assert_eq!(snapshot.resources[0].content_length, None);
     }
+
+    /// A config sent without the T3.1 pattern fields means "no restriction".
+    #[test]
+    fn config_without_patterns_defaults_to_empty() {
+        let config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
+        assert!(config.include_patterns.is_empty());
+        assert!(config.exclude_patterns.is_empty());
+    }
 }
