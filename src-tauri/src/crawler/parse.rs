@@ -47,6 +47,11 @@ pub const MAX_HEADINGS: usize = 20;
 pub const MAX_HEADING_LEVELS: usize = 200;
 /// Longest anchor text stored per outlink, in characters.
 pub const MAX_ANCHOR_CHARS: usize = 200;
+/// Pages with fewer body words than this get an empty `content_simhash`: too few
+/// shingles for the fingerprint to say anything about similarity.
+pub const SIMHASH_MIN_WORDS: usize = 20;
+/// Words per shingle fed to the simhash.
+const SIMHASH_SHINGLE_WORDS: usize = 3;
 
 pub struct ParsedPage {
     pub title: Option<String>,
@@ -95,6 +100,9 @@ pub struct ParsedPage {
     pub internal_nofollow_count: usize,
     pub text_ratio_pct: f64,
     pub content_hash: String,
+    /// 64-bit simhash of the body text as 16 lowercase hex chars; empty for pages
+    /// under `SIMHASH_MIN_WORDS` words. See `content_simhash`.
+    pub content_simhash: String,
     pub viewport: Option<String>,
     pub has_open_graph: bool,
     pub has_twitter_card: bool,
@@ -279,6 +287,51 @@ fn hash_content(text: &str) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+/// 64-bit FNV-1a. Implemented inline because `DefaultHasher` output is not guaranteed
+/// to stay the same between Rust releases, and simhashes are persisted in saved crawls.
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    const OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    bytes.iter().fold(OFFSET_BASIS, |hash, &b| {
+        (hash ^ u64::from(b)).wrapping_mul(PRIME)
+    })
+}
+
+/// Charikar simhash over lowercase word 3-shingles of `text`, as 16 hex chars (a string
+/// because JSON numbers lose precision past 2^53). Words are lowercased and stripped of
+/// leading/trailing punctuation. Empty when the text has fewer than `SIMHASH_MIN_WORDS`
+/// words. Near-identical texts get fingerprints a small Hamming distance apart.
+pub fn content_simhash(text: &str) -> String {
+    let words: Vec<String> = text
+        .split_whitespace()
+        .map(|w| {
+            w.trim_matches(|c: char| !c.is_alphanumeric())
+                .to_lowercase()
+        })
+        .filter(|w| !w.is_empty())
+        .collect();
+    if words.len() < SIMHASH_MIN_WORDS {
+        return String::new();
+    }
+    let mut weights = [0i32; 64];
+    for shingle in words.windows(SIMHASH_SHINGLE_WORDS) {
+        let hash = fnv1a64(shingle.join(" ").as_bytes());
+        for (bit, weight) in weights.iter_mut().enumerate() {
+            if hash >> bit & 1 == 1 {
+                *weight += 1;
+            } else {
+                *weight -= 1;
+            }
+        }
+    }
+    let fingerprint = weights
+        .iter()
+        .enumerate()
+        .filter(|(_, &w)| w > 0)
+        .fold(0u64, |acc, (bit, _)| acc | 1 << bit);
+    format!("{fingerprint:016x}")
+}
+
 /// Counts subresources (see `MIXED_CONTENT_SEL`) that resolve to `http:` when the page
 /// itself was served over `https:`.
 fn count_mixed_content(document: &Html, base: &Url) -> usize {
@@ -461,6 +514,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         .unwrap_or_default();
     let word_count = body_text.split_whitespace().count();
     let content_hash = hash_content(&body_text);
+    let content_simhash = content_simhash(&body_text);
 
     let mut internal_links = Vec::new();
     let mut internal_outlinks = Vec::new();
@@ -562,6 +616,7 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
         internal_nofollow_count,
         text_ratio_pct,
         content_hash,
+        content_simhash,
         viewport,
         has_open_graph,
         has_twitter_card,
@@ -984,6 +1039,52 @@ mod tests {
         assert!(page.structured_data_types.is_empty());
         assert_eq!(page.structured_data_errors.len(), 1);
         assert!(page.structured_data_errors[0].starts_with("Invalid JSON-LD"));
+    }
+
+    /// About 60 words of original prose used by the simhash tests.
+    const SIMHASH_TEXT: &str = "Our small bakery opens every morning at six with fresh         sourdough loaves, buttery croissants and seasonal fruit tarts. The ovens are         wood fired and the flour comes from a family mill two valleys away. Regulars         know to arrive early on Saturdays because the cinnamon buns sell out before         nine. We also bake custom cakes for birthdays and weddings when ordered a week         ahead.";
+
+    fn hamming(a: &str, b: &str) -> u32 {
+        let a = u64::from_str_radix(a, 16).unwrap();
+        let b = u64::from_str_radix(b, 16).unwrap();
+        (a ^ b).count_ones()
+    }
+
+    #[test]
+    fn simhash_is_stable_across_runs() {
+        let hash = content_simhash(SIMHASH_TEXT);
+        assert_eq!(hash.len(), 16);
+        assert_eq!(hash, "fde217e8fa0fab49");
+        assert_eq!(fnv1a64(b""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a64(b"a"), 0xaf63_dc4c_8601_ec8c);
+    }
+
+    #[test]
+    fn similar_texts_have_small_hamming_distance() {
+        let original = content_simhash(SIMHASH_TEXT);
+        // One word changed out of about 60 (three of 58 shingles differ).
+        let edited = content_simhash(&SIMHASH_TEXT.replace("nine", "ten"));
+        assert_ne!(original, edited);
+        let d = hamming(&original, &edited);
+        assert!(d <= 3, "distance {d}");
+        let unrelated = content_simhash(
+            "Winter tyres grip better below seven degrees because their rubber compound              stays soft and the deep sipes bite into slush, while summer tyres harden and              lose traction. Swap them before the first frost and store the spare set              indoors, stacked flat, away from sunlight and electric motors that emit ozone.",
+        );
+        let far = hamming(&original, &unrelated);
+        assert!(far > 10, "distance {far}");
+    }
+
+    #[test]
+    fn short_pages_have_empty_simhash() {
+        let nineteen = "one two three four five six seven eight nine ten eleven twelve             thirteen fourteen fifteen sixteen seventeen eighteen nineteen";
+        assert_eq!(content_simhash(nineteen), "");
+        assert_eq!(content_simhash(&format!("{nineteen} twenty")).len(), 16);
+        assert_eq!(
+            parse("<body><p>Too short to fingerprint.</p></body>").content_simhash,
+            ""
+        );
+        // Punctuation-only tokens do not count as words.
+        assert_eq!(content_simhash(&format!("{nineteen} --- !!")), "");
     }
 
     #[test]

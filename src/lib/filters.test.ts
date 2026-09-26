@@ -109,6 +109,7 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     outlinks: [],
     textRatioPct: 20,
     contentHash: "hash1",
+    contentSimhash: "",
     xRobotsTag: null,
     viewport: "width=device-width",
     hasOpenGraph: true,

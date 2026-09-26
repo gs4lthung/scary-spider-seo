@@ -192,6 +192,10 @@ pub struct PageResult {
     pub text_ratio_pct: f64,
     #[serde(default)]
     pub content_hash: String,
+    /// 64-bit simhash of the body text as 16 hex chars, for near-duplicate detection.
+    /// Empty for short or non-HTML pages and for crawls saved before this field existed.
+    #[serde(default)]
+    pub content_simhash: String,
     #[serde(default)]
     pub x_robots_tag: Option<String>,
     #[serde(default)]
@@ -374,6 +378,7 @@ mod tests {
         assert!(home.outlinks.is_empty());
         assert!(home.hreflang_links.is_empty());
         assert_eq!(home.images_missing_dimensions, 0);
+        assert_eq!(home.content_simhash, "");
         assert_eq!(snapshot.resources[0].content_length, None);
     }
 }
