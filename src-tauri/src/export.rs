@@ -1,5 +1,23 @@
 use crate::crawler::types::{PageResult, ResourceResult, ResourceType};
+use std::collections::HashSet;
 use std::fs::File;
+
+/// Every custom search rule id with a count on at least one page, in the order ids
+/// first appear (each page's ids are sorted, shorter first, so `cs2` precedes `cs10`).
+fn custom_search_ids(pages: &[PageResult]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut ids = Vec::new();
+    for p in pages {
+        let mut page_ids: Vec<&String> = p.custom_search_counts.keys().collect();
+        page_ids.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        for id in page_ids {
+            if seen.insert(id.as_str()) {
+                ids.push(id.clone());
+            }
+        }
+    }
+    ids
+}
 
 pub fn export_pages_csv(
     pages: &[PageResult],
@@ -7,8 +25,9 @@ pub fn export_pages_csv(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
+    let custom_ids = custom_search_ids(pages);
 
-    wtr.write_record([
+    let fixed_headers = [
         "URL",
         "Status",
         "Status Text",
@@ -70,10 +89,16 @@ pub fn export_pages_csv(
         "Accessibility Violations",
         "Mobile Usability Violations",
         "Error",
-    ])?;
+    ];
+    wtr.write_record(
+        fixed_headers
+            .iter()
+            .map(|h| h.to_string())
+            .chain(custom_ids.iter().map(|id| format!("Custom Search: {id}"))),
+    )?;
 
     for p in pages {
-        wtr.write_record([
+        let fixed = [
             p.url.clone(),
             p.status.map(|s| s.to_string()).unwrap_or_default(),
             p.status_text.clone(),
@@ -143,7 +168,15 @@ pub fn export_pages_csv(
             p.accessibility_violations.len().to_string(),
             p.mobile_usability_violations.len().to_string(),
             p.error.clone().unwrap_or_default(),
-        ])?;
+        ];
+        // Blank (not 0) for a page the rule never ran on, e.g. a non-HTML URL.
+        let custom = custom_ids.iter().map(|id| {
+            p.custom_search_counts
+                .get(id)
+                .map(|n| n.to_string())
+                .unwrap_or_default()
+        });
+        wtr.write_record(fixed.into_iter().chain(custom))?;
     }
 
     wtr.flush()?;
@@ -229,6 +262,54 @@ mod tests {
             nofollow,
             is_image_link: false,
         }
+    }
+
+    #[test]
+    fn pages_csv_has_one_column_per_custom_search() {
+        let counts = |pairs: &[(&str, u32)]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), *v))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        let pages = vec![
+            PageResult {
+                url: "https://example.com/".to_string(),
+                custom_search_counts: counts(&[("cs10", 1), ("cs2", 0)]),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/logo.png".to_string(),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/b".to_string(),
+                custom_search_counts: counts(&[("cs2", 4), ("cs3", 2)]),
+                ..Default::default()
+            },
+        ];
+        let path = std::env::temp_dir().join(format!("gseo-pages-cs-{}.csv", std::process::id()));
+        export_pages_csv(&pages, path.to_str().unwrap()).unwrap();
+        let mut rdr = csv::Reader::from_path(&path).unwrap();
+        let headers: Vec<String> = rdr.headers().unwrap().iter().map(str::to_string).collect();
+        let rows: Vec<Vec<String>> = rdr
+            .records()
+            .map(|r| r.unwrap().iter().map(str::to_string).collect())
+            .collect();
+        std::fs::remove_file(&path).ok();
+        let tail = |row: &[String]| row[row.len() - 3..].to_vec();
+        assert_eq!(
+            tail(&headers),
+            vec![
+                "Custom Search: cs2",
+                "Custom Search: cs10",
+                "Custom Search: cs3"
+            ]
+        );
+        assert_eq!(tail(&rows[0]), vec!["0", "1", ""]);
+        assert_eq!(tail(&rows[1]), vec!["", "", ""]);
+        assert_eq!(tail(&rows[2]), vec!["4", "", "2"]);
+        assert!(rows.iter().all(|r| r.len() == headers.len()));
     }
 
     #[test]
