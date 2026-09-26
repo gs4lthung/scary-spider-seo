@@ -15,6 +15,8 @@ use tokio::net::TcpListener;
 
 struct FixtureServer {
     origin: String,
+    /// Requests served so far, keyed by `"<METHOD> <path>"` (query string dropped).
+    requests: Arc<DashMap<String, usize>>,
 }
 
 impl FixtureServer {
@@ -24,44 +26,119 @@ impl FixtureServer {
             .expect("bind fixture server");
         let origin = format!("http://{}", listener.local_addr().unwrap());
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/site");
+        let requests: Arc<DashMap<String, usize>> = Arc::new(DashMap::new());
         let served_origin = origin.clone();
+        let served_requests = requests.clone();
         tokio::spawn(async move {
             loop {
-                let Ok((mut stream, _)) = listener.accept().await else {
+                let Ok((stream, _)) = listener.accept().await else {
                     return;
                 };
-                let root = root.clone();
-                let origin = served_origin.clone();
-                tokio::spawn(async move {
-                    let mut buf = vec![0u8; 8192];
-                    let mut len = 0;
-                    while !buf[..len].windows(4).any(|w| w == b"\r\n\r\n") && len < buf.len() {
-                        match stream.read(&mut buf[len..]).await {
-                            Ok(0) | Err(_) => return,
-                            Ok(n) => len += n,
-                        }
-                    }
-                    let request = String::from_utf8_lossy(&buf[..len]);
-                    let mut parts = request.split_whitespace();
-                    let method = parts.next().unwrap_or("GET").to_string();
-                    let path = parts.next().unwrap_or("/").split('?').next().unwrap_or("/");
-                    let response = respond(&root, &origin, &method, path);
-                    let _ = stream.write_all(&response).await;
-                    let _ = stream.shutdown().await;
-                });
+                tokio::spawn(serve_connection(
+                    stream,
+                    root.clone(),
+                    served_origin.clone(),
+                    served_requests.clone(),
+                ));
             }
         });
-        Self { origin }
+        Self { origin, requests }
     }
 
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.origin, path)
     }
+
+    /// How many `method` requests for `path` (query string dropped) were served.
+    fn request_count(&self, method: &str, path: &str) -> usize {
+        self.requests
+            .get(&format!("{method} {path}"))
+            .map_or(0, |count| *count)
+    }
+
+    /// Requests of any method whose path starts with `prefix`.
+    fn request_count_with_prefix(&self, prefix: &str) -> usize {
+        self.requests
+            .iter()
+            .filter(|entry| {
+                entry
+                    .key()
+                    .split_once(' ')
+                    .is_some_and(|(_, path)| path.starts_with(prefix))
+            })
+            .map(|entry| *entry.value())
+            .sum()
+    }
+
+    /// Forgets every counted request, so the next crawl on this server counts from zero.
+    fn reset_request_counts(&self) {
+        self.requests.clear();
+    }
+}
+
+/// Serves one connection. Every `/gen/` response keeps the connection open (see
+/// `respond_generated`), so the large-site crawl reuses pooled connections instead of
+/// opening thousands of fresh TCP connections per run, which is slow and burns
+/// ephemeral ports on Windows. Every other response closes it, as it always has.
+async fn serve_connection(
+    mut stream: tokio::net::TcpStream,
+    root: PathBuf,
+    origin: String,
+    requests: Arc<DashMap<String, usize>>,
+) {
+    let mut buf = vec![0u8; 8192];
+    let mut len = 0;
+    loop {
+        let header_end = loop {
+            if let Some(pos) = buf[..len].windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+            if len == buf.len() {
+                return;
+            }
+            match stream.read(&mut buf[len..]).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => len += n,
+            }
+        };
+        let request = String::from_utf8_lossy(&buf[..header_end]).into_owned();
+        // The crawler only sends GET and HEAD, which have no body, so whatever follows
+        // the headers already belongs to the next request on this connection.
+        buf.copy_within(header_end..len, 0);
+        len -= header_end;
+
+        let mut parts = request.split_whitespace();
+        let method = parts.next().unwrap_or("GET").to_string();
+        let path = parts.next().unwrap_or("/").split('?').next().unwrap_or("/");
+        *requests.entry(format!("{method} {path}")).or_insert(0) += 1;
+        let keep_alive = path.starts_with("/gen/");
+        let response = respond(&root, &origin, &method, path);
+        if stream.write_all(&response).await.is_err() {
+            return;
+        }
+        if !keep_alive {
+            let _ = stream.shutdown().await;
+            return;
+        }
+    }
 }
 
 fn http_response(status: &str, headers: &[(&str, &str)], body: &[u8], head_only: bool) -> Vec<u8> {
+    http_response_on(status, headers, body, head_only, false)
+}
+
+/// Like `http_response`; `keep_alive` answers with `Connection: keep-alive` instead of
+/// `Connection: close`. Only `serve_connection` knows how to keep a connection open.
+fn http_response_on(
+    status: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+    head_only: bool,
+    keep_alive: bool,
+) -> Vec<u8> {
+    let connection = if keep_alive { "keep-alive" } else { "close" };
     let mut out = format!(
-        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: {connection}\r\n",
         body.len()
     );
     for (name, value) in headers {
@@ -105,16 +182,20 @@ fn gen_link_targets(n: usize) -> impl Iterator<Item = usize> {
 /// unique title, 10 links to other generated pages and 2 images: `/gen/img/<n>.png`
 /// (unique to the page) and `/gen/img/shared.png` (on every page). Everything is
 /// generated in memory, so the throughput test measures the crawler, not disk reads.
-/// Returns `None` for any path outside `/gen/`.
+/// Returns `None` for any path outside `/gen/`. Every `/gen/` response, 404s included,
+/// keeps the connection alive (`serve_connection` relies on that).
 fn respond_generated(path: &str, head: bool) -> Option<Vec<u8>> {
     let rest = path.strip_prefix("/gen/")?;
-    let not_found = || http_response("404 Not Found", &[], b"", head);
+    let reply = |status: &str, headers: &[(&str, &str)], body: &[u8]| {
+        http_response_on(status, headers, body, head, true)
+    };
+    let not_found = || reply("404 Not Found", &[], b"");
     if let Some(image) = rest.strip_prefix("img/") {
         let valid = image
             .strip_suffix(".png")
             .is_some_and(|stem| stem == "shared" || stem.parse::<usize>().is_ok());
         return Some(if valid {
-            http_response("200 OK", &[("Content-Type", "image/png")], b"\x89PNG", head)
+            reply("200 OK", &[("Content-Type", "image/png")], b"\x89PNG")
         } else {
             not_found()
         });
@@ -135,11 +216,10 @@ fn respond_generated(path: &str, head: bool) -> Option<Vec<u8>> {
          <img src=\"/gen/img/shared.png\" alt=\"Shared image\" width=\"4\" height=\"4\">\
          <ul>{links}</ul></body></html>"
     );
-    Some(http_response(
+    Some(reply(
         "200 OK",
         &[("Content-Type", "text/html; charset=utf-8")],
         body.as_bytes(),
-        head,
     ))
 }
 
@@ -1251,8 +1331,9 @@ const LARGE_SITE_BUDGET: std::time::Duration = std::time::Duration::from_secs(60
 /// retried, a consistently slow crawler is not.
 const LARGE_SITE_ATTEMPTS: usize = 3;
 /// Hard ceiling for any single attempt, so a hung crawl fails instead of stalling
-/// `cargo test`.
-const LARGE_SITE_HARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+/// `cargo test`. 2.5 times the budget: a slow attempt still finishes and gets retried,
+/// while all attempts together stay well inside the gate's own timeout.
+const LARGE_SITE_HARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(150);
 
 /// Deterministic checks on a finished large-site crawl, independent of timing.
 fn assert_large_site_complete(site: &FixtureServer, out: &CrawlOutput) {
@@ -1281,6 +1362,19 @@ fn assert_large_site_complete(site: &FixtureServer, out: &CrawlOutput) {
         "every generated image answers 200"
     );
     assert_eq!(out.linked_urls.len(), GEN_PAGES, "linked internal URLs");
+
+    // `out.resources` is keyed by URL, so it can't show a duplicate check; the server's
+    // request counts can. Needs `reset_request_counts` right before the crawl.
+    assert_eq!(
+        site.request_count_with_prefix("/gen/img/shared.png"),
+        1,
+        "the image on every page is requested once"
+    );
+    assert_eq!(
+        site.request_count_with_prefix("/gen/img/"),
+        GEN_PAGES + 1,
+        "image requests, any method"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1305,6 +1399,7 @@ async fn large_site_crawl_completes_within_budget() {
 
     let mut timings = Vec::new();
     for attempt in 1..=LARGE_SITE_ATTEMPTS {
+        site.reset_request_counts();
         let started = std::time::Instant::now();
         let out = tokio::time::timeout(
             LARGE_SITE_HARD_TIMEOUT,
