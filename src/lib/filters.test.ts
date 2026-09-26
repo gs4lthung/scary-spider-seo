@@ -56,6 +56,13 @@ import {
   searchResources,
 } from "./filters";
 import { addPageToLinkGraph, buildLinkGraph, createLinkGraph } from "./linkGraph";
+import { createNearDuplicateTracker, getNearDuplicateClusters, ingestNearDuplicatePage } from "./nearDuplicates";
+
+function nearDuplicateContext(pages: PageResult[]) {
+  const tracker = createNearDuplicateTracker();
+  for (const p of pages) ingestNearDuplicatePage(tracker, p);
+  return getNearDuplicateClusters(tracker);
+}
 
 function makePage(overrides: Partial<PageResult> = {}): PageResult {
   return {
@@ -913,6 +920,8 @@ describe("issue registry", () => {
       at("canonical-to-moved", { canonical: "https://example.com/moved" }),
       at("linked-only", { discoveredViaSitemap: false, depth: 1 }),
       at("few-words", { wordCount: LOW_WORD_COUNT - 1 }),
+      at("near-dup-a", { contentSimhash: "0123456789abcdef", contentHash: "near-a" }),
+      at("near-dup-b", { contentSimhash: "0123456789abcdee", contentHash: "near-b" }),
       at("deep", { depth: DEEP_PAGE_DEPTH + 1 }),
       at("huge", { htmlSizeBytes: LARGE_HTML_BYTES + 1 }),
       at("no-h2", { h2Values: [], h2Count: 0, headingLevels: [1] }),
@@ -963,6 +972,7 @@ describe("issue registry", () => {
       non200LinkSources: getNon200LinkSourceSet(pages),
       hreflangMissingReturn: hreflang.missingReturn,
       hreflangTargetError: hreflang.targetError,
+      nearDuplicates: nearDuplicateContext(pages),
     };
     return { pages, resources, ctx };
   }
@@ -1669,5 +1679,55 @@ describe("hreflang issues", () => {
       expect.arrayContaining(["hreflangMissingSelf", "hreflangMissingXDefault", "hreflangInvalidCode", "hreflangTargetError"]),
     );
     expect(keys).not.toContain("hreflangMissingReturn");
+  });
+});
+
+describe("near-duplicate content", () => {
+  const url = (path: string) => `https://example.com/${path}`;
+  const page = (path: string, overrides: Partial<PageResult> = {}) =>
+    makePage({ url: url(path), contentHash: `hash-${path}`, ...overrides });
+  const flagged = (pages: PageResult[]) =>
+    filterPages(pages, "nearDuplicateContent", { ...emptyFilterContext(), nearDuplicates: nearDuplicateContext(pages) }).map(
+      (p) => p.url,
+    );
+
+  it("flags pages whose simhashes are within 3 bits", () => {
+    const pages = [
+      page("a", { contentSimhash: "ffff0000ffff0000" }),
+      page("b", { contentSimhash: "ffff0000ffff0007" }),
+      page("far", { contentSimhash: "ffff0000ffff00f0" }),
+    ];
+    expect(flagged(pages)).toEqual([url("a"), url("b")]);
+  });
+
+  it("does not flag exact duplicates, which are duplicateContent", () => {
+    const pages = [
+      page("a", { contentSimhash: "ffff0000ffff0000", contentHash: "same" }),
+      page("b", { contentSimhash: "ffff0000ffff0000", contentHash: "same" }),
+    ];
+    expect(flagged(pages)).toEqual([]);
+  });
+
+  it("does not flag pages from crawls saved without simhashes", () => {
+    expect(flagged([page("a", { contentSimhash: "" }), page("b", { contentSimhash: "" })])).toEqual([]);
+  });
+
+  it("does not flag redirected, non-200, non-HTML or non-indexable copies", () => {
+    const original = page("a", { contentSimhash: "ffff0000ffff0000" });
+    for (const copy of [
+      page("r", { contentSimhash: "ffff0000ffff0001", redirectChain: [url("r")] }),
+      page("e", { contentSimhash: "ffff0000ffff0001", status: 500 }),
+      page("n", { contentSimhash: "ffff0000ffff0001", htmlSizeBytes: 0 }),
+      page("c", { contentSimhash: "ffff0000ffff0001", indexability: "Canonicalised" }),
+    ]) {
+      expect(flagged([original, copy]), copy.url).toEqual([]);
+    }
+  });
+
+  it("appears in getPageIssueKeys", () => {
+    const pages = [page("a", { contentSimhash: "ffff0000ffff0000" }), page("b", { contentSimhash: "ffff0000ffff0001" })];
+    const ctx = { ...emptyFilterContext(), nearDuplicates: nearDuplicateContext(pages) };
+    expect(getPageIssueKeys(pages[0], ctx)).toContain("nearDuplicateContent");
+    expect(getPageIssueKeys(makePage(), ctx)).not.toContain("nearDuplicateContent");
   });
 });

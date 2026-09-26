@@ -221,6 +221,15 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
     },
   },
+  nearDuplicateContent: {
+    title: "Near-duplicate content",
+    problem: "The visible text of this page is almost the same as one or more other crawled pages (their 64-bit simhash fingerprints differ in 3 bits or fewer, which in practice means only a few words differ). Google groups such pages and shows one of them, so the others compete with it, and templated pages that differ only by a place name or product variant can look thin.",
+    fix: "Open the page details to see how many pages share its cluster, then either merge the pages, make each one substantially unique, or point the copies at the preferred URL with <link rel=\"canonical\" href=\"...\">. Canonicalised and noindex pages are left out of this check, so the issue clears once the copies canonicalise to one URL.",
+    source: {
+      label: "Google Search Central: Consolidate duplicate URLs",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
   lowTextRatio: {
     title: "Low text-to-HTML ratio",
     problem: "Worth flagging honestly: Google's John Mueller has said text-to-HTML ratio \"makes no sense\" as an SEO metric and isn't something Google uses directly, so ignore any tool that presents it as a ranking factor. It can still be a useful proxy for two unrelated things worth checking manually: bloated/unminified markup hurting load time, or a page that's genuinely thin on real content relative to its boilerplate.",

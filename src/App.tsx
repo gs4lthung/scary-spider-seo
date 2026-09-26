@@ -73,6 +73,7 @@ import {
   getUniqueInlinkCount,
   linkScore,
 } from "./lib/linkGraph";
+import { createNearDuplicateTracker, getNearDuplicateClusters, ingestNearDuplicatePage } from "./lib/nearDuplicates";
 import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
@@ -610,6 +611,7 @@ function App() {
   const linkGraphRef = useRef(createLinkGraph());
   const non200LinkSourcesRef = useRef(new Set<string>());
   const hreflangTrackerRef = useRef(createHreflangTracker());
+  const nearDuplicateTrackerRef = useRef(createNearDuplicateTracker());
   const ingestedPagesCountRef = useRef(0);
 
   const resetDerivedTrackers = useCallback(() => {
@@ -624,6 +626,7 @@ function App() {
     linkGraphRef.current = createLinkGraph();
     non200LinkSourcesRef.current = new Set();
     hreflangTrackerRef.current = createHreflangTracker();
+    nearDuplicateTrackerRef.current = createNearDuplicateTracker();
     ingestedPagesCountRef.current = 0;
   }, []);
   // Mirrors the state the close-confirmation handler below needs, so that handler
@@ -875,6 +878,7 @@ function App() {
     non200LinkSources,
     hreflangMissingReturn,
     hreflangTargetError,
+    nearDuplicates,
   } = useMemo(() => {
     if (ingestedPagesCountRef.current > pages.length) {
       // `pages` was replaced wholesale rather than appended to (defensive fallback —
@@ -894,6 +898,7 @@ function App() {
       addPageToLinkGraph(linkGraphRef.current, p);
       ingestNon200LinkSources(non200LinkSourcesRef.current, linkGraphRef.current, pageByUrlRef.current, p);
       ingestHreflangPage(hreflangTrackerRef.current, pageByUrlRef.current, p);
+      ingestNearDuplicatePage(nearDuplicateTrackerRef.current, p);
     }
     ingestedPagesCountRef.current = pages.length;
 
@@ -912,6 +917,8 @@ function App() {
       non200LinkSources: new Set(non200LinkSourcesRef.current),
       hreflangMissingReturn: new Set(hreflangTrackerRef.current.missingReturn),
       hreflangTargetError: new Set(hreflangTrackerRef.current.targetError),
+      // O(pages) snapshot of the incrementally built clusters; no pairwise rescan.
+      nearDuplicates: getNearDuplicateClusters(nearDuplicateTrackerRef.current),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- trackers are refs, intentionally excluded
   }, [pages]);
@@ -933,6 +940,7 @@ function App() {
       non200LinkSources,
       hreflangMissingReturn,
       hreflangTargetError,
+      nearDuplicates,
     }),
     [
       duplicateTitleSet,
@@ -948,6 +956,7 @@ function App() {
       non200LinkSources,
       hreflangMissingReturn,
       hreflangTargetError,
+      nearDuplicates,
     ],
   );
   // Link scores rank the whole graph, so while a crawl runs they refresh on a timer instead
@@ -1239,6 +1248,11 @@ function App() {
             {
               label: "Text/HTML Ratio",
               value: selectedPage.htmlSizeBytes ? `${selectedPage.textRatioPct.toFixed(1)}%` : null,
+            },
+            { label: "Content Simhash", value: selectedPage.contentSimhash || null },
+            {
+              label: "Near-Duplicate Cluster Size",
+              value: filterContext.nearDuplicates.get(selectedPage.url)?.size ?? null,
             },
             { label: "X-Robots-Tag", value: selectedPage.xRobotsTag },
             { label: "Viewport", value: selectedPage.viewport },
