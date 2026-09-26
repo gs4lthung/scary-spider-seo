@@ -10,11 +10,14 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
+use tauri::Listener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 struct FixtureServer {
     origin: String,
+    /// Requests served so far, keyed by `"<METHOD> <path>"` (query string dropped).
+    requests: Arc<DashMap<String, usize>>,
 }
 
 impl FixtureServer {
@@ -24,44 +27,119 @@ impl FixtureServer {
             .expect("bind fixture server");
         let origin = format!("http://{}", listener.local_addr().unwrap());
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/site");
+        let requests: Arc<DashMap<String, usize>> = Arc::new(DashMap::new());
         let served_origin = origin.clone();
+        let served_requests = requests.clone();
         tokio::spawn(async move {
             loop {
-                let Ok((mut stream, _)) = listener.accept().await else {
+                let Ok((stream, _)) = listener.accept().await else {
                     return;
                 };
-                let root = root.clone();
-                let origin = served_origin.clone();
-                tokio::spawn(async move {
-                    let mut buf = vec![0u8; 8192];
-                    let mut len = 0;
-                    while !buf[..len].windows(4).any(|w| w == b"\r\n\r\n") && len < buf.len() {
-                        match stream.read(&mut buf[len..]).await {
-                            Ok(0) | Err(_) => return,
-                            Ok(n) => len += n,
-                        }
-                    }
-                    let request = String::from_utf8_lossy(&buf[..len]);
-                    let mut parts = request.split_whitespace();
-                    let method = parts.next().unwrap_or("GET").to_string();
-                    let path = parts.next().unwrap_or("/").split('?').next().unwrap_or("/");
-                    let response = respond(&root, &origin, &method, path);
-                    let _ = stream.write_all(&response).await;
-                    let _ = stream.shutdown().await;
-                });
+                tokio::spawn(serve_connection(
+                    stream,
+                    root.clone(),
+                    served_origin.clone(),
+                    served_requests.clone(),
+                ));
             }
         });
-        Self { origin }
+        Self { origin, requests }
     }
 
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.origin, path)
     }
+
+    /// How many `method` requests for `path` (query string dropped) were served.
+    fn request_count(&self, method: &str, path: &str) -> usize {
+        self.requests
+            .get(&format!("{method} {path}"))
+            .map_or(0, |count| *count)
+    }
+
+    /// Requests of any method whose path starts with `prefix`.
+    fn request_count_with_prefix(&self, prefix: &str) -> usize {
+        self.requests
+            .iter()
+            .filter(|entry| {
+                entry
+                    .key()
+                    .split_once(' ')
+                    .is_some_and(|(_, path)| path.starts_with(prefix))
+            })
+            .map(|entry| *entry.value())
+            .sum()
+    }
+
+    /// Forgets every counted request, so the next crawl on this server counts from zero.
+    fn reset_request_counts(&self) {
+        self.requests.clear();
+    }
+}
+
+/// Serves one connection. Every `/gen/` response keeps the connection open (see
+/// `respond_generated`), so the large-site crawl reuses pooled connections instead of
+/// opening thousands of fresh TCP connections per run, which is slow and burns
+/// ephemeral ports on Windows. Every other response closes it, as it always has.
+async fn serve_connection(
+    mut stream: tokio::net::TcpStream,
+    root: PathBuf,
+    origin: String,
+    requests: Arc<DashMap<String, usize>>,
+) {
+    let mut buf = vec![0u8; 8192];
+    let mut len = 0;
+    loop {
+        let header_end = loop {
+            if let Some(pos) = buf[..len].windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+            if len == buf.len() {
+                return;
+            }
+            match stream.read(&mut buf[len..]).await {
+                Ok(0) | Err(_) => return,
+                Ok(n) => len += n,
+            }
+        };
+        let request = String::from_utf8_lossy(&buf[..header_end]).into_owned();
+        // The crawler only sends GET and HEAD, which have no body, so whatever follows
+        // the headers already belongs to the next request on this connection.
+        buf.copy_within(header_end..len, 0);
+        len -= header_end;
+
+        let mut parts = request.split_whitespace();
+        let method = parts.next().unwrap_or("GET").to_string();
+        let path = parts.next().unwrap_or("/").split('?').next().unwrap_or("/");
+        *requests.entry(format!("{method} {path}")).or_insert(0) += 1;
+        let keep_alive = path.starts_with("/gen/");
+        let response = respond(&root, &origin, &method, path);
+        if stream.write_all(&response).await.is_err() {
+            return;
+        }
+        if !keep_alive {
+            let _ = stream.shutdown().await;
+            return;
+        }
+    }
 }
 
 fn http_response(status: &str, headers: &[(&str, &str)], body: &[u8], head_only: bool) -> Vec<u8> {
+    http_response_on(status, headers, body, head_only, false)
+}
+
+/// Like `http_response`; `keep_alive` answers with `Connection: keep-alive` instead of
+/// `Connection: close`. Only `serve_connection` knows how to keep a connection open.
+fn http_response_on(
+    status: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+    head_only: bool,
+    keep_alive: bool,
+) -> Vec<u8> {
+    let connection = if keep_alive { "keep-alive" } else { "close" };
     let mut out = format!(
-        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: {connection}\r\n",
         body.len()
     );
     for (name, value) in headers {
@@ -86,6 +164,9 @@ const SECURITY_HEADERS: &[(&str, &str)] = &[
     ("Referrer-Policy", "strict-origin-when-cross-origin"),
 ];
 
+/// `Server` header of the start page `/`, reported in site info.
+const FIXTURE_SERVER_HEADER: &str = "fixture-server";
+
 /// Body size of `/img/large.png`, over the frontend's 100 KB `largeImage` threshold.
 const LARGE_IMAGE_BYTES: usize = 150_000;
 
@@ -105,16 +186,20 @@ fn gen_link_targets(n: usize) -> impl Iterator<Item = usize> {
 /// unique title, 10 links to other generated pages and 2 images: `/gen/img/<n>.png`
 /// (unique to the page) and `/gen/img/shared.png` (on every page). Everything is
 /// generated in memory, so the throughput test measures the crawler, not disk reads.
-/// Returns `None` for any path outside `/gen/`.
+/// Returns `None` for any path outside `/gen/`. Every `/gen/` response, 404s included,
+/// keeps the connection alive (`serve_connection` relies on that).
 fn respond_generated(path: &str, head: bool) -> Option<Vec<u8>> {
     let rest = path.strip_prefix("/gen/")?;
-    let not_found = || http_response("404 Not Found", &[], b"", head);
+    let reply = |status: &str, headers: &[(&str, &str)], body: &[u8]| {
+        http_response_on(status, headers, body, head, true)
+    };
+    let not_found = || reply("404 Not Found", &[], b"");
     if let Some(image) = rest.strip_prefix("img/") {
         let valid = image
             .strip_suffix(".png")
             .is_some_and(|stem| stem == "shared" || stem.parse::<usize>().is_ok());
         return Some(if valid {
-            http_response("200 OK", &[("Content-Type", "image/png")], b"\x89PNG", head)
+            reply("200 OK", &[("Content-Type", "image/png")], b"\x89PNG")
         } else {
             not_found()
         });
@@ -135,11 +220,10 @@ fn respond_generated(path: &str, head: bool) -> Option<Vec<u8>> {
          <img src=\"/gen/img/shared.png\" alt=\"Shared image\" width=\"4\" height=\"4\">\
          <ul>{links}</ul></body></html>"
     );
-    Some(http_response(
+    Some(reply(
         "200 OK",
         &[("Content-Type", "text/html; charset=utf-8")],
         body.as_bytes(),
-        head,
     ))
 }
 
@@ -152,6 +236,7 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
     match path {
         "/old-page" => return redirect("/new-page.html"),
         "/redirect-to-gone" => return redirect("/gone.html"),
+        "/start-redirect" => return redirect("/"),
         "/loop-a" => return redirect("/loop-b"),
         "/loop-b" => return redirect("/loop-a"),
         "/img/ok.png" | "/img/decorative.png" | "/img/logo.png" => {
@@ -190,6 +275,9 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
             if path == "/secure-headers.html" {
                 headers.extend_from_slice(SECURITY_HEADERS);
             }
+            if path == "/" {
+                headers.push(("Server", FIXTURE_SERVER_HEADER));
+            }
             http_response("200 OK", &headers, body.as_bytes(), head)
         }
         Err(_) => http_response(
@@ -206,6 +294,8 @@ struct CrawlOutput {
     resources: Vec<ResourceResult>,
     /// Normalized internal URLs some crawled page linked to (the `run_crawl` result).
     linked_urls: Vec<String>,
+    /// Every `crawl://site_info` payload the crawl emitted, in order.
+    site_info: Vec<serde_json::Value>,
 }
 
 impl CrawlOutput {
@@ -258,6 +348,14 @@ async fn crawl_resumable(
     let config: CrawlConfig = serde_json::from_value(config).expect("valid crawl config");
 
     let app = tauri::test::mock_app();
+    let site_info = Arc::new(Mutex::new(Vec::new()));
+    let site_info_sink = site_info.clone();
+    // Rust listeners run inside `emit`, so every payload is recorded before `run_crawl`
+    // returns.
+    app.listen("crawl://site_info", move |event| {
+        let payload = serde_json::from_str(event.payload()).expect("site info is JSON");
+        site_info_sink.lock().unwrap().push(payload);
+    });
     let resume_slot = Arc::new(Mutex::new(None));
     let pages = Arc::new(Mutex::new(Vec::new()));
     let resources = Arc::new(DashMap::new());
@@ -274,11 +372,13 @@ async fn crawl_resumable(
     let pages = pages.lock().unwrap().clone();
     let resources = resources.iter().map(|e| e.value().clone()).collect();
     let left_behind = resume_slot.lock().unwrap().take();
+    let site_info = site_info.lock().unwrap().clone();
     (
         CrawlOutput {
             pages,
             resources,
             linked_urls,
+            site_info,
         },
         left_behind,
     )
@@ -325,6 +425,123 @@ async fn crawls_every_linked_page_exactly_once() {
     .map(|p| site.url(p))
     .collect();
     assert_eq!(out.urls(), expected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn start_url_is_fetched_once() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+    assert_eq!(out.page(&site.url("/")).status, Some(200));
+    // Site info takes its technologies from the crawl's own fetch of `/`.
+    assert_eq!(site.request_count("GET", "/"), 1, "GET / requests");
+    assert_eq!(site.request_count("HEAD", "/"), 0, "HEAD / requests");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn site_info_still_reports_technologies() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    let info = &out.site_info[0];
+    assert_eq!(info["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(info["llmsTxtUrl"], site.url("/llms.txt"));
+    assert_eq!(info["robotsTxtChecked"], true);
+    assert_eq!(info["ipAddresses"], json!(["127.0.0.1"]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resumed_crawl_sends_no_site_info() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    let queued = site.url("/dup-a.html");
+    // The first run already fetched `/`, so only `/dup-a.html` is left to crawl.
+    let resume = CrawlResumeState {
+        start_url: start.clone(),
+        frontier: [(url::Url::parse(&queued).unwrap(), 1, false)].into(),
+        visited: [start.clone(), queued.clone()].into(),
+        scheduled_count: 2,
+        crawled_count: 1,
+        linked_urls: Default::default(),
+    };
+    let (out, _) = crawl_resumable(&start, json!({ "maxDepth": 1 }), Some(resume), false).await;
+    assert_eq!(out.urls(), vec![queued.as_str()]);
+    assert_eq!(
+        site.request_count("GET", "/"),
+        0,
+        "the start page is not refetched"
+    );
+    // The first run's site info (with technologies) stays what the user sees.
+    assert!(out.site_info.is_empty(), "{:?}", out.site_info);
+    assert_eq!(
+        site.request_count("GET", "/llms.txt"),
+        0,
+        "no site info lookups"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resumed_crawl_with_the_start_page_queued_reports_technologies() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    // Stopped before anything was fetched, so `/` is still queued.
+    let (_, resume) = crawl_resumable(&start, json!({}), None, true).await;
+    let resume = resume.expect("a stopped crawl leaves resume state");
+    let (out, _) = crawl_resumable(&start, json!({ "maxDepth": 0 }), Some(resume), false).await;
+    assert_eq!(out.urls(), vec![start.as_str()]);
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    assert_eq!(out.site_info[0]["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(site.request_count("GET", "/"), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_reports_technologies_when_the_start_url_is_listed() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    let out = crawl(
+        &start,
+        json!({ "listUrls": [&start, site.url("/dup-a.html")] }),
+    )
+    .await;
+    assert_eq!(out.pages.len(), 2);
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    assert_eq!(out.site_info[0]["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(site.request_count("GET", "/"), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn list_mode_sends_site_info_once_when_the_start_url_is_not_listed() {
+    let site = FixtureServer::start().await;
+    let dup_a = site.url("/dup-a.html");
+    let out = crawl(&site.url("/"), json!({ "listUrls": [&dup_a] })).await;
+    assert_eq!(out.urls(), vec![dup_a.as_str()]);
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    // `/` is neither crawled nor probed, so there is nothing to detect from.
+    assert_eq!(out.site_info[0]["server"], serde_json::Value::Null);
+    assert_eq!(out.site_info[0]["llmsTxtUrl"], site.url("/llms.txt"));
+    assert_eq!(site.request_count("GET", "/"), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn redirecting_start_page_reports_the_target_headers() {
+    let site = FixtureServer::start().await;
+    // `/start-redirect` answers 301 without a `Server` header; its target `/` has one.
+    let start = site.url("/start-redirect");
+    let out = crawl(&start, json!({ "maxDepth": 0 })).await;
+    assert_eq!(out.page(&start).redirect_url, Some(site.url("/")));
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    assert_eq!(out.site_info[0]["server"], FIXTURE_SERVER_HEADER);
+    assert_eq!(site.request_count("GET", "/start-redirect"), 1);
+    assert_eq!(site.request_count("GET", "/"), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn site_info_is_emitted_when_stopped_before_the_start_page() {
+    let site = FixtureServer::start().await;
+    let (out, _) = crawl_resumable(&site.url("/"), json!({}), None, true).await;
+    assert!(out.pages.is_empty());
+    assert_eq!(out.site_info.len(), 1, "site info is emitted once");
+    assert_eq!(out.site_info[0]["server"], serde_json::Value::Null);
+    assert_eq!(site.request_count("GET", "/"), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1244,15 +1461,17 @@ fn gen_links_reach_every_page() {
 }
 
 /// Wall-time budget for one 2000-page crawl. Generous (debug builds, shared CI runners,
-/// parallel test threads); it exists to catch large regressions such as an accidental
-/// O(n^2) step, not to benchmark. See ADR-0021 for the retry design.
+/// parallel test threads): about 40 times the measured time, so it only trips on a
+/// roughly 40x slowdown at this size, not on smaller regressions or every O(n^2) step.
+/// A tripwire, not a benchmark. See ADR-0021 for the retry design.
 const LARGE_SITE_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 /// Timed attempts before the budget check fails: one slow run on a busy machine is
 /// retried, a consistently slow crawler is not.
 const LARGE_SITE_ATTEMPTS: usize = 3;
 /// Hard ceiling for any single attempt, so a hung crawl fails instead of stalling
-/// `cargo test`.
-const LARGE_SITE_HARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+/// `cargo test`. 2.5 times the budget: a slow attempt still finishes and gets retried,
+/// while all attempts together stay well inside the gate's own timeout.
+const LARGE_SITE_HARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(150);
 
 /// Deterministic checks on a finished large-site crawl, independent of timing.
 fn assert_large_site_complete(site: &FixtureServer, out: &CrawlOutput) {
@@ -1281,6 +1500,24 @@ fn assert_large_site_complete(site: &FixtureServer, out: &CrawlOutput) {
         "every generated image answers 200"
     );
     assert_eq!(out.linked_urls.len(), GEN_PAGES, "linked internal URLs");
+
+    // `out.resources` is keyed by URL, so it can't show a duplicate check; the server's
+    // request counts can. Needs `reset_request_counts` right before the crawl.
+    assert_eq!(
+        site.request_count_with_prefix("/gen/img/shared.png"),
+        1,
+        "the image on every page is requested once"
+    );
+    assert_eq!(
+        site.request_count_with_prefix("/gen/img/"),
+        GEN_PAGES + 1,
+        "image requests, any method"
+    );
+    assert_eq!(
+        site.request_count("GET", "/gen/0"),
+        1,
+        "the start page is requested once"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1305,6 +1542,7 @@ async fn large_site_crawl_completes_within_budget() {
 
     let mut timings = Vec::new();
     for attempt in 1..=LARGE_SITE_ATTEMPTS {
+        site.reset_request_counts();
         let started = std::time::Instant::now();
         let out = tokio::time::timeout(
             LARGE_SITE_HARD_TIMEOUT,
