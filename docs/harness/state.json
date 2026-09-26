@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 3,
     "startedAt": "2026-09-26T03:51:03.737Z",
-    "lastProgressAt": "2026-09-26T04:51:54.437Z"
+    "lastProgressAt": "2026-09-26T05:36:39.680Z"
   },
   "tasks": {
     "T1.1": {
@@ -214,10 +214,10 @@
         "T1.1",
         "T3.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:07.016Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "01d9e72",
+      "updatedAt": "2026-09-26T05:36:39.679Z"
     },
     "T3.4": {
       "title": "Custom extraction with CSS selectors",
