@@ -1,6 +1,28 @@
-use crate::crawler::types::{CustomSearchRule, PageResult, ResourceResult, ResourceType};
-use std::collections::HashSet;
+use crate::crawler::types::{
+    CustomSearchRule, ExtractionRule, PageResult, ResourceResult, ResourceType,
+};
+use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
+
+/// Ids with an entry on at least one page, in the order they first appear (each page's ids
+/// sorted shorter first, so `ex2` comes before `ex10`).
+fn ids_in_page_order<'a, V: 'a>(
+    pages: &'a [PageResult],
+    map: impl Fn(&'a PageResult) -> &'a BTreeMap<String, V>,
+) -> Vec<&'a str> {
+    let mut seen = HashSet::new();
+    let mut order = Vec::new();
+    for p in pages {
+        let mut page_ids: Vec<&String> = map(p).keys().collect();
+        page_ids.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+        for id in page_ids {
+            if seen.insert(id.as_str()) {
+                order.push(id.as_str());
+            }
+        }
+    }
+    order
+}
 
 /// The pages CSV's custom search columns: every rule id with a count on at least one page,
 /// as `(id, header)`. Ids of `rules` come first in rule order, then any other id in the order
@@ -10,17 +32,8 @@ fn custom_search_columns(
     pages: &[PageResult],
     rules: &[CustomSearchRule],
 ) -> Vec<(String, String)> {
-    let mut seen_on_pages = HashSet::new();
-    let mut page_order = Vec::new();
-    for p in pages {
-        let mut page_ids: Vec<&String> = p.custom_search_counts.keys().collect();
-        page_ids.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-        for id in page_ids {
-            if seen_on_pages.insert(id.as_str()) {
-                page_order.push(id.as_str());
-            }
-        }
-    }
+    let page_order = ids_in_page_order(pages, |p| &p.custom_search_counts);
+    let seen_on_pages: HashSet<&str> = page_order.iter().copied().collect();
     let mut columns = Vec::new();
     let mut emitted = HashSet::new();
     for rule in rules {
@@ -40,14 +53,56 @@ fn custom_search_columns(
     columns
 }
 
+/// The pages CSV's custom extraction columns: every rule id with an entry on at least one
+/// page, as `(id, header)`. Ids of `rules` come first in rule order, then any other id. A
+/// column is headed `Extraction: ` and the rule's name, else its selector, else (a rule not
+/// in `rules`) the bare id; a header already used gets ` (2)`, ` (3)`... appended.
+fn extraction_columns(pages: &[PageResult], rules: &[ExtractionRule]) -> Vec<(String, String)> {
+    let page_order = ids_in_page_order(pages, |p| &p.extracted);
+    let on_pages: HashSet<&str> = page_order.iter().copied().collect();
+    let mut labelled: Vec<(&str, &str)> = Vec::new();
+    let mut emitted = HashSet::new();
+    for rule in rules {
+        if on_pages.contains(rule.id.as_str()) && emitted.insert(rule.id.as_str()) {
+            let label = [rule.name.trim(), rule.selector.trim()]
+                .into_iter()
+                .find(|s| !s.is_empty())
+                .unwrap_or(rule.id.as_str());
+            labelled.push((rule.id.as_str(), label));
+        }
+    }
+    for id in page_order {
+        if emitted.insert(id) {
+            labelled.push((id, id));
+        }
+    }
+    let mut used: HashSet<String> = HashSet::new();
+    labelled
+        .into_iter()
+        .map(|(id, label)| {
+            let base = format!("Extraction: {label}");
+            let mut header = base.clone();
+            let mut n = 1;
+            while used.contains(&header) {
+                n += 1;
+                header = format!("{base} ({n})");
+            }
+            used.insert(header.clone());
+            (id.to_string(), header)
+        })
+        .collect()
+}
+
 pub fn export_pages_csv(
     pages: &[PageResult],
     custom_searches: &[CustomSearchRule],
+    extractions: &[ExtractionRule],
     path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
     let custom_columns = custom_search_columns(pages, custom_searches);
+    let extraction_columns = extraction_columns(pages, extractions);
 
     let fixed_headers = [
         "URL",
@@ -116,7 +171,8 @@ pub fn export_pages_csv(
         fixed_headers
             .iter()
             .map(|h| h.to_string())
-            .chain(custom_columns.iter().map(|(_, header)| header.clone())),
+            .chain(custom_columns.iter().map(|(_, header)| header.clone()))
+            .chain(extraction_columns.iter().map(|(_, header)| header.clone())),
     )?;
 
     for p in pages {
@@ -198,7 +254,14 @@ pub fn export_pages_csv(
                 .map(|n| n.to_string())
                 .unwrap_or_default()
         });
-        wtr.write_record(fixed.into_iter().chain(custom))?;
+        // Values joined with " | "; blank where nothing matched or the rule never ran.
+        let extracted = extraction_columns.iter().map(|(id, _)| {
+            p.extracted
+                .get(id)
+                .map(|values| values.join(" | "))
+                .unwrap_or_default()
+        });
+        wtr.write_record(fixed.into_iter().chain(custom).chain(extracted))?;
     }
 
     wtr.flush()?;
@@ -332,7 +395,7 @@ mod tests {
                 ..Default::default()
             },
         ];
-        export_pages_csv(&pages, &rules, path.to_str().unwrap()).unwrap();
+        export_pages_csv(&pages, &rules, &[], path.to_str().unwrap()).unwrap();
         let mut rdr = csv::Reader::from_path(&path).unwrap();
         let headers: Vec<String> = rdr.headers().unwrap().iter().map(str::to_string).collect();
         let rows: Vec<Vec<String>> = rdr
@@ -352,6 +415,70 @@ mod tests {
         assert_eq!(tail(&rows[0]), vec!["", "1", "0"]);
         assert_eq!(tail(&rows[1]), vec!["", "", ""]);
         assert_eq!(tail(&rows[2]), vec!["2", "", "4"]);
+        assert!(rows.iter().all(|r| r.len() == headers.len()));
+    }
+
+    #[test]
+    fn pages_csv_has_one_column_per_extraction() {
+        let values = |pairs: &[(&str, &[&str])]| {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.iter().map(|s| s.to_string()).collect()))
+                .collect::<BTreeMap<String, Vec<String>>>()
+        };
+        let pages = vec![
+            PageResult {
+                url: "https://example.com/".to_string(),
+                extracted: values(&[("ex1", &["$5", "$7"]), ("ex2", &[]), ("ex3", &["a"])]),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/logo.png".to_string(),
+                ..Default::default()
+            },
+            PageResult {
+                url: "https://example.com/b".to_string(),
+                extracted: values(&[("ex1", &["$9"]), ("ex2", &["x"]), ("old", &["y"])]),
+                ..Default::default()
+            },
+        ];
+        let rule = |id: &str, name: &str, selector: &str| ExtractionRule {
+            id: id.to_string(),
+            name: name.to_string(),
+            selector: selector.to_string(),
+            ..Default::default()
+        };
+        let rules = vec![
+            rule("ex1", "Price", ".price"),
+            // Same name as ex1: the header is made unique.
+            rule("ex2", "Price", ".sale"),
+            // No name: headed by the selector.
+            rule("ex3", "", "h1"),
+            // Never extracted on any page: no column.
+            rule("ex9", "Unused", "p"),
+        ];
+        let path = std::env::temp_dir().join(format!("gseo-pages-ex-{}.csv", std::process::id()));
+        export_pages_csv(&pages, &[], &rules, path.to_str().unwrap()).unwrap();
+        let mut rdr = csv::Reader::from_path(&path).unwrap();
+        let headers: Vec<String> = rdr.headers().unwrap().iter().map(str::to_string).collect();
+        let rows: Vec<Vec<String>> = rdr
+            .records()
+            .map(|r| r.unwrap().iter().map(str::to_string).collect())
+            .collect();
+        std::fs::remove_file(&path).ok();
+        let tail = |row: &[String]| row[row.len() - 4..].to_vec();
+        assert_eq!(
+            tail(&headers),
+            vec![
+                "Extraction: Price",
+                "Extraction: Price (2)",
+                "Extraction: h1",
+                "Extraction: old"
+            ]
+        );
+        assert_eq!(tail(&rows[0]), vec!["$5 | $7", "", "a", ""]);
+        assert_eq!(tail(&rows[1]), vec!["", "", "", ""]);
+        assert_eq!(tail(&rows[2]), vec!["$9", "x", "", "y"]);
         assert!(rows.iter().all(|r| r.len() == headers.len()));
     }
 

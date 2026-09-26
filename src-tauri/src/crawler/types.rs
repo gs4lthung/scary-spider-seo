@@ -53,6 +53,40 @@ pub struct CrawlConfig {
     /// HTML page into `PageResult::custom_search_counts`.
     #[serde(default)]
     pub custom_searches: Vec<CustomSearchRule>,
+    /// Custom extraction rules (at most `custom::MAX_EXTRACTIONS`), run on every HTML
+    /// page into `PageResult::extracted`.
+    #[serde(default)]
+    pub extractions: Vec<ExtractionRule>,
+}
+
+/// One custom extraction rule: a CSS selector and what to take from each element it
+/// matches.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractionRule {
+    /// Stable key of the rule's values in `PageResult::extracted`.
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    pub selector: String,
+    #[serde(default)]
+    pub mode: ExtractionMode,
+    /// Attribute to read in `ExtractionMode::Attr`; ignored by the other modes.
+    #[serde(default)]
+    pub attr: Option<String>,
+}
+
+/// What an extraction rule takes from a matched element.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractionMode {
+    /// The element's text, whitespace collapsed.
+    #[default]
+    Text,
+    /// The value of one attribute (`ExtractionRule::attr`).
+    Attr,
+    /// The element's inner HTML.
+    InnerHtml,
 }
 
 /// One custom search rule: a literal text (matched case-insensitively) or a regular
@@ -278,6 +312,13 @@ pub struct PageResult {
     /// crawls saved before custom search existed.
     #[serde(default)]
     pub custom_search_counts: BTreeMap<String, u32>,
+    /// Values of every custom extraction rule of the crawl, keyed by rule id, for parsed
+    /// HTML pages (an empty list when nothing matched). At most
+    /// `custom::MAX_EXTRACTED_VALUES` values per rule, each at most
+    /// `custom::MAX_EXTRACTED_CHARS` characters. Empty for other URLs, crawls without
+    /// rules and crawls saved before custom extraction existed.
+    #[serde(default)]
+    pub extracted: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub error: Option<String>,
 }
@@ -413,6 +454,10 @@ pub struct CrawlSnapshot {
     /// `PageResult::custom_search_counts`. Empty for crawls saved before T3.3.
     #[serde(default)]
     pub custom_searches: Vec<CustomSearchRule>,
+    /// Custom extraction rules the crawl ran with, so a loaded crawl can name the ids in
+    /// `PageResult::extracted`. Empty for crawls saved before T3.4.
+    #[serde(default)]
+    pub extractions: Vec<ExtractionRule>,
 }
 
 #[cfg(test)]
@@ -446,6 +491,8 @@ mod tests {
         assert!(home.custom_search_counts.is_empty());
         assert_eq!(snapshot.resources[0].content_length, None);
         assert!(snapshot.custom_searches.is_empty());
+        assert!(home.extracted.is_empty());
+        assert!(snapshot.extractions.is_empty());
     }
 
     /// A config sent without the T3.1 pattern fields means "no restriction".
@@ -484,5 +531,32 @@ mod tests {
         assert_eq!(config.custom_searches[0].scope, CustomSearchScope::Html);
         assert!(config.custom_searches[1].is_regex);
         assert_eq!(config.custom_searches[1].scope, CustomSearchScope::Text);
+    }
+
+    /// A config sent without the T3.4 `extractions` field extracts nothing, and a rule
+    /// without `mode` extracts text.
+    #[test]
+    fn config_extractions_default() {
+        let config: CrawlConfig =
+            serde_json::from_str(r#"{"startUrl":"https://example.com/"}"#).expect("config");
+        assert!(config.extractions.is_empty());
+        let config: CrawlConfig = serde_json::from_str(
+            r#"{"startUrl":"https://example.com/","extractions":[
+                {"id":"a","selector":".price"},
+                {"id":"b","name":"B","selector":"meta","mode":"attr","attr":"content"},
+                {"id":"c","selector":"main","mode":"inner_html","attr":null}]}"#,
+        )
+        .expect("config");
+        let modes: Vec<_> = config.extractions.iter().map(|r| r.mode).collect();
+        assert_eq!(
+            modes,
+            vec![
+                ExtractionMode::Text,
+                ExtractionMode::Attr,
+                ExtractionMode::InnerHtml
+            ]
+        );
+        assert_eq!(config.extractions[1].attr.as_deref(), Some("content"));
+        assert_eq!(config.extractions[2].attr, None);
     }
 }

@@ -3,9 +3,14 @@
 //! body text; the crawler records the number of matches per rule per page as a raw
 //! signal. Whether a page "contains" or "does not contain" a rule is decided by the
 //! frontend from that count.
+//!
+//! Also holds the custom extraction rules (Screaming Frog's Custom Extraction): a CSS
+//! selector per rule, and the text, one attribute or the inner HTML of every element
+//! it matches, recorded per rule per page.
 
-use super::types::{CustomSearchRule, CustomSearchScope};
+use super::types::{CustomSearchRule, CustomSearchScope, ExtractionMode, ExtractionRule};
 use regex::{Regex, RegexBuilder};
+use scraper::{Html, Selector};
 use std::collections::BTreeMap;
 
 /// Most custom search rules one crawl accepts.
@@ -91,6 +96,124 @@ impl CustomSearch {
                 };
                 let count = rule.regex.find_iter(haystack).count();
                 (rule.id.clone(), u32::try_from(count).unwrap_or(u32::MAX))
+            })
+            .collect()
+    }
+}
+
+/// Most custom extraction rules one crawl accepts.
+pub const MAX_EXTRACTIONS: usize = 10;
+/// Most values one extraction rule records per page (the first matches in document order).
+pub const MAX_EXTRACTED_VALUES: usize = 10;
+/// Longest extracted value, in characters; longer values are cut on a character boundary.
+pub const MAX_EXTRACTED_CHARS: usize = 500;
+
+#[derive(Debug, Clone)]
+struct CompiledExtraction {
+    id: String,
+    selector: Selector,
+    mode: ExtractionMode,
+    attr: String,
+}
+
+/// The crawl's custom extraction rules, with their selectors parsed once per crawl.
+#[derive(Debug, Clone, Default)]
+pub struct Extraction {
+    rules: Vec<CompiledExtraction>,
+}
+
+/// How an extraction rule is named in an error: its name, or its 1-based position.
+fn extraction_label(rule: &ExtractionRule, index: usize) -> String {
+    let name = rule.name.trim();
+    if name.is_empty() {
+        format!("extraction {}", index + 1)
+    } else {
+        format!("extraction \"{name}\"")
+    }
+}
+
+/// Collapses every run of whitespace to one space and trims the ends.
+fn collapse_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Cuts `value` to `MAX_EXTRACTED_CHARS` characters (never inside a character).
+fn cap_value(mut value: String) -> String {
+    if let Some((byte_index, _)) = value.char_indices().nth(MAX_EXTRACTED_CHARS) {
+        value.truncate(byte_index);
+    }
+    value
+}
+
+impl Extraction {
+    /// Parses every rule's selector. Rules with a blank selector are skipped. An attribute
+    /// rule needs an attribute name. Errors name the offending rule.
+    pub fn new(rules: &[ExtractionRule]) -> Result<Extraction, String> {
+        if rules.len() > MAX_EXTRACTIONS {
+            return Err(format!(
+                "At most {MAX_EXTRACTIONS} extractions are allowed; {} were given.",
+                rules.len()
+            ));
+        }
+        let mut compiled = Vec::new();
+        for (index, rule) in rules.iter().enumerate() {
+            let source = rule.selector.trim();
+            if source.is_empty() {
+                continue;
+            }
+            if rule.id.trim().is_empty() {
+                return Err(format!("The {} has no id.", extraction_label(rule, index)));
+            }
+            let selector = Selector::parse(source).map_err(|e| {
+                format!(
+                    "Invalid CSS selector in {}: {e}",
+                    extraction_label(rule, index)
+                )
+            })?;
+            let attr = rule.attr.as_deref().unwrap_or("").trim().to_string();
+            if rule.mode == ExtractionMode::Attr && attr.is_empty() {
+                return Err(format!(
+                    "The {} extracts an attribute but names none.",
+                    extraction_label(rule, index)
+                ));
+            }
+            compiled.push(CompiledExtraction {
+                id: rule.id.clone(),
+                selector,
+                mode: rule.mode,
+                attr,
+            });
+        }
+        Ok(Extraction { rules: compiled })
+    }
+
+    /// Values of every rule on `document`, keyed by rule id: for each matched element in
+    /// document order, its whitespace-collapsed text, the trimmed attribute value (elements
+    /// without the attribute are skipped) or its trimmed inner HTML. Empty values are
+    /// skipped, at most `MAX_EXTRACTED_VALUES` are kept and each is capped at
+    /// `MAX_EXTRACTED_CHARS`. Every rule gets an entry, an empty list included, so the
+    /// frontend can tell "nothing matched" from "not extracted".
+    pub fn extract(&self, document: &Html) -> BTreeMap<String, Vec<String>> {
+        self.rules
+            .iter()
+            .map(|rule| {
+                let values = document
+                    .select(&rule.selector)
+                    .filter_map(|element| match rule.mode {
+                        ExtractionMode::Text => {
+                            Some(collapse_whitespace(&element.text().collect::<String>()))
+                        }
+                        ExtractionMode::Attr => element
+                            .value()
+                            .attr(&rule.attr)
+                            .map(|v| v.trim().to_string()),
+                        ExtractionMode::InnerHtml => Some(element.inner_html().trim().to_string()),
+                    })
+                    .filter(|v| !v.is_empty())
+                    .take(MAX_EXTRACTED_VALUES)
+                    .map(cap_value)
+                    .collect();
+                (rule.id.clone(), values)
             })
             .collect()
     }
@@ -201,5 +324,60 @@ mod tests {
         let err = CustomSearch::new(&rules).unwrap_err();
         assert!(err.contains("At most 10"), "{err}");
         assert!(CustomSearch::new(&rules[..MAX_CUSTOM_SEARCHES]).is_ok());
+    }
+
+    fn extraction(id: &str, name: &str, selector: &str, mode: ExtractionMode) -> ExtractionRule {
+        ExtractionRule {
+            id: id.to_string(),
+            name: name.to_string(),
+            selector: selector.to_string(),
+            mode,
+            attr: None,
+        }
+    }
+
+    #[test]
+    fn invalid_selector_is_rejected_with_rule_name() {
+        let err =
+            Extraction::new(&[extraction("p", "Price", "div[", ExtractionMode::Text)]).unwrap_err();
+        assert!(
+            err.starts_with("Invalid CSS selector in extraction \"Price\": "),
+            "{err}"
+        );
+        // An unnamed rule is named by its position.
+        let err = Extraction::new(&[
+            extraction("a", "", ".ok", ExtractionMode::Text),
+            extraction("b", " ", "::::", ExtractionMode::InnerHtml),
+        ])
+        .unwrap_err();
+        assert!(
+            err.starts_with("Invalid CSS selector in extraction 2: "),
+            "{err}"
+        );
+        // An attribute rule without an attribute name is rejected too.
+        let err =
+            Extraction::new(&[extraction("m", "Image", "meta", ExtractionMode::Attr)]).unwrap_err();
+        assert!(err.contains("\"Image\""), "{err}");
+        // Blank selectors are skipped, not rejected.
+        let ok = Extraction::new(&[extraction("blank", "", "  ", ExtractionMode::Text)]).unwrap();
+        assert!(ok.extract(&Html::parse_document("<p>x</p>")).is_empty());
+    }
+
+    #[test]
+    fn too_many_extractions_are_rejected() {
+        let rules: Vec<_> = (0..=MAX_EXTRACTIONS)
+            .map(|i| extraction(&i.to_string(), "", "p", ExtractionMode::Text))
+            .collect();
+        let err = Extraction::new(&rules).unwrap_err();
+        assert!(err.contains("At most 10"), "{err}");
+        assert!(Extraction::new(&rules[..MAX_EXTRACTIONS]).is_ok());
+    }
+
+    #[test]
+    fn cap_value_cuts_on_a_character_boundary() {
+        let long = "\u{e9}".repeat(MAX_EXTRACTED_CHARS + 5);
+        let capped = cap_value(long);
+        assert_eq!(capped.chars().count(), MAX_EXTRACTED_CHARS);
+        assert_eq!(cap_value("abc".to_string()), "abc");
     }
 }

@@ -1,9 +1,9 @@
 use crate::crawler::crawl;
-use crate::crawler::custom::CustomSearch;
+use crate::crawler::custom::{CustomSearch, Extraction};
 use crate::crawler::scope::UrlScope;
 use crate::crawler::types::{
-    CrawlConfig, CrawlSnapshot, CrawlSummary, CustomSearchRule, PageResult, ResourceResult,
-    MAX_LIST_URLS,
+    CrawlConfig, CrawlSnapshot, CrawlSummary, CustomSearchRule, ExtractionRule, PageResult,
+    ResourceResult, MAX_LIST_URLS,
 };
 use crate::export;
 use crate::state::AppState;
@@ -115,10 +115,11 @@ pub async fn start_crawl(
 }
 
 /// Every check `start_crawl` runs before touching state: include/exclude patterns,
-/// custom search rules and the list size.
+/// custom search rules, custom extraction selectors and the list size.
 fn validate_config(config: &CrawlConfig) -> Result<(), String> {
     UrlScope::new(&config.include_patterns, &config.exclude_patterns)?;
     CustomSearch::new(&config.custom_searches)?;
+    Extraction::new(&config.extractions)?;
     check_list_size(config)
 }
 
@@ -161,20 +162,27 @@ pub fn get_resources(state: State<'_, AppState>) -> Result<Vec<ResourceResult>, 
     Ok(state.resources.iter().map(|r| r.value().clone()).collect())
 }
 
-/// `custom_searches` are the rules of the results on screen (sent by the frontend, which
-/// keeps them for live and loaded crawls); they name the pages CSV's custom search columns.
+/// `custom_searches` and `extractions` are the rules of the results on screen (sent by the
+/// frontend, which keeps them for live and loaded crawls); they name the pages CSV's custom
+/// search and extraction columns.
 #[tauri::command]
 pub fn export_csv(
     state: State<'_, AppState>,
     path: String,
     what: String,
     custom_searches: Option<Vec<CustomSearchRule>>,
+    extractions: Option<Vec<ExtractionRule>>,
 ) -> Result<(), String> {
     match what.as_str() {
         "pages" => {
             let pages = lock_state(&state.pages)?;
-            export::export_pages_csv(&pages, &custom_searches.unwrap_or_default(), &path)
-                .map_err(|e| e.to_string())
+            export::export_pages_csv(
+                &pages,
+                &custom_searches.unwrap_or_default(),
+                &extractions.unwrap_or_default(),
+                &path,
+            )
+            .map_err(|e| e.to_string())
         }
         "resources" => {
             let resources: Vec<ResourceResult> =
@@ -195,6 +203,7 @@ pub fn save_crawl(
     path: String,
     start_url: String,
     custom_searches: Option<Vec<CustomSearchRule>>,
+    extractions: Option<Vec<ExtractionRule>>,
 ) -> Result<(), String> {
     let pages = lock_state(&state.pages)?.clone();
     let resources: Vec<ResourceResult> =
@@ -210,6 +219,7 @@ pub fn save_crawl(
         pages,
         resources,
         custom_searches: custom_searches.unwrap_or_default(),
+        extractions: extractions.unwrap_or_default(),
     };
 
     let json = serde_json::to_string_pretty(&snapshot).map_err(|e| e.to_string())?;
@@ -252,7 +262,9 @@ pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{check_list_size, save_text_file, validate_config};
-    use crate::crawler::types::{CrawlConfig, CustomSearchRule, MAX_LIST_URLS};
+    use crate::crawler::types::{
+        CrawlConfig, CustomSearchRule, ExtractionMode, ExtractionRule, MAX_LIST_URLS,
+    };
 
     fn list_config(len: usize) -> CrawlConfig {
         let mut config: CrawlConfig =
@@ -288,6 +300,22 @@ mod tests {
         }];
         let err = validate_config(&config).unwrap_err();
         assert!(err.contains("\"Prices\""), "{err}");
+    }
+
+    #[test]
+    fn invalid_extraction_selector_is_rejected_before_the_crawl() {
+        let mut config = list_config(0);
+        config.extractions = vec![ExtractionRule {
+            id: "ex1".to_string(),
+            name: "Price".to_string(),
+            selector: ".price >".to_string(),
+            mode: ExtractionMode::Text,
+            attr: None,
+        }];
+        let err = validate_config(&config).unwrap_err();
+        assert!(err.contains("\"Price\""), "{err}");
+        config.extractions[0].selector = ".price".to_string();
+        assert!(validate_config(&config).is_ok());
     }
 
     #[test]
