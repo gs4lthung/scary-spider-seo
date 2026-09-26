@@ -32,7 +32,9 @@ export interface CrawlEventSetters {
  * Registers the six `crawl://*` listeners once on mount. Pages, resources and progress are
  * buffered and applied in one batch per flush window (progress keeps only its latest value);
  * the other events update state directly. Returns `discardPending`, which drops buffered
- * events that were not applied yet (used when a new crawl clears the view).
+ * events that were not applied yet (used when a new crawl clears the view), and
+ * `discardPendingProgress`, which drops only a buffered progress update (used before an
+ * optimistic pause or resume, so a pre-click payload cannot undo it).
  */
 export function useCrawlEvents({
   setPages,
@@ -44,7 +46,7 @@ export function useCrawlEvents({
   setLinkedUrls,
   setResumableStartUrl,
   activeStartUrlRef,
-}: CrawlEventSetters): { discardPending: () => void } {
+}: CrawlEventSetters): { discardPending: () => void; discardPendingProgress: () => void } {
   const batcherRef = useRef<EventBatcher<BufferedEvent> | null>(null);
   const pendingProgressRef = useRef<CrawlProgress | null>(null);
 
@@ -146,5 +148,8 @@ export function useCrawlEvents({
     batcherRef.current?.cancel();
     pendingProgressRef.current = null;
   }, []);
-  return { discardPending };
+  const discardPendingProgress = useCallback(() => {
+    pendingProgressRef.current = null;
+  }, []);
+  return { discardPending, discardPendingProgress };
 }

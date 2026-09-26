@@ -63,6 +63,8 @@ export interface CrawlSessionParams {
   resetDerivedTrackers: () => void;
   /** From `useCrawlEvents`: drop buffered pages and resources not applied yet. */
   discardPending: () => void;
+  /** Drops a buffered progress update so it cannot override an optimistic pause/resume. */
+  discardPendingProgress: () => void;
 }
 
 /**
@@ -98,6 +100,7 @@ export function useCrawlSession({
   filterContext,
   resetDerivedTrackers,
   discardPending,
+  discardPendingProgress,
 }: CrawlSessionParams) {
   // Mirrors the state the close-confirmation handler below needs, so that handler
   // (registered once on mount) always reads current values instead of a stale closure.
@@ -268,6 +271,7 @@ export function useCrawlSession({
   }, []);
 
   const handlePause = useCallback(async () => {
+    discardPendingProgress();
     setPaused(true);
     try {
       await invoke("pause_crawl");
@@ -275,9 +279,10 @@ export function useCrawlSession({
       toast.error(String(err));
       setPaused(false);
     }
-  }, [setPaused]);
+  }, [discardPendingProgress, setPaused]);
 
   const handleResume = useCallback(async () => {
+    discardPendingProgress();
     setPaused(false);
     try {
       await invoke("resume_crawl");
@@ -285,7 +290,7 @@ export function useCrawlSession({
       toast.error(String(err));
       setPaused(true);
     }
-  }, [setPaused]);
+  }, [discardPendingProgress, setPaused]);
 
   const handleExport = useCallback(async (what: "pages" | "resources" | "links") => {
     try {
