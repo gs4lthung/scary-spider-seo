@@ -20,8 +20,10 @@ expressions; `regex` guarantees linear-time matching (no catastrophic backtracki
 patterns) and `RegexBuilder::size_limit(1 << 20)` caps the compiled size. It was already in
 `Cargo.lock` as a transitive dependency, so the build does not grow.
 
-**Matching.** Patterns are unanchored (`is_match` on `Url::as_str()`), like Screaming Frog, so
-`/blog/` matches anywhere in the URL; users anchor with `^`/`$` themselves. Each pattern is
+**Matching.** Patterns are unanchored, like Screaming Frog, so `/blog/` matches anywhere in the
+URL; users anchor with `^`/`$` themselves. The URL is matched without its fragment, which is the
+same form the crawler dedups by and records pages under, so `$` anchors behave as the table
+shows the URL. Each pattern is
 trimmed and blank entries are skipped in both the frontend (`parsePatternLines`) and Rust, so the
 index in `Invalid include pattern N: ...` is the 1-based position among the non-blank lines.
 
@@ -33,8 +35,11 @@ are still inserted into `linked_urls`, so orphan detection is unchanged. They ar
 pattern leaves the backend untouched. `run_crawl` compiles it again (patterns are small) rather
 than threading a compiled scope through `CrawlState`, which keeps the fixture helper unchanged.
 
-**Resume.** A resumed crawl's saved frontier is not re-filtered: URLs queued before the stop are
-fetched even if the new patterns would exclude them. Newly discovered links use the new scope.
+**Resume.** The patterns may change between stopping a crawl and continuing it. A resumed
+crawl re-filters its saved frontier with the new scope: queued URLs the scope excludes are
+dropped (the start URL is always kept), removed from `visited`, and released from
+`scheduled_count` so they don't use up `max_pages`. Covered by the fixture test
+`resumed_crawl_drops_queued_urls_the_new_scope_excludes`.
 
 **Fixture pattern.** The plan's `includePatterns: ["noindex"]` also matches
 `/canonical-to-noindex.html`, which the fixture home page links to (added after the plan was
@@ -45,6 +50,9 @@ written). The test uses `/noindex\.html$` so the expected result is exactly `/` 
 
 - `CrawlConfig` gains `includePatterns` and `excludePatterns` (`#[serde(default)]`, empty in
   `DEFAULT_CONFIG`). `CrawlConfig` is not part of saved snapshots, so saved crawls are unaffected.
-- The frontend clears its displayed results before `start_crawl` returns, so a rejected pattern
-  still empties the table view (the backend keeps its data). Validating on the frontend would
-  need JavaScript regex semantics, which differ from Rust's; left as is.
+- The frontend clears its displayed results before `start_crawl` resolves (crawl events can
+  arrive before it does). When the backend rejects the start, for example over an invalid
+  pattern, `handleStart` restores the pages, resources, site info, linked URLs and progress it
+  showed before and resets the derived trackers so they re-ingest them. The view then matches
+  the backend again, including a later resumed start that only appends new pages. Patterns are
+  not validated in the frontend because JavaScript regex syntax differs from Rust's.

@@ -18,12 +18,9 @@ pub struct UrlScope {
 
 fn compile(patterns: &[String], kind: &str) -> Result<Vec<Regex>, String> {
     let mut compiled = Vec::new();
-    for (index, pattern) in patterns.iter().enumerate() {
-        let trimmed = pattern.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let regex = RegexBuilder::new(trimmed)
+    let non_blank = patterns.iter().map(|p| p.trim()).filter(|p| !p.is_empty());
+    for (index, pattern) in non_blank.enumerate() {
+        let regex = RegexBuilder::new(pattern)
             .size_limit(PATTERN_SIZE_LIMIT)
             .build()
             .map_err(|e| format!("Invalid {kind} pattern {}: {e}", index + 1))?;
@@ -34,7 +31,8 @@ fn compile(patterns: &[String], kind: &str) -> Result<Vec<Regex>, String> {
 
 impl UrlScope {
     /// Compiles both pattern lists. Blank entries are ignored. The error names the
-    /// list and the 1-based position of the first pattern that fails to compile.
+    /// list and the 1-based position, among the non-blank entries, of the first pattern
+    /// that fails to compile.
     pub fn new(include: &[String], exclude: &[String]) -> Result<UrlScope, String> {
         Ok(UrlScope {
             include: compile(include, "include")?,
@@ -43,9 +41,12 @@ impl UrlScope {
     }
 
     /// A URL is in scope when it matches at least one include pattern (or there are
-    /// none) and matches no exclude pattern. Exclude wins over include.
+    /// none) and matches no exclude pattern. Exclude wins over include. The URL is
+    /// matched without its fragment, i.e. in the same form the crawler dedups and
+    /// records pages by.
     pub fn allows(&self, url: &Url) -> bool {
         let s = url.as_str();
+        let s = s.split_once('#').map_or(s, |(before, _)| before);
         if self.exclude.iter().any(|r| r.is_match(s)) {
             return false;
         }
@@ -93,11 +94,22 @@ mod tests {
     }
 
     #[test]
+    fn fragment_is_ignored_when_matching() {
+        let scope = UrlScope::new(&[], &strings(&["section$"])).unwrap();
+        assert!(!scope.allows(&url("https://example.com/section#top")));
+        let scope = UrlScope::new(&[], &strings(&["top"])).unwrap();
+        assert!(scope.allows(&url("https://example.com/page#top")));
+    }
+
+    #[test]
     fn invalid_pattern_reports_its_index() {
         let err = UrlScope::new(&strings(&["ok", "(unclosed"]), &[]).unwrap_err();
         assert!(err.starts_with("Invalid include pattern 2: "), "{err}");
         let err = UrlScope::new(&[], &strings(&["[bad"])).unwrap_err();
         assert!(err.starts_with("Invalid exclude pattern 1: "), "{err}");
+        // Blank lines don't count toward the position.
+        let err = UrlScope::new(&strings(&["", "ok", "  ", "(bad"]), &[]).unwrap_err();
+        assert!(err.starts_with("Invalid include pattern 2: "), "{err}");
         let err = UrlScope::new(&strings(&["a{1000}{1000}{1000}"]), &[]).unwrap_err();
         assert!(err.starts_with("Invalid include pattern 1: "), "{err}");
     }
