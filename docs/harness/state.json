@@ -3,7 +3,7 @@
     "active": true,
     "milestone": 2,
     "startedAt": "2026-09-25T19:43:46.001Z",
-    "lastProgressAt": "2026-09-26T02:07:03.507Z"
+    "lastProgressAt": "2026-09-26T02:27:10.262Z"
   },
   "tasks": {
     "T1.1": {
@@ -179,10 +179,10 @@
       "deps": [
         "T1.1"
       ],
-      "status": "pending",
-      "attempts": 0,
-      "note": "",
-      "updatedAt": "2026-09-25T18:11:06.940Z"
+      "status": "done",
+      "attempts": 1,
+      "note": "94a15dc",
+      "updatedAt": "2026-09-26T02:27:10.261Z"
     },
     "T3.1": {
       "title": "Include and exclude URL patterns",
