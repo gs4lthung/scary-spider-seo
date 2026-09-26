@@ -1798,16 +1798,17 @@ describe("custom search", () => {
 
   it("stats list the crawl's rules first, then ids only found on pages", () => {
     const tracker = getCustomSearchTracker(pages);
-    const stats = getCustomSearchStats(
-      tracker,
-      [rule("cs2", "Prices"), rule("cs9", " ", "needle"), rule("blank", "Blank", "  ")],
-      [rule("cs1", "From options")],
-    );
+    const stats = getCustomSearchStats(tracker, [
+      rule("cs2", "Prices"),
+      rule("cs9", " ", "needle"),
+      rule("blank", "Blank", "  "),
+    ]);
     expect(stats).toEqual([
       { id: "cs2", label: "Prices", contains: 1, missing: 1 },
       // No name: the pattern labels it; no page yet: zero counts.
       { id: "cs9", label: "needle", contains: 0, missing: 0 },
-      { id: "cs1", label: "From options", contains: 2, missing: 1 },
+      // Found on pages but not among the crawl's rules: labelled with its id only.
+      { id: "cs1", label: "Custom search cs1", contains: 2, missing: 1 },
     ]);
     expect(getCustomSearchStats(tracker, []).map((s) => s.label)).toEqual(["Custom search cs1", "Custom search cs2"]);
   });

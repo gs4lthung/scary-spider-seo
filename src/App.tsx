@@ -84,7 +84,7 @@ import { ISSUE_SOLUTIONS } from "./lib/issueSolutions";
 import { buildIssueSummaryCsv, buildIssuesCsv } from "./lib/issueExport";
 import { cn } from "@/lib/utils";
 import { MAX_LIST_URLS, parseUrlList, withScheme } from "./lib/url";
-import { activeCustomSearches } from "./lib/customSearch";
+import { activeCustomSearches, mergeCustomSearchRules, reconcileCustomSearchIds } from "./lib/customSearch";
 
 type Tab = "overview" | "pages" | "resources" | "sitemap";
 
@@ -828,10 +828,6 @@ function App() {
     // one; a URL that already specifies http:// or https:// is left untouched. In list
     // mode the first listed URL stands in as the start URL (site info, saved crawls).
     const startUrl = listMode ? listUrls[0] : withScheme(config.startUrl, preferHttps);
-    // Only sent to the backend: `config` keeps the Spider box's URL and no list.
-    const customSearches = activeCustomSearches(config.customSearches);
-    const nextConfig = { ...config, startUrl, listUrls, customSearches };
-
     // Continuing a crawl stopped with URLs still queued (the backend kept its frontier
     // for this exact start URL — see AppState.resume_state): keep the results gathered
     // so far instead of wiping them, since the backend will append to them, not replace
@@ -839,12 +835,33 @@ function App() {
     // List mode never continues: the backend neither stores nor consumes resume state
     // for it, and discards a spider crawl's leftover state when a list crawl starts.
     const continuing = !listMode && resumableStartUrl === startUrl;
+    // A continued crawl already has counts under the earlier rules' ids: a rule edited since
+    // then gets a fresh id (written back to the sheet) so one id never means two searches,
+    // and the earlier rules stay known so their columns keep their names.
+    const active = activeCustomSearches(config.customSearches);
+    const { rules: customSearches, renamed } = continuing
+      ? reconcileCustomSearchIds(active, shownSource.customSearches)
+      : { rules: active, renamed: new Map<string, string>() };
+    const shownCustomSearches = continuing
+      ? mergeCustomSearchRules(shownSource.customSearches, customSearches)
+      : customSearches;
+    // Only sent to the backend: `config` keeps the Spider box's URL and no list.
+    const nextConfig = { ...config, startUrl, listUrls, customSearches };
+    if (renamed.size > 0) {
+      setConfig((c) => ({
+        ...c,
+        customSearches: c.customSearches.map((r) => {
+          const id = renamed.get(r.id);
+          return id ? { ...r, id } : r;
+        }),
+      }));
+    }
     activeStartUrlRef.current = startUrl;
     // Cleared up front rather than after `invoke` resolves, because crawl events can
     // arrive before it does; restored below if the backend rejects the start.
     const previous = shownCrawlRef.current;
     const previousSource = shownSource;
-    setShownSource({ startUrl, listMode, customSearches });
+    setShownSource({ startUrl, listMode, customSearches: shownCustomSearches });
     if (!continuing) {
       setPages([]);
       setResources([]);
@@ -914,11 +931,11 @@ function App() {
         defaultPath: `${what}-export.csv`,
       });
       if (!path) return;
-      await invoke("export_csv", { path, what });
+      await invoke("export_csv", { path, what, customSearches: shownSource.customSearches });
     } catch (err) {
       toast.error(String(err));
     }
-  }, []);
+  }, [shownSource.customSearches]);
 
   const handleSaveCrawl = useCallback(async () => {
     try {
@@ -927,11 +944,15 @@ function App() {
         defaultPath: "crawl.json",
       });
       if (!path) return;
-      await invoke("save_crawl", { path, startUrl: shownSource.startUrl || config.startUrl });
+      await invoke("save_crawl", {
+        path,
+        startUrl: shownSource.startUrl || config.startUrl,
+        customSearches: shownSource.customSearches,
+      });
     } catch (err) {
       toast.error(String(err));
     }
-  }, [shownSource.startUrl, config.startUrl]);
+  }, [shownSource.startUrl, shownSource.customSearches, config.startUrl]);
 
   const handleOpenCrawl = useCallback(async () => {
     try {
@@ -950,7 +971,8 @@ function App() {
       setFilter("all");
       setConfig((prev) => ({ ...prev, startUrl: snapshot.startUrl }));
       // Saved crawls don't record their mode; they are classified as spider crawls.
-      setShownSource({ startUrl: snapshot.startUrl, listMode: false, customSearches: [] });
+      // Rules come from the snapshot only (empty before T3.3), never from the options sheet.
+      setShownSource({ startUrl: snapshot.startUrl, listMode: false, customSearches: snapshot.customSearches ?? [] });
     } catch (err) {
       toast.error(String(err));
     }
@@ -1098,11 +1120,11 @@ function App() {
     [pages, resources, filterContext],
   );
 
-  // Rules of the crawl on screen, plus rule ids only found on its pages (a loaded crawl),
-  // labelled from the options sheet when it still has a rule with that id.
+  // Rules of the crawl on screen (live or from its snapshot), plus rule ids only found on its
+  // pages (a crawl saved before snapshots stored rules), labelled with the bare id.
   const customSearchStats = useMemo<CustomSearchStat[]>(
-    () => getCustomSearchStats(customSearchTracker, shownSource.customSearches, config.customSearches),
-    [customSearchTracker, shownSource.customSearches, config.customSearches],
+    () => getCustomSearchStats(customSearchTracker, shownSource.customSearches),
+    [customSearchTracker, shownSource.customSearches],
   );
   // Keyed on ids and labels only, so the columns are not rebuilt on every count change.
   const customSearchColumnsKey = JSON.stringify(customSearchStats.map((s) => [s.id, s.label]));

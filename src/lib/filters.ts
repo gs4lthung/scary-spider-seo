@@ -1431,18 +1431,17 @@ function ruleLabel(rule: CustomSearchRule): string {
 
 /**
  * The custom search rules to show for the results on screen: the rules the crawl ran with
- * (`crawlRules`, in order, even before any page has a count), then any other rule id found
- * on the pages (a loaded saved crawl, which does not store its rules). Labels come from the
- * crawl's rules, else from `knownRules` (the options sheet) by id, else the bare id.
+ * (`crawlRules`, in order, even before any page has a count; for a loaded crawl, the rules
+ * saved in its snapshot), then any other rule id found on the pages (a crawl saved before
+ * snapshots stored rules), labelled with the bare id. Names are never borrowed from the
+ * options sheet: a rule there with the same id may count something else.
  */
 export function getCustomSearchStats(
   tracker: CustomSearchTracker,
   crawlRules: readonly CustomSearchRule[],
-  knownRules: readonly CustomSearchRule[] = [],
 ): CustomSearchStat[] {
   const stats: CustomSearchStat[] = [];
   const seen = new Set<string>();
-  const known = new Map(knownRules.map((r) => [r.id, r]));
   const push = (id: string, label: string) => {
     if (seen.has(id)) return;
     seen.add(id);
@@ -1452,10 +1451,7 @@ export function getCustomSearchStats(
   for (const rule of crawlRules) {
     if (rule.pattern.trim() !== "") push(rule.id, ruleLabel(rule));
   }
-  for (const id of tracker.counts.keys()) {
-    const rule = known.get(id);
-    push(id, rule ? ruleLabel(rule) : `Custom search ${id}`);
-  }
+  for (const id of tracker.counts.keys()) push(id, `Custom search ${id}`);
   return stats;
 }
 

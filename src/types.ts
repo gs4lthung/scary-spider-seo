@@ -211,6 +211,8 @@ export interface CrawlSnapshot {
   savedAtUnixMs: number;
   pages: PageResult[];
   resources: ResourceResult[];
+  /** Custom search rules the crawl ran with; absent or empty for crawls saved before T3.3. */
+  customSearches?: CustomSearchRule[];
 }
 
 export const DEFAULT_CONFIG: CrawlConfig = {
