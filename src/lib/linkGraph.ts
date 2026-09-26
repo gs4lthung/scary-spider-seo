@@ -64,12 +64,17 @@ export function buildLinkGraph(pages: readonly PageResult[]): LinkGraph {
   return graph;
 }
 
-/** Every link pointing at `url` from another crawled page, in crawl order. Allocates one
- * object per link, so call it for a page being shown, not across the whole crawl. */
-export function getInlinks(graph: LinkGraph, url: string): Inlink[] {
+/** Most links a page's detail view lists per direction; the full list is in "Export all
+ * internal links". */
+export const MAX_LINK_ROWS = 100;
+
+/** The links pointing at `url` from other crawled pages, in crawl order, at most `limit` of
+ * them. Allocates one object per link, so call it for a page being shown, not across the
+ * whole crawl. */
+export function getInlinks(graph: LinkGraph, url: string, limit = Infinity): Inlink[] {
   const target = graph.targets.get(url);
   if (!target) return [];
-  return target.links.map((link, i) => ({
+  return target.links.slice(0, limit).map((link, i) => ({
     source: target.sources[i],
     anchor: link.anchor,
     nofollow: link.nofollow,
