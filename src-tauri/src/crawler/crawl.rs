@@ -32,10 +32,14 @@ const RENDER_AUDIT_MAX_CONCURRENCY: usize = 2;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Rate-limits `crawl://progress`: an event goes out when `interval` has passed since the
-/// last one, or when forced (pause state changed, crawl finished).
+/// last one, or when forced (pause state changed, crawl finished). An update swallowed
+/// inside the window is not lost: it marks the throttle dirty, and `trailing_deadline`
+/// tells the crawl loop when to send it, so the UI never keeps stale counts for longer
+/// than one interval (e.g. image checks finishing just before a slow page render).
 struct ProgressThrottle {
     last: Option<Instant>,
     interval: Duration,
+    dirty: bool,
 }
 
 impl ProgressThrottle {
@@ -43,10 +47,12 @@ impl ProgressThrottle {
         Self {
             last: None,
             interval,
+            dirty: false,
         }
     }
 
-    /// Whether to emit at `now`; records `now` as the last emit when it returns true.
+    /// Whether to emit at `now`; records `now` as the last emit when it returns true,
+    /// and remembers a swallowed update when it returns false.
     fn should_emit(&mut self, now: Instant, force: bool) -> bool {
         let due = force
             || self
@@ -54,8 +60,19 @@ impl ProgressThrottle {
                 .is_none_or(|last| now.saturating_duration_since(last) >= self.interval);
         if due {
             self.last = Some(now);
+            self.dirty = false;
+        } else {
+            self.dirty = true;
         }
         due
+    }
+
+    /// When the latest swallowed update becomes due, or `None` when nothing is pending.
+    fn trailing_deadline(&self) -> Option<Instant> {
+        match self.last {
+            Some(last) if self.dirty => last.checked_add(self.interval),
+            _ => None,
+        }
     }
 
     /// Emits the progress `snapshot` builds, if `should_emit` allows it right now.
@@ -1112,13 +1129,15 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
     let mut progress_throttle = ProgressThrottle::new(progress_interval);
     // Pause state the frontend last heard about; a change is always reported at once.
     let mut reported_paused = false;
-    let progress = |crawled: usize, queued: usize, running: bool, paused: bool| CrawlProgress {
+    // `paused` is read at emit time, not taken from the loop-top snapshot, so an event
+    // never reports a pause state the user has already changed.
+    let progress = |crawled: usize, queued: usize, running: bool| CrawlProgress {
         crawled,
         queued,
         resources_checked: resources_checked.load(Ordering::Relaxed),
         resources_total: resources.len(),
         running,
-        paused,
+        paused: running && paused.load(Ordering::SeqCst),
     };
 
     loop {
@@ -1129,9 +1148,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
         let is_paused = paused.load(Ordering::SeqCst);
         if is_paused != reported_paused {
             reported_paused = is_paused;
-            progress_throttle.emit(&app, true, || {
-                progress(crawled_count, frontier.len(), true, is_paused)
-            });
+            progress_throttle.emit(&app, true, || progress(crawled_count, frontier.len(), true));
         }
 
         if !is_paused {
@@ -1238,7 +1255,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
         if page_tasks.is_empty() && resource_tasks.is_empty() {
             if is_paused && !frontier.is_empty() {
                 progress_throttle.emit(&app, false, || {
-                    progress(crawled_count, frontier.len(), true, true)
+                    progress(crawled_count, frontier.len(), true)
                 });
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 continue;
@@ -1246,6 +1263,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
             break;
         }
 
+        let trailing_deadline = progress_throttle.trailing_deadline();
         tokio::select! {
             res = page_tasks.join_next(), if !page_tasks.is_empty() => {
                 if let Some(Err(error)) = &res {
@@ -1321,7 +1339,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
                     }
 
                     progress_throttle.emit(&app, false, || {
-                        progress(crawled_count, frontier.len(), true, is_paused)
+                        progress(crawled_count, frontier.len(), true)
                     });
                 }
             }
@@ -1330,7 +1348,14 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
                     let _ = app.emit("crawl://error", format!("Resource check task failed: {error}"));
                 }
                 progress_throttle.emit(&app, false, || {
-                    progress(crawled_count, frontier.len(), true, is_paused)
+                    progress(crawled_count, frontier.len(), true)
+                });
+            }
+            // Sends an update the throttle swallowed once its window has passed, even if
+            // no page or resource finishes in the meantime.
+            _ = sleep_until_deadline(trailing_deadline), if trailing_deadline.is_some() => {
+                progress_throttle.emit(&app, false, || {
+                    progress(crawled_count, frontier.len(), true)
                 });
             }
         }
@@ -1382,14 +1407,22 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
         );
     }
 
-    // Always sent, whatever ended the loop, so the last counts the frontend sees are the
-    // final ones even when the throttle swallowed the most recent updates. `start_crawl`
-    // emits `crawl://done` only after this function returns.
-    progress_throttle.emit(&app, true, || {
-        progress(crawled_count, queued_at_end, false, false)
-    });
+    // Sent whatever ended the crawl loop (finished, stopped, or an error inside the loop),
+    // so the last counts the frontend sees are the final ones even when the throttle
+    // swallowed the most recent updates. `start_crawl` emits `crawl://done` only after this
+    // function returns. The early validation returns above never reach the loop; they
+    // emit only `crawl://error`, and no progress at all.
+    progress_throttle.emit(&app, true, || progress(crawled_count, queued_at_end, false));
 
     linked_urls.into_iter().collect()
+}
+
+/// Sleeps until `deadline`; pending forever for `None` (the branch is disabled then anyway).
+async fn sleep_until_deadline(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await,
+        None => std::future::pending().await,
+    }
 }
 
 #[cfg(test)]
@@ -1432,5 +1465,33 @@ mod progress_throttle_tests {
         assert!(throttle.should_emit(start + Duration::from_millis(90), true));
         assert!(!throttle.should_emit(start + Duration::from_millis(150), false));
         assert!(throttle.should_emit(start + Duration::from_millis(190), false));
+    }
+
+    #[test]
+    fn progress_throttle_sends_swallowed_update_within_one_interval() {
+        let start = Instant::now();
+        let interval = Duration::from_millis(100);
+        let mut throttle = ProgressThrottle::new(interval);
+        assert_eq!(throttle.trailing_deadline(), None);
+        assert!(throttle.should_emit(start, false));
+        assert_eq!(throttle.trailing_deadline(), None, "nothing swallowed yet");
+
+        // Two updates inside the window are swallowed; one trailing emit is owed.
+        assert!(!throttle.should_emit(start + Duration::from_millis(10), false));
+        assert!(!throttle.should_emit(start + Duration::from_millis(40), false));
+        let deadline = throttle
+            .trailing_deadline()
+            .expect("a swallowed update is pending");
+        assert_eq!(deadline, start + interval);
+
+        // At the deadline the trailing emit goes out and nothing is owed any more.
+        assert!(throttle.should_emit(deadline, false));
+        assert_eq!(throttle.trailing_deadline(), None);
+
+        // A forced emit also settles a pending update.
+        assert!(!throttle.should_emit(deadline + Duration::from_millis(1), false));
+        assert!(throttle.trailing_deadline().is_some());
+        assert!(throttle.should_emit(deadline + Duration::from_millis(2), true));
+        assert_eq!(throttle.trailing_deadline(), None);
     }
 }
