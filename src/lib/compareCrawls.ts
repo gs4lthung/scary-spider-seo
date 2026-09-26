@@ -58,6 +58,16 @@ export interface IssueDelta {
   key: IssueKey;
   before: number;
   after: number;
+  /** False when either crawl predates a signal this issue depends on (see
+   * `SIGNAL_FAMILIES`): its count there is unknown, so the delta means nothing. */
+  comparable: boolean;
+}
+
+/** Pages dropped from one crawl because their URL matched an earlier page's after
+ * normalization and host mapping (the first page is kept). */
+export interface UrlCollisions {
+  before: number;
+  after: number;
 }
 
 export interface CrawlComparison {
@@ -66,6 +76,7 @@ export interface CrawlComparison {
   changed: ChangedUrl[];
   /** Every issue in the registry, in registry order, with its count in each crawl. */
   issueDeltas: IssueDelta[];
+  collisions: UrlCollisions;
 }
 
 /** Word count changes at or under this fraction of the earlier count are noise, not a change. */
@@ -164,6 +175,87 @@ export function countCrawlIssues(crawl: ComparableCrawl): Record<IssueKey, numbe
   return countIssues(crawl.pages, crawl.resources, buildCrawlFilterContext(crawl.pages));
 }
 
+/**
+ * A group of raw signals a crawler build started collecting at one point (M2 tasks), with a
+ * test for whether a saved crawl has it and the issues that depend on it. Crawls saved before
+ * the signal existed load with its default (empty, 0 or false), which would otherwise read as
+ * "no issue" or, through the link graph, as "every page is an orphan".
+ *
+ * Each test is true when some page shows the signal, or when nothing in the crawl could have
+ * produced it (so its absence is real).
+ */
+interface SignalFamily {
+  name: string;
+  captured: (crawl: ComparableCrawl) => boolean;
+  issues: readonly IssueKey[];
+}
+
+export const SIGNAL_FAMILIES: readonly SignalFamily[] = [
+  {
+    name: "heading outline (T2.1)",
+    captured: ({ pages }) => pages.some((p) => (p.headingLevels ?? []).length > 0) || !pages.some((p) => p.h1Count > 0),
+    issues: ["h1TooLong", "missingH2", "multipleH2", "duplicateH2", "h2TooLong", "nonSequentialHeadings"],
+  },
+  {
+    name: "title and meta counts, meta refresh, pagination (T2.2)",
+    captured: ({ pages }) => pages.some((p) => (p.titleCount ?? 0) > 0) || !pages.some((p) => p.title),
+    issues: ["multipleTitles", "multipleMetaDescriptions", "metaRefresh", "paginationTargetError"],
+  },
+  {
+    name: "internal outlinks (T2.3)",
+    captured: ({ pages }) =>
+      pages.some((p) => (p.outlinks ?? []).length > 0) || !pages.some((p) => p.internalLinkCount > 0),
+    issues: [
+      "orphanPage",
+      "internalRedirect",
+      "singleInlink",
+      "linksToErrorPages",
+      "nonDescriptiveAnchors",
+      "emptyAnchors",
+    ],
+  },
+  {
+    name: "security headers and mixed content (T2.5)",
+    captured: ({ pages }) => pages.some((p) => p.securityHeadersCaptured) || !pages.some((p) => p.status !== null),
+    issues: ["missingCsp", "missingFrameOptions", "missingContentTypeOptions", "missingReferrerPolicy", "mixedContent"],
+  },
+  {
+    name: "hreflang links (T2.6)",
+    captured: ({ pages }) =>
+      pages.some((p) => (p.hreflangLinks ?? []).length > 0) || !pages.some((p) => (p.hreflangValues ?? []).length > 0),
+    issues: [
+      "hreflangMissingReturn",
+      "hreflangMissingSelf",
+      "hreflangMissingXDefault",
+      "hreflangInvalidCode",
+      "hreflangTargetError",
+    ],
+  },
+  {
+    name: "image dimensions and sizes (T2.7)",
+    captured: ({ pages, resources }) =>
+      pages.some((p) => (p.imagesMissingDimensions ?? 0) > 0) ||
+      resources.some((r) => r.contentLength != null) ||
+      (!pages.some((p) => p.imageCount > 0) && !resources.some((r) => r.resourceType === "image")),
+    issues: ["imageMissingDimensions", "largeImage"],
+  },
+  {
+    name: "content simhash (T2.8)",
+    captured: ({ pages }) => pages.some((p) => p.contentSimhash) || !pages.some((p) => p.wordCount >= 20),
+    issues: ["nearDuplicateContent"],
+  },
+];
+
+/** Issues whose count is unknown in at least one of the two crawls. */
+export function incomparableIssueKeys(before: ComparableCrawl, after: ComparableCrawl): Set<IssueKey> {
+  const keys = new Set<IssueKey>();
+  for (const family of SIGNAL_FAMILIES) {
+    if (family.captured(before) && family.captured(after)) continue;
+    for (const key of family.issues) keys.add(key);
+  }
+  return keys;
+}
+
 /** Empty text and a missing value are the same thing to a reader, and a field missing from an
  * older saved crawl must not read as a change. */
 function text(value: string | null | undefined): string | null {
@@ -199,10 +291,15 @@ function fieldChanges(before: PageResult, after: PageResult, mapping: HostMappin
   return changes;
 }
 
-function byUrl(pages: PageResult[], mapping: HostMapping | null): Map<string, PageResult> {
+function byUrl(pages: PageResult[], mapping: HostMapping | null): { map: Map<string, PageResult>; collisions: number } {
   const map = new Map<string, PageResult>();
-  for (const page of pages) map.set(normalizeUrl(page.url, mapping), page);
-  return map;
+  let collisions = 0;
+  for (const page of pages) {
+    const key = normalizeUrl(page.url, mapping);
+    if (map.has(key)) collisions++;
+    else map.set(key, page);
+  }
+  return { map, collisions };
 }
 
 function urlRow(url: string, page: PageResult): CompareUrlRow {
@@ -220,8 +317,10 @@ export function compareCrawls(
   options: CompareOptions = {},
 ): CrawlComparison {
   const mapping = resolveMapping(options);
-  const beforeByUrl = byUrl(before.pages, mapping);
-  const afterByUrl = byUrl(after.pages, mapping);
+  const beforeIndex = byUrl(before.pages, mapping);
+  const afterIndex = byUrl(after.pages, mapping);
+  const beforeByUrl = beforeIndex.map;
+  const afterByUrl = afterIndex.map;
 
   const added: CompareUrlRow[] = [];
   const changed: ChangedUrl[] = [];
@@ -241,13 +340,21 @@ export function compareCrawls(
 
   const countsBefore = countCrawlIssues(before);
   const countsAfter = countCrawlIssues(after);
+  const incomparable = incomparableIssueKeys(before, after);
   const issueDeltas = (Object.keys(countsBefore) as IssueKey[]).map((key) => ({
     key,
     before: countsBefore[key],
     after: countsAfter[key],
+    comparable: !incomparable.has(key),
   }));
 
-  return { added, removed, changed, issueDeltas };
+  return {
+    added,
+    removed,
+    changed,
+    issueDeltas,
+    collisions: { before: beforeIndex.collisions, after: afterIndex.collisions },
+  };
 }
 
 /** One changed field of one URL, the row shape of the Compare view's Changed table. */

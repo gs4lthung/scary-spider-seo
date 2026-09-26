@@ -6,6 +6,7 @@ import {
   changedFieldRows,
   comparisonUrl,
   compareCrawls,
+  incomparableIssueKeys,
 } from "./compareCrawls";
 import { countIssues } from "./filters";
 
@@ -234,5 +235,60 @@ describe("compareCrawls", () => {
       { url: "https://example.com/a", field: "Status", before: 200, after: 404 },
       { url: "https://example.com/a", field: "H1", before: "A", after: null },
     ]);
+  });
+
+  it("marks issues built on signals a legacy crawl lacks as not comparable", () => {
+    const link = (url: string) => ({ url, anchor: "Read more", nofollow: false, isImageLink: false });
+    // Shaped like a crawl saved before T2.1/T2.3: no outlinks or heading outline recorded,
+    // so every sitemap page would look orphaned and H2 data would look absent.
+    const legacyPage = (url: string) =>
+      makePage({
+        url,
+        discoveredViaSitemap: true,
+        internalLinkCount: 2,
+        outlinks: [],
+        headingLevels: [],
+        h2Values: [],
+        h2Count: 0,
+      });
+    const legacy = crawl([legacyPage("https://example.com/"), legacyPage("https://example.com/a")]);
+    const current = crawl([
+      makePage({ url: "https://example.com/", outlinks: [link("https://example.com/a")] }),
+      makePage({ url: "https://example.com/a", outlinks: [link("https://example.com/")] }),
+    ]);
+    const { issueDeltas } = compareCrawls(legacy, current);
+    const delta = (key: string) => issueDeltas.find((d) => d.key === key);
+    expect(delta("orphanPage")?.comparable).toBe(false);
+    expect(delta("missingH2")?.comparable).toBe(false);
+    expect(delta("nonDescriptiveAnchors")?.comparable).toBe(false);
+    // Signals both crawls carry stay comparable.
+    expect(delta("missingTitle")?.comparable).toBe(true);
+    const reported = issueDeltas.filter((d) => d.comparable && d.before !== d.after).map((d) => d.key);
+    expect(reported).not.toContain("orphanPage");
+    expect(reported).not.toContain("missingH2");
+  });
+
+  it("keeps every issue comparable between two current crawls", () => {
+    const pages = [
+      makePage({
+        url: "https://example.com/",
+        outlinks: [{ url: "https://example.com/a", anchor: "A page", nofollow: false, isImageLink: false }],
+        contentSimhash: "0123456789abcdef",
+        titleCount: 1,
+        imagesMissingDimensions: 1,
+      }),
+    ];
+    expect(incomparableIssueKeys(crawl(pages), crawl(pages)).size).toBe(0);
+  });
+
+  it("counts url collisions and keeps the first page", () => {
+    const before = crawl([
+      makePage({ url: "https://staging.example.com/", title: "First" }),
+      makePage({ url: "https://example.com/", title: "Second" }),
+    ]);
+    const after = crawl([makePage({ url: "https://example.com/", title: "First" })]);
+    const result = compareCrawls(before, after, { mapHostFrom: "staging.example.com", mapHostTo: "example.com" });
+    expect(result.collisions).toEqual({ before: 1, after: 0 });
+    expect(result.changed).toEqual([]);
   });
 });
