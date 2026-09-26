@@ -15,6 +15,7 @@ must produce.
 | `/canonicalised.html` | canonical pointing elsewhere |
 | `/old-page` | 301 to `/new-page.html` (route in the test server) |
 | `/redirect-to-gone` | 301 to `/gone.html`, so the redirect ends in a 404 (route in the test server) |
+| `/start-redirect` | 301 to `/` (which sends `Server: fixture-server`); used only as a start URL, to check site info reads the redirect target's headers; not linked (route in the test server) |
 | `/loop-a` | redirect loop `/loop-a` <-> `/loop-b` (route in the test server) |
 | `/private/secret.html` | disallowed by `robots.txt` |
 | `/gone.html` | 404 (file intentionally absent) |

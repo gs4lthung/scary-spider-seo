@@ -27,12 +27,128 @@ const RENDER_MAX_CONCURRENCY: usize = 4;
 /// Tighter cap when the accessibility and/or mobile-usability audit is running, since
 /// each adds real CPU time inside the tab on top of the render itself.
 const RENDER_AUDIT_MAX_CONCURRENCY: usize = 2;
+/// Minimum gap between two unforced `crawl://progress` events. A fast crawl finishes
+/// pages and resource checks far more often than the UI can usefully repaint.
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Rate-limits `crawl://progress`: an event goes out when `interval` has passed since the
+/// last one, or when forced (pause state changed, crawl finished). An update swallowed
+/// inside the window is not lost: it marks the throttle dirty, and `trailing_deadline`
+/// tells the crawl loop when to send it, so the UI never keeps stale counts for longer
+/// than one interval (e.g. image checks finishing just before a slow page render).
+struct ProgressThrottle {
+    last: Option<Instant>,
+    interval: Duration,
+    dirty: bool,
+}
+
+impl ProgressThrottle {
+    fn new(interval: Duration) -> Self {
+        Self {
+            last: None,
+            interval,
+            dirty: false,
+        }
+    }
+
+    /// Whether to emit at `now`; records `now` as the last emit when it returns true,
+    /// and remembers a swallowed update when it returns false.
+    fn should_emit(&mut self, now: Instant, force: bool) -> bool {
+        let due = force
+            || self
+                .last
+                .is_none_or(|last| now.saturating_duration_since(last) >= self.interval);
+        if due {
+            self.last = Some(now);
+            self.dirty = false;
+        } else {
+            self.dirty = true;
+        }
+        due
+    }
+
+    /// When the latest swallowed update becomes due, or `None` when nothing is pending.
+    fn trailing_deadline(&self) -> Option<Instant> {
+        match self.last {
+            Some(last) if self.dirty => last.checked_add(self.interval),
+            _ => None,
+        }
+    }
+
+    /// Emits the progress `snapshot` builds, if `should_emit` allows it right now.
+    fn emit<R: Runtime>(
+        &mut self,
+        app: &AppHandle<R>,
+        force: bool,
+        snapshot: impl FnOnce() -> CrawlProgress,
+    ) {
+        if self.should_emit(Instant::now(), force) {
+            let _ = app.emit("crawl://progress", snapshot());
+        }
+    }
+}
 
 struct PageFetchOutcome {
     result: PageResult,
     discovered_internal: Vec<Url>,
     discovered_external: Vec<Url>,
     discovered_images: Vec<(Url, Option<String>)>,
+    /// Technologies detected on this page. Only set for the start page (see
+    /// `PageTarget::detect_site_tech`), whose fetch doubles as the site info probe.
+    site_tech: Option<SiteTech>,
+}
+
+impl PageFetchOutcome {
+    fn with_site_tech(mut self, site_tech: Option<SiteTech>) -> Self {
+        self.site_tech = site_tech;
+        self
+    }
+}
+
+/// What `techdetect` found on the start page, for `SiteInfo`.
+struct SiteTech {
+    header: techdetect::HeaderTech,
+    cms: Option<String>,
+    technologies: Vec<String>,
+}
+
+impl SiteTech {
+    fn from_headers(headers: &reqwest::header::HeaderMap) -> Self {
+        Self {
+            header: techdetect::detect_from_headers(headers),
+            cms: None,
+            technologies: Vec::new(),
+        }
+    }
+}
+
+/// A page to fetch: its URL, crawl depth and whether to fingerprint its technologies.
+struct PageTarget {
+    url: Url,
+    depth: usize,
+    /// True only for the start page while site info is still pending, so the crawl
+    /// requests the start URL once instead of a separate probe plus the page fetch.
+    detect_site_tech: bool,
+}
+
+/// Fills the technology fields of the pending site info (left empty when `site_tech`
+/// is `None`) and emits `crawl://site_info`. Does nothing once it has been emitted.
+fn emit_site_info<R: Runtime>(
+    app: &AppHandle<R>,
+    pending: &mut Option<SiteInfo>,
+    site_tech: Option<SiteTech>,
+) {
+    let Some(mut info) = pending.take() else {
+        return;
+    };
+    if let Some(tech) = site_tech {
+        info.server = tech.header.server;
+        info.powered_by = tech.header.powered_by;
+        info.cdn = tech.header.cdn;
+        info.cms = tech.cms;
+        info.technologies = tech.technologies;
+    }
+    let _ = app.emit("crawl://site_info", info);
 }
 
 /// The crawl loop's in-progress frontier state, captured when a crawl is stopped with
@@ -166,6 +282,7 @@ fn empty_outcome(result: PageResult) -> PageFetchOutcome {
         discovered_internal: Vec::new(),
         discovered_external: Vec::new(),
         discovered_images: Vec::new(),
+        site_tech: None,
     }
 }
 
@@ -254,15 +371,22 @@ async fn fetch_and_parse(
     browser: Option<Arc<Browser>>,
     axe_source: Option<Arc<String>>,
     render_semaphore: Option<Arc<Semaphore>>,
-    url: Url,
-    depth: usize,
+    target: PageTarget,
     analysis: Arc<PageAnalysis>,
 ) -> PageFetchOutcome {
+    let PageTarget {
+        url,
+        depth,
+        detect_site_tech,
+    } = target;
     let started = Instant::now();
 
     // Rendering takes the body from Chrome, so a plain HEAD is enough unless the raw
-    // HTML is wanted too for the raw vs rendered comparison.
-    let fetch_raw_html = browser.is_some() && analysis.compare_raw_html;
+    // HTML is wanted too: for the raw vs rendered comparison, or on the start page, whose
+    // GET headers and raw HTML feed site info exactly like the standalone probe it
+    // replaced (a HEAD may answer with different headers, and the rendered DOM can be a
+    // different document after a script navigation).
+    let fetch_raw_html = browser.is_some() && (analysis.compare_raw_html || detect_site_tech);
     let request_method = if browser.is_some() && !fetch_raw_html {
         Method::HEAD
     } else {
@@ -286,6 +410,10 @@ async fn fetch_and_parse(
     };
 
     let resp = followed.response;
+    // Headers of the final response, like the auto-following probe this replaces saw.
+    // Every return from here on carries it, so site info keeps the header signals even
+    // when the start page is not HTML or its body can't be read.
+    let mut site_tech = detect_site_tech.then(|| SiteTech::from_headers(resp.headers()));
     let redirect_chain = followed.chain;
     let status_code = resp.status();
     let status = status_code.as_u16();
@@ -361,22 +489,29 @@ async fn fetch_and_parse(
             indexability,
             response_time_ms: elapsed,
             ..base
-        });
+        })
+        .with_site_tech(site_tech);
     }
 
     let mut rendered = false;
     let mut accessibility_violations = Vec::new();
     let mut mobile_usability_violations = Vec::new();
     let mut raw_body: Option<String> = None;
+    // The start page's raw HTML for `detect_from_html` when the parsed body is rendered.
+    let mut site_tech_html: Option<String> = None;
     let body: String = if let Some(browser) = browser {
         if fetch_raw_html {
             match resp.text().await {
                 Ok(b) => raw_body = Some(b),
                 Err(e) => {
                     let elapsed = started.elapsed().as_millis() as u64;
-                    return body_read_error_outcome(base, elapsed, e);
+                    return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                 }
             }
+        }
+        // Kept apart from `raw_body`, which is dropped below when the tab navigated away.
+        if detect_site_tech {
+            site_tech_html = raw_body.clone();
         }
         // A rendered page opens a full Chrome tab — much heavier than a plain fetch —
         // so it's throttled by its own (CPU-core-scaled) semaphore independent of
@@ -418,12 +553,12 @@ async fn fetch_and_parse(
                     Ok(b) => b,
                     Err(e) => {
                         let elapsed = started.elapsed().as_millis() as u64;
-                        return body_read_error_outcome(base, elapsed, e);
+                        return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                     }
                 },
                 Err(e) => {
                     let elapsed = started.elapsed().as_millis() as u64;
-                    return body_read_error_outcome(base, elapsed, e);
+                    return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
                 }
             },
         }
@@ -432,7 +567,7 @@ async fn fetch_and_parse(
             Ok(b) => b,
             Err(e) => {
                 let elapsed = started.elapsed().as_millis() as u64;
-                return body_read_error_outcome(base, elapsed, e);
+                return body_read_error_outcome(base, elapsed, e).with_site_tech(site_tech);
             }
         }
     };
@@ -443,19 +578,29 @@ async fn fetch_and_parse(
     // workers that drive every other in-flight fetch.
     let parse_url = final_url.clone();
     let parse_analysis = analysis.clone();
-    // Raw signals only mean something next to a rendered body; the fallback path above
-    // already parses the raw HTML as the page itself.
-    let raw_body = if rendered { raw_body } else { None };
+    // Raw signals only mean something next to a rendered body, and only when asked for
+    // (the start page may have fetched its raw HTML for site info alone); the fallback
+    // path above already parses the raw HTML as the page itself.
+    let raw_body = if rendered && analysis.compare_raw_html {
+        raw_body
+    } else {
+        None
+    };
+    let detect_html_tech = site_tech.is_some();
     let parse_result = tokio::task::spawn_blocking(move || {
         let parsed = parse_page_with(&body, &parse_url, &parse_analysis.extraction);
         let counts = parse_analysis
             .custom_search
             .count_matches(&body, &parsed.body_text);
         let raw = raw_body.map(|raw| parse_raw_signals(&raw, &parse_url));
-        (parsed, counts, raw)
+        // Always the raw HTML, as the old standalone probe saw it: the start page's own
+        // GET body when rendering, the parsed body (which is raw) otherwise.
+        let html_tech = detect_html_tech
+            .then(|| techdetect::detect_from_html(site_tech_html.as_deref().unwrap_or(&body)));
+        (parsed, counts, raw, html_tech)
     })
     .await;
-    let (parsed, custom_search_counts, raw) = match parse_result {
+    let (parsed, custom_search_counts, raw, html_tech) = match parse_result {
         Ok(result) => result,
         Err(e) => {
             return empty_outcome(PageResult {
@@ -463,9 +608,14 @@ async fn fetch_and_parse(
                 response_time_ms: elapsed,
                 error: Some(format!("Failed to parse the page: {e}")),
                 ..base
-            });
+            })
+            .with_site_tech(site_tech);
         }
     };
+    if let (Some(tech), Some((cms, technologies))) = (site_tech.as_mut(), html_tech) {
+        tech.cms = cms;
+        tech.technologies = technologies;
+    }
     let indexability = indexability_for(
         status,
         parsed.canonical.as_deref(),
@@ -582,6 +732,7 @@ async fn fetch_and_parse(
             .collect(),
         discovered_external: parsed.external_links,
         discovered_images: parsed.images,
+        site_tech,
     }
 }
 
@@ -757,6 +908,18 @@ pub async fn run_crawl<R: Runtime>(
     state: CrawlState,
     resume: Option<CrawlResumeState>,
 ) -> Vec<String> {
+    run_crawl_with_progress_interval(app, config, state, resume, PROGRESS_INTERVAL).await
+}
+
+/// `run_crawl` with the progress throttle interval passed in, so tests can make the
+/// number of `crawl://progress` events independent of wall-clock speed.
+pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
+    app: AppHandle<R>,
+    config: CrawlConfig,
+    state: CrawlState,
+    resume: Option<CrawlResumeState>,
+    progress_interval: Duration,
+) -> Vec<String> {
     let CrawlState {
         cancel,
         paused,
@@ -811,7 +974,7 @@ pub async fn run_crawl<R: Runtime>(
     };
 
     // `client` auto-follows redirects (used for every auxiliary fetch: robots.txt,
-    // sitemap, tech detection, resource checks) so those keep working exactly as
+    // sitemap, llms.txt, resource checks) so those keep working exactly as
     // before. `page_client` disables auto-follow so the main page fetch can walk
     // the redirect chain itself and report every hop.
     let client = match Client::builder()
@@ -849,7 +1012,24 @@ pub async fn run_crawl<R: Runtime>(
         robots_by_origin.insert(start_robots_key.clone(), Arc::new(OnceCell::from(rules)));
     }
 
-    {
+    // A resumed crawl whose first run already fetched the start page sends no site info
+    // at all: the first run sent the complete one (with technologies) in this same
+    // session, and resume state never survives a different start URL or a loaded crawl,
+    // so re-sending would only replace it with a copy missing the technologies. Only when
+    // the first run stopped before fetching the start page (it is still queued) is site
+    // info gathered again, and then completed from that fetch as usual.
+    let start_key = normalize(&start_url);
+    let is_start_page = |url: &Url| normalize(url) == start_key;
+    let send_site_info = resume
+        .as_ref()
+        .is_none_or(|r| r.frontier.iter().any(|(url, _, _)| is_start_page(url)));
+
+    // Everything site info needs except the technologies, which come from the start
+    // page's own crawl fetch (see `PageTarget::detect_site_tech`), so the start URL is
+    // requested once. Emitted by `emit_site_info` when that page's outcome arrives.
+    let mut pending_site_info = if !send_site_info {
+        None
+    } else {
         let llms_txt_found = match start_url.join("/llms.txt") {
             Ok(llms_txt_url) => matches!(
                 client.get(llms_txt_url).send().await,
@@ -858,25 +1038,6 @@ pub async fn run_crawl<R: Runtime>(
             Err(_) => false,
         };
         let llms_txt_url = start_url.join("/llms.txt").ok().map(|u| u.to_string());
-
-        let (server, powered_by, cdn, cms, technologies) =
-            match client.get(start_url.clone()).send().await {
-                Ok(resp) => {
-                    let header_tech = techdetect::detect_from_headers(resp.headers());
-                    let (cms, technologies) = match resp.text().await {
-                        Ok(body) => techdetect::detect_from_html(&body),
-                        Err(_) => (None, Vec::new()),
-                    };
-                    (
-                        header_tech.server,
-                        header_tech.powered_by,
-                        header_tech.cdn,
-                        cms,
-                        technologies,
-                    )
-                }
-                Err(_) => (None, None, None, None, Vec::new()),
-            };
 
         let ip_addresses = hosting::resolve_ips(&start_url).await;
 
@@ -892,23 +1053,20 @@ pub async fn run_crawl<R: Runtime>(
             (None, None)
         };
 
-        let _ = app.emit(
-            "crawl://site_info",
-            SiteInfo {
-                llms_txt_found,
-                llms_txt_url,
-                robots_txt_checked: config.respect_robots,
-                server,
-                powered_by,
-                cdn,
-                cms,
-                technologies,
-                ip_addresses,
-                hosting_org,
-                hosting_country,
-            },
-        );
-    }
+        Some(SiteInfo {
+            llms_txt_found,
+            llms_txt_url,
+            robots_txt_checked: config.respect_robots,
+            server: None,
+            powered_by: None,
+            cdn: None,
+            cms: None,
+            technologies: Vec::new(),
+            ip_addresses,
+            hosting_org,
+            hosting_country,
+        })
+    };
 
     let browser: Option<Arc<Browser>> = if config.render_js
         || config.run_accessibility_audit
@@ -1049,10 +1207,31 @@ pub async fn run_crawl<R: Runtime>(
         }
     }
 
+    // Site info waits for the start page's outcome, which brings the technologies. When
+    // this crawl will never fetch the start page (list mode need not list the start
+    // URL), emit it now without them.
+    if !frontier.iter().any(|(url, _, _)| is_start_page(url)) {
+        emit_site_info(&app, &mut pending_site_info, None);
+    }
+
     let mut page_tasks: JoinSet<Option<PageFetchOutcome>> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
 
     let mut last_dispatch: Option<Instant> = None;
+
+    let mut progress_throttle = ProgressThrottle::new(progress_interval);
+    // Pause state the frontend last heard about; a change is always reported at once.
+    let mut reported_paused = false;
+    // `paused` is read at emit time, not taken from the loop-top snapshot, so an event
+    // never reports a pause state the user has already changed.
+    let progress = |crawled: usize, queued: usize, running: bool| CrawlProgress {
+        crawled,
+        queued,
+        resources_checked: resources_checked.load(Ordering::Relaxed),
+        resources_total: resources.len(),
+        running,
+        paused: running && paused.load(Ordering::SeqCst),
+    };
 
     loop {
         if cancel.load(Ordering::SeqCst) {
@@ -1060,6 +1239,10 @@ pub async fn run_crawl<R: Runtime>(
         }
 
         let is_paused = paused.load(Ordering::SeqCst);
+        if is_paused != reported_paused {
+            reported_paused = is_paused;
+            progress_throttle.emit(&app, true, || progress(crawled_count, frontier.len(), true));
+        }
 
         if !is_paused {
             while page_tasks.len() < page_concurrency && !frontier.is_empty() {
@@ -1081,8 +1264,15 @@ pub async fn run_crawl<R: Runtime>(
                 let robots = robots_cell.as_ref().and_then(|cell| cell.get());
                 let pending_robots = robots_cell.clone().filter(|cell| !cell.initialized());
 
+                let detect_site_tech = pending_site_info.is_some() && is_start_page(&url);
+
                 if let Some(robots) = robots {
                     if !robots.is_allowed(url.path()) {
+                        // A blocked start page is never fetched, so there is nothing
+                        // to detect technologies from.
+                        if detect_site_tech {
+                            emit_site_info(&app, &mut pending_site_info, None);
+                        }
                         crawled_count += 1;
                         let mut result = robots_blocked_result(&url, depth);
                         result.discovered_via_sitemap = via_sitemap;
@@ -1147,8 +1337,7 @@ pub async fn run_crawl<R: Runtime>(
                                 browser,
                                 axe_source,
                                 render_semaphore,
-                                url,
-                                depth,
+                                PageTarget { url, depth, detect_site_tech },
                                 analysis,
                             )
                             .await
@@ -1164,23 +1353,16 @@ pub async fn run_crawl<R: Runtime>(
 
         if page_tasks.is_empty() && resource_tasks.is_empty() {
             if is_paused && !frontier.is_empty() {
-                let _ = app.emit(
-                    "crawl://progress",
-                    CrawlProgress {
-                        crawled: crawled_count,
-                        queued: frontier.len(),
-                        resources_checked: resources_checked.load(Ordering::Relaxed),
-                        resources_total: resources.len(),
-                        running: true,
-                        paused: true,
-                    },
-                );
+                progress_throttle.emit(&app, false, || {
+                    progress(crawled_count, frontier.len(), true)
+                });
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 continue;
             }
             break;
         }
 
+        let trailing_deadline = progress_throttle.trailing_deadline();
         tokio::select! {
             res = page_tasks.join_next(), if !page_tasks.is_empty() => {
                 if let Some(Err(error)) = &res {
@@ -1188,7 +1370,14 @@ pub async fn run_crawl<R: Runtime>(
                 }
                 if let Some(Ok(Some(outcome))) = res {
                     crawled_count += 1;
-                    let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images } = outcome;
+                    let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images, site_tech } = outcome;
+                    // The start page's outcome completes site info, with or without
+                    // technologies (a robots block or failed fetch leaves them empty).
+                    if pending_site_info.is_some()
+                        && Url::parse(&result.url).is_ok_and(|url| is_start_page(&url))
+                    {
+                        emit_site_info(&app, &mut pending_site_info, site_tech);
+                    }
 
                     // List mode never follows links, but still records them as linked.
                     if !list_mode && result.depth < config.max_depth {
@@ -1255,13 +1444,8 @@ pub async fn run_crawl<R: Runtime>(
                         }
                     }
 
-                    let _ = app.emit("crawl://progress", CrawlProgress {
-                        crawled: crawled_count,
-                        queued: frontier.len(),
-                        resources_checked: resources_checked.load(Ordering::Relaxed),
-                        resources_total: resources.len(),
-                        running: true,
-                        paused: is_paused,
+                    progress_throttle.emit(&app, false, || {
+                        progress(crawled_count, frontier.len(), true)
                     });
                 }
             }
@@ -1269,19 +1453,26 @@ pub async fn run_crawl<R: Runtime>(
                 if let Some(Err(error)) = res {
                     let _ = app.emit("crawl://error", format!("Resource check task failed: {error}"));
                 }
-                let _ = app.emit("crawl://progress", CrawlProgress {
-                    crawled: crawled_count,
-                    queued: frontier.len(),
-                    resources_checked: resources_checked.load(Ordering::Relaxed),
-                    resources_total: resources.len(),
-                    running: true,
-                    paused: is_paused,
+                progress_throttle.emit(&app, false, || {
+                    progress(crawled_count, frontier.len(), true)
+                });
+            }
+            // Sends an update the throttle swallowed once its window has passed, even if
+            // no page or resource finishes in the meantime.
+            _ = sleep_until_deadline(trailing_deadline), if trailing_deadline.is_some() => {
+                progress_throttle.emit(&app, false, || {
+                    progress(crawled_count, frontier.len(), true)
                 });
             }
         }
     }
 
+    // Stopped before the start page's outcome arrived: still report what is known.
+    emit_site_info(&app, &mut pending_site_info, None);
+
     let cancelled = cancel.load(Ordering::SeqCst);
+    // Read before the frontier may move into the resume state below.
+    let queued_at_end = frontier.len();
     if cancelled {
         page_tasks.abort_all();
         resource_tasks.abort_all();
@@ -1325,5 +1516,91 @@ pub async fn run_crawl<R: Runtime>(
         );
     }
 
+    // Sent whatever ended the crawl loop (finished, stopped, or an error inside the loop),
+    // so the last counts the frontend sees are the final ones even when the throttle
+    // swallowed the most recent updates. `start_crawl` emits `crawl://done` only after this
+    // function returns. The early validation returns above never reach the loop; they
+    // emit only `crawl://error`, and no progress at all.
+    progress_throttle.emit(&app, true, || progress(crawled_count, queued_at_end, false));
+
     linked_urls.into_iter().collect()
+}
+
+/// Sleeps until `deadline`; pending forever for `None` (the branch is disabled then anyway).
+async fn sleep_until_deadline(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)).await,
+        None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod progress_throttle_tests {
+    use super::*;
+
+    #[test]
+    fn progress_throttle_limits_rate() {
+        let start = Instant::now();
+        let mut throttle = ProgressThrottle::new(Duration::from_millis(100));
+        assert!(
+            throttle.should_emit(start, false),
+            "first event always goes out"
+        );
+        assert!(!throttle.should_emit(start + Duration::from_millis(1), false));
+        assert!(!throttle.should_emit(start + Duration::from_millis(99), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(100), false));
+        // The window restarts at the last emit, not at the first.
+        assert!(!throttle.should_emit(start + Duration::from_millis(150), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(200), false));
+        // 1000 events 1 ms apart over one second let through one per 100 ms.
+        let mut throttle = ProgressThrottle::new(Duration::from_millis(100));
+        let emitted = (0..1000u64)
+            .filter(|ms| throttle.should_emit(start + Duration::from_millis(*ms), false))
+            .count();
+        assert_eq!(emitted, 10);
+    }
+
+    #[test]
+    fn progress_throttle_forces_through() {
+        let start = Instant::now();
+        let mut throttle = ProgressThrottle::new(Duration::from_secs(3600));
+        assert!(throttle.should_emit(start, false));
+        assert!(!throttle.should_emit(start + Duration::from_millis(5), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(5), true));
+        assert!(throttle.should_emit(start + Duration::from_millis(5), true));
+        // A forced emit restarts the window.
+        let mut throttle = ProgressThrottle::new(Duration::from_millis(100));
+        assert!(throttle.should_emit(start, false));
+        assert!(throttle.should_emit(start + Duration::from_millis(90), true));
+        assert!(!throttle.should_emit(start + Duration::from_millis(150), false));
+        assert!(throttle.should_emit(start + Duration::from_millis(190), false));
+    }
+
+    #[test]
+    fn progress_throttle_sends_swallowed_update_within_one_interval() {
+        let start = Instant::now();
+        let interval = Duration::from_millis(100);
+        let mut throttle = ProgressThrottle::new(interval);
+        assert_eq!(throttle.trailing_deadline(), None);
+        assert!(throttle.should_emit(start, false));
+        assert_eq!(throttle.trailing_deadline(), None, "nothing swallowed yet");
+
+        // Two updates inside the window are swallowed; one trailing emit is owed.
+        assert!(!throttle.should_emit(start + Duration::from_millis(10), false));
+        assert!(!throttle.should_emit(start + Duration::from_millis(40), false));
+        let deadline = throttle
+            .trailing_deadline()
+            .expect("a swallowed update is pending");
+        assert_eq!(deadline, start + interval);
+
+        // At the deadline the trailing emit goes out and nothing is owed any more.
+        assert!(throttle.should_emit(deadline, false));
+        assert_eq!(throttle.trailing_deadline(), None);
+
+        // A forced emit also settles a pending update.
+        assert!(!throttle.should_emit(deadline + Duration::from_millis(1), false));
+        assert!(throttle.trailing_deadline().is_some());
+        assert!(throttle.should_emit(deadline + Duration::from_millis(2), true));
+        assert_eq!(throttle.trailing_deadline(), None);
+    }
 }

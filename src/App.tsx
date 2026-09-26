@@ -103,7 +103,7 @@ function App() {
   // which would otherwise be a stale closure from that first render.
   const activeStartUrlRef = useRef<string | null>(null);
 
-  const { discardPending } = useCrawlEvents({
+  const { discardPending, discardPendingProgress } = useCrawlEvents({
     setPages,
     setResources,
     setSiteInfo,
@@ -156,6 +156,7 @@ function App() {
     filterContext,
     resetDerivedTrackers,
     discardPending,
+    discardPendingProgress,
   });
 
   // Link scores rank the whole graph, so while a crawl runs they refresh on a timer instead
