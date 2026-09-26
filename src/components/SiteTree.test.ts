@@ -54,6 +54,7 @@ function makePage(url: string): PageResult {
     outlinks: [],
     textRatioPct: 20,
     contentHash: url,
+    contentSimhash: "",
     xRobotsTag: null,
     viewport: "width=device-width",
     hasOpenGraph: true,

@@ -447,6 +447,7 @@ async fn fetch_and_parse(
         outlinks: parsed.internal_outlinks,
         text_ratio_pct: parsed.text_ratio_pct,
         content_hash: parsed.content_hash,
+        content_simhash: parsed.content_simhash,
         x_robots_tag,
         viewport: parsed.viewport,
         has_open_graph: parsed.has_open_graph,

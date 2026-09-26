@@ -100,6 +100,8 @@ export interface PageResult {
   outlinks: LinkRef[];
   textRatioPct: number;
   contentHash: string;
+  /** 64-bit simhash of the body text as 16 hex chars; empty for pages under 20 words, non-HTML URLs and crawls saved before it existed. */
+  contentSimhash: string;
   xRobotsTag: string | null;
   viewport: string | null;
   hasOpenGraph: boolean;

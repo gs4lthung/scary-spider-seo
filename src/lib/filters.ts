@@ -1,6 +1,7 @@
 import type { PageResult, ResourceResult } from "../types";
 import { isValidHreflang, isXDefault } from "./hreflang";
 import { type LinkGraph, buildLinkGraph, createLinkGraph, getUniqueInlinkCount } from "./linkGraph";
+import type { NearDuplicateCluster } from "./nearDuplicates";
 import { META_FONT_PX, TITLE_FONT_PX, estimatePixelWidth } from "./pixelWidth";
 
 export const TITLE_MIN_LENGTH = 30;
@@ -420,6 +421,9 @@ export interface FilterContext {
   hreflangMissingReturn: Set<string>;
   /** Pages with a crawled hreflang target in error (see `isHreflangTargetError`). */
   hreflangTargetError: Set<string>;
+  /** Pages with at least one near duplicate, by URL, with their cluster (see `nearDuplicates.ts`).
+   * Exact copies alone do not count; they are `duplicateContent`. */
+  nearDuplicates: Map<string, NearDuplicateCluster>;
 }
 
 export function emptyFilterContext(): FilterContext {
@@ -437,6 +441,7 @@ export function emptyFilterContext(): FilterContext {
     non200LinkSources: new Set(),
     hreflangMissingReturn: new Set(),
     hreflangTargetError: new Set(),
+    nearDuplicates: new Map(),
   };
 }
 
@@ -836,6 +841,14 @@ export const ISSUE_DEFS = [
     group: "content",
     section: "Content",
     test: (p, ctx) => !!p.contentHash && ctx.duplicateContent.has(p.contentHash),
+  }),
+  pageIssue({
+    key: "nearDuplicateContent",
+    label: "Near-duplicate content",
+    group: "content",
+    tone: "warn",
+    section: "Content",
+    test: (p, ctx) => ctx.nearDuplicates.has(p.url),
   }),
   pageIssue({
     key: "lowTextRatio",
