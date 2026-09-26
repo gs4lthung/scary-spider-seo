@@ -259,6 +259,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/paged-1.html",
         "/paged-2.html",
         "/private/secret.html",
+        "/product.html",
         "/redirect-to-gone",
         "/secure-headers.html",
         "/title-equals-h1.html",
@@ -402,6 +403,40 @@ async fn custom_search_counts() {
     // Without rules nothing is recorded.
     let plain = crawl(&site.url("/"), json!({ "maxPages": 1 })).await;
     assert!(plain.page(&site.url("/")).custom_search_counts.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn extraction_fixture() {
+    let site = FixtureServer::start().await;
+    let out = crawl(
+        &site.url("/"),
+        json!({ "extractions": [
+            { "id": "price", "name": "Price", "selector": ".price" },
+            { "id": "og", "name": "OG image", "selector": "meta[property=\"og:image\"]",
+              "mode": "attr", "attr": "content" },
+            { "id": "ld", "name": "JSON-LD", "selector": "script[type=\"application/ld+json\"]",
+              "mode": "inner_html" },
+        ] }),
+    )
+    .await;
+
+    let product = &out.page(&site.url("/product.html")).extracted;
+    assert_eq!(product["price"], vec!["$19.99"], "{product:?}");
+    assert_eq!(product["og"], vec![site.url("/img/ok.png")], "{product:?}");
+    // Scripts are still in the document when extraction runs.
+    assert_eq!(product["ld"].len(), 1, "{product:?}");
+    assert!(product["ld"][0].contains("\"Product\""), "{product:?}");
+
+    // A page without the elements still gets an (empty) entry per rule.
+    let home = &out.page(&site.url("/")).extracted;
+    assert!(home["price"].is_empty(), "{home:?}");
+    assert!(home["og"].is_empty(), "{home:?}");
+    // A robots-blocked URL is never fetched, so it has no entries at all.
+    let blocked = out.page(&site.url("/private/secret.html"));
+    assert!(blocked.extracted.is_empty(), "{blocked:?}");
+    // Without rules nothing is recorded.
+    let plain = crawl(&site.url("/"), json!({ "maxPages": 1 })).await;
+    assert!(plain.page(&site.url("/")).extracted.is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -647,7 +682,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 26);
+    assert_eq!(home.internal_link_count, 27);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));

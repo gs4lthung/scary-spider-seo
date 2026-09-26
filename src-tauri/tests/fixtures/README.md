@@ -33,6 +33,7 @@ must produce.
 | `/en.html` | hreflang `en` (self), `fr` and `x-default` (`/`) |
 | `/fr.html` | not linked; reached only through the hreflang annotation on `/en.html`. Annotates `fr` (self) and an invalid `fr-XX`, with no return link to `/en.html` |
 | `/near-dup-a.html`, `/near-dup-b.html` | about 60 words of body text differing by one word: near duplicates (simhash within distance 3) with different content hashes |
+| `/product.html` | custom extraction: a `.price` element with text `$19.99` (whitespace around it), `meta[property="og:image"]` content `{{ORIGIN}}/img/ok.png`, and Product JSON-LD |
 | `/orphan.html` | not linked; only listed in `sitemap.xml` |
 | `/noindex-in-sitemap.html` | not linked; listed in `sitemap.xml` and noindex (non-indexable URL in the sitemap) |
 | `/gone-in-sitemap.html` | not linked; listed in `sitemap.xml`, file intentionally absent so it answers 404 |
