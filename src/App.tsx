@@ -1,6 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { ChevronDown, SearchIcon, XIcon } from "lucide-react";
@@ -21,6 +20,7 @@ import { CrawlActions } from "@/components/crawl-actions";
 import { CrawlOptionsSheet } from "@/components/crawl-options-sheet";
 import { CrawlModeToggle, ListModeDialog, type CrawlMode } from "@/components/list-mode-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useCrawlEvents } from "@/hooks/useCrawlEvents";
 import { Overview } from "./components/Overview";
 import { DataTable } from "./components/DataTable";
 import { DetailModal } from "./components/DetailModal";
@@ -33,7 +33,6 @@ import {
   type CrawlConfig,
   type CrawlProgress,
   type CrawlSnapshot,
-  type CrawlSummary,
   type CustomSearchRule,
   type ExtractionRule,
   type PageResult,
@@ -163,8 +162,6 @@ function App() {
     customSearches: [],
     extractions: [],
   });
-  const pagesBufRef = useRef<PageResult[]>([]);
-  const resourcesBufRef = useRef<ResourceResult[]>([]);
   // Backs the duplicate-title/meta/content and canonical-status derivations below with
   // incremental accumulators instead of full-array rescans (see the useMemo that reads
   // them for why). Reset via resetDerivedTrackers() whenever `pages` is replaced wholesale
@@ -215,80 +212,17 @@ function App() {
   // which would otherwise be a stale closure from that first render.
   const activeStartUrlRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    // `listen()`/unlisten are async, and React StrictMode's dev-only
-    // mount->unmount->remount cycle can leave a stale listener from the first
-    // mount briefly registered alongside the second mount's listener before its
-    // unlisten call resolves. Without this guard, events fired in that overlap
-    // window get processed twice (e.g. duplicate rows for the same page).
-    let active = true;
-    const unlistenFns: Array<() => void> = [];
-    let flushHandle: number | undefined;
-
-    function scheduleFlush() {
-      if (flushHandle !== undefined) return;
-      flushHandle = window.setTimeout(() => {
-        flushHandle = undefined;
-        if (pagesBufRef.current.length > 0) {
-          const batch = pagesBufRef.current;
-          pagesBufRef.current = [];
-          setPages((prev) => [...prev, ...batch]);
-        }
-        if (resourcesBufRef.current.length > 0) {
-          const batch = resourcesBufRef.current;
-          resourcesBufRef.current = [];
-          setResources((prev) => [...prev, ...batch]);
-        }
-      }, 150);
-    }
-
-    async function registerListener<T>(event: string, handler: (payload: T) => void) {
-      const unlisten = await listen<T>(event, (e) => {
-        if (!active) return;
-        handler(e.payload);
-      });
-      if (!active) {
-        unlisten();
-        return;
-      }
-      unlistenFns.push(unlisten);
-    }
-
-    (async () => {
-      await registerListener<PageResult>("crawl://page", (payload) => {
-        pagesBufRef.current.push(payload);
-        scheduleFlush();
-      });
-      await registerListener<ResourceResult>("crawl://resource", (payload) => {
-        resourcesBufRef.current.push(payload);
-        scheduleFlush();
-      });
-      await registerListener<SiteInfo>("crawl://site_info", (payload) => {
-        setSiteInfo(payload);
-      });
-      await registerListener<CrawlProgress>("crawl://progress", (payload) => {
-        setProgress(payload);
-        setPaused(payload.paused);
-      });
-      await registerListener<CrawlSummary>("crawl://done", (payload) => {
-        setRunning(false);
-        setPaused(false);
-        setLinkedUrls(payload.linkedUrls);
-        setProgress((prev) => (prev ? { ...prev, running: false, paused: false } : prev));
-        setResumableStartUrl(payload.resumable ? activeStartUrlRef.current : null);
-      });
-      await registerListener<string>("crawl://error", (payload) => {
-        toast.error(payload);
-        setRunning(false);
-      });
-    })();
-
-    return () => {
-      active = false;
-      if (flushHandle !== undefined) window.clearTimeout(flushHandle);
-      unlistenFns.forEach((fn) => fn());
-    };
-  }, []);
+  const { discardPending } = useCrawlEvents({
+    setPages,
+    setResources,
+    setSiteInfo,
+    setProgress,
+    setPaused,
+    setRunning,
+    setLinkedUrls,
+    setResumableStartUrl,
+    activeStartUrlRef,
+  });
 
   useEffect(() => {
     closeGuardRef.current = { running, pagesCount: pages.length, resourcesCount: resources.length };
@@ -398,8 +332,7 @@ function App() {
       setSiteInfo(null);
       setLinkedUrls([]);
       resetDerivedTrackers();
-      pagesBufRef.current = [];
-      resourcesBufRef.current = [];
+      discardPending();
     }
     if (!listMode) setConfig((c) => ({ ...c, startUrl }));
     setProgress(null);
@@ -424,7 +357,7 @@ function App() {
         setLinkedUrls(previous.linkedUrls);
       }
     }
-  }, [config, crawlMode, listText, preferHttps, resumableStartUrl, shownSource, resetDerivedTrackers]);
+  }, [config, crawlMode, listText, preferHttps, resumableStartUrl, shownSource, resetDerivedTrackers, discardPending]);
 
   const handleStop = useCallback(async () => {
     try {
