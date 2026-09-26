@@ -33,8 +33,9 @@ loaded machine.
     with every attempt's time in the panic message.
   - Each attempt is wrapped in a 300 s `tokio::time::timeout`, so a hang fails the test instead
     of stalling `cargo test` until the gate's own timeout.
-  - The 60 s budget is several times the measured time (see the T4.5 report), so it only trips on
-    order-of-magnitude regressions such as an accidental O(n^2) step per page.
+  - The 60 s budget is about 40 times the measured time (1.54 s, 1298 pages/s, debug build on
+    the development machine when T4.5 landed), so it only trips on order-of-magnitude
+    regressions such as an accidental O(n^2) step per page.
 - **Reporting.** Each attempt prints pages per second with `eprintln!`, visible with
   `cargo test large_site -- --nocapture`.
 
