@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)", "Bash(npm test)", "Bash(npm test *)", "Bash(npm ci)", "Bash(npx vitest *)", "Bash(npx tsc *)",
+      "Bash(npx eslint *)", "Bash(node scripts/harness/*)",
+      "Bash(cargo fmt *)", "Bash(cargo fmt)", "Bash(cargo clippy *)", "Bash(cargo test)", "Bash(cargo test *)",
+      "Bash(cargo build *)", "Bash(cargo check *)",
+      "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git show *)", "Bash(git add *)",
+      "Bash(git commit *)", "Bash(git switch *)", "Bash(git checkout *)", "Bash(git branch *)",
+      "Bash(git merge *)", "Bash(git rebase *)", "Bash(git stash *)", "Bash(git rev-parse *)"
+    ],
+    "deny": [
+      "Bash(git push)", "Bash(git push *)", "Bash(git remote add *)", "Bash(git remote set-url *)",
+      "Bash(git filter-branch *)", "Bash(git reset --hard *)", "Bash(npm publish *)",
+      "Bash(npm run release)", "Bash(npm run release *)", "Bash(wrangler *)", "Bash(npx wrangler *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/harness/format-on-edit.mjs\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -15,6 +15,68 @@ export interface CrawlConfig {
   lookupHosting: boolean;
   runAccessibilityAudit: boolean;
   runMobileUsabilityAudit: boolean;
+  /** Regular expressions matched against the full URL; when any are given, a discovered URL must match one to be crawled. The start URL is always crawled. */
+  includePatterns: string[];
+  /** Regular expressions matched against the full URL; a discovered URL matching any is not crawled (wins over include). */
+  excludePatterns: string[];
+  /** List mode when non-empty: crawl exactly these URLs without following links. `startUrl` is the first of them. */
+  listUrls: string[];
+  /** Custom search rules (at most `MAX_CUSTOM_SEARCHES`); each HTML page gets a match count per rule. */
+  customSearches: CustomSearchRule[];
+  /** Custom extraction rules (at most `MAX_EXTRACTIONS`); each HTML page gets the values each rule's selector matches. */
+  extractions: ExtractionRule[];
+  /** With `renderJs` on, also fetch each page's raw HTML so `PageResult.raw` can be compared with the rendered page. Ignored without `renderJs`. */
+  compareRawHtml: boolean;
+}
+
+/** What a custom search rule searches: the raw HTML, or the visible body text. */
+export type CustomSearchScope = "html" | "text";
+
+/** One custom search rule: a literal text (case-insensitive) or a regex (case-sensitive unless it says `(?i)`). */
+export interface CustomSearchRule {
+  /** Stable key of the rule's count in `PageResult.customSearchCounts`. */
+  id: string;
+  name: string;
+  pattern: string;
+  isRegex: boolean;
+  scope: CustomSearchScope;
+}
+
+/** Most custom search rules one crawl accepts (mirrors `custom::MAX_CUSTOM_SEARCHES`). */
+export const MAX_CUSTOM_SEARCHES = 10;
+
+/** What a custom extraction rule takes from each element its selector matches. */
+export type ExtractionMode = "text" | "attr" | "inner_html";
+
+/** One custom extraction rule: a CSS selector and what to extract from the matched elements. */
+export interface ExtractionRule {
+  /** Stable key of the rule's values in `PageResult.extracted`. */
+  id: string;
+  name: string;
+  selector: string;
+  mode: ExtractionMode;
+  /** Attribute read in `attr` mode; ignored otherwise. */
+  attr: string | null;
+}
+
+/** Most custom extraction rules one crawl accepts (mirrors `custom::MAX_EXTRACTIONS`). */
+export const MAX_EXTRACTIONS = 10;
+
+/** One internal link found on a page. */
+export interface LinkRef {
+  url: string;
+  /** Whitespace-collapsed link text (max 200 chars), or the wrapped image's alt when the link has no text. */
+  anchor: string;
+  nofollow: boolean;
+  isImageLink: boolean;
+}
+
+/** One `<link rel="alternate" hreflang>` annotation. */
+export interface HreflangLink {
+  /** Language/region code as written (`en`, `en-GB`, `x-default`). */
+  lang: string;
+  /** Absolute target URL, fragment stripped. */
+  href: string;
 }
 
 export interface PageResult {
@@ -29,6 +91,24 @@ export interface PageResult {
   metaDescriptionLength: number;
   h1: string | null;
   h1Count: number;
+  /** Every non-empty H1 in document order (capped at 20 by the crawler). */
+  h1Values: string[];
+  /** Every non-empty H2 in document order (capped at 20 by the crawler). */
+  h2Values: string[];
+  /** Number of non-empty H2s (uncapped). */
+  h2Count: number;
+  /** Level (1 to 6) of every heading in document order, empty ones included (capped at 200). */
+  headingLevels: number[];
+  /** Number of HTML `<title>` elements in the head and body (0 in crawls saved before T2.2). */
+  titleCount: number;
+  /** Number of `<meta name="description">` tags, empty ones included. */
+  metaDescriptionCount: number;
+  /** Trimmed `content` of the first `<meta http-equiv="refresh">`. */
+  metaRefresh: string | null;
+  /** Absolute URL of the first `<link rel="next">` in the head. */
+  paginationNext: string | null;
+  /** Absolute URL of the first `<link rel="prev">` in the head. */
+  paginationPrev: string | null;
   wordCount: number;
   canonical: string | null;
   metaRobots: string | null;
@@ -43,13 +123,30 @@ export interface PageResult {
   isMinified: boolean;
   rendered: boolean;
   hsts: boolean;
+  /** Raw response header values; null when the header was not sent. */
+  contentSecurityPolicy: string | null;
+  xFrameOptions: string | null;
+  xContentTypeOptions: string | null;
+  referrerPolicy: string | null;
+  /** False for crawls saved before T2.5 and for fetch errors: the four headers above are unknown. */
+  securityHeadersCaptured: boolean;
+  /** Scripts, stylesheets, iframes and media requested over http: from an https: page. */
+  mixedContentCount: number;
   insecureLinkCount: number;
   missingAltCount: number;
+  /** `<img src>` elements missing a `width` or `height` attribute. 0 for crawls saved before T2.7. */
+  imagesMissingDimensions: number;
   lang: string | null;
   hreflangValues: string[];
+  /** Hreflang annotations with resolvable hrefs, in document order, capped at 300. Empty for crawls saved before T2.6. */
+  hreflangLinks: HreflangLink[];
   internalNofollowCount: number;
+  /** Internal `<a href>` links in document order, duplicates kept, capped at 1000 per page. Empty for crawls saved before T2.3. */
+  outlinks: LinkRef[];
   textRatioPct: number;
   contentHash: string;
+  /** 64-bit simhash of the body text as 16 hex chars; empty for pages under 20 words, non-HTML URLs and crawls saved before it existed. */
+  contentSimhash: string;
   xRobotsTag: string | null;
   viewport: string | null;
   hasOpenGraph: boolean;
@@ -61,7 +158,24 @@ export interface PageResult {
   structuredDataErrors: string[];
   accessibilityViolations: AccessibilityViolation[];
   mobileUsabilityViolations: MobileUsabilityViolation[];
+  /** Match count per custom search rule id (0 included) for parsed HTML pages. Empty for other URLs, crawls without rules and crawls saved before T3.3. */
+  customSearchCounts: Record<string, number>;
+  /** Values per custom extraction rule id (at most 10 values of 500 chars; an empty list when nothing matched) for parsed HTML pages. Empty for other URLs, crawls without rules and crawls saved before T3.4. */
+  extracted: Record<string, string[]>;
+  /** SEO signals of the raw HTML before JavaScript ran. Only set on pages rendered by a crawl with `compareRawHtml` on; absent or null otherwise, including in crawls saved before T3.6. */
+  raw?: RawSignals | null;
   error: string | null;
+}
+
+/** The SEO critical elements of a page's raw (unrendered) HTML. */
+export interface RawSignals {
+  title: string | null;
+  metaDescription: string | null;
+  h1: string | null;
+  canonical: string | null;
+  metaRobots: string | null;
+  wordCount: number;
+  internalLinkCount: number;
 }
 
 export interface AccessibilityViolation {
@@ -91,6 +205,8 @@ export interface ResourceResult {
   isInternal: boolean;
   isInsecure: boolean;
   error: string | null;
+  /** Bytes from the `Content-Length` response header; null when absent and for crawls saved before T2.7. */
+  contentLength: number | null;
 }
 
 export interface CrawlProgress {
@@ -131,6 +247,10 @@ export interface CrawlSnapshot {
   savedAtUnixMs: number;
   pages: PageResult[];
   resources: ResourceResult[];
+  /** Custom search rules the crawl ran with; absent or empty for crawls saved before T3.3. */
+  customSearches?: CustomSearchRule[];
+  /** Custom extraction rules the crawl ran with; absent or empty for crawls saved before T3.4. */
+  extractions?: ExtractionRule[];
 }
 
 export const DEFAULT_CONFIG: CrawlConfig = {
@@ -149,4 +269,10 @@ export const DEFAULT_CONFIG: CrawlConfig = {
   lookupHosting: false,
   runAccessibilityAudit: false,
   runMobileUsabilityAudit: false,
+  includePatterns: [],
+  excludePatterns: [],
+  listUrls: [],
+  customSearches: [],
+  extractions: [],
+  compareRawHtml: false,
 };

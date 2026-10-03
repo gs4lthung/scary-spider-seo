@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import { Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
   SheetContent,
@@ -13,15 +15,60 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { CustomSearchEditor } from "@/components/custom-search-editor";
+import { ExtractionEditor } from "@/components/extraction-editor";
+import { formatPatternLines, parsePatternLines } from "@/lib/urlPatterns";
 import type { CrawlConfig } from "@/types";
 
 interface CrawlOptionsSheetProps {
   config: CrawlConfig;
   running: boolean;
+  /** List mode crawls only the listed URLs, so the include/exclude patterns do not apply. */
+  listMode?: boolean;
   onChange: (config: CrawlConfig) => void;
 }
 
-export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsSheetProps) {
+interface PatternFieldProps {
+  label: string;
+  hint: string;
+  placeholder: string;
+  patterns: string[] | undefined;
+  disabled: boolean;
+  onChange: (patterns: string[]) => void;
+}
+
+/** A one-pattern-per-line textarea. The raw text is kept locally so blank lines the
+ * user is typing survive; the parent only ever sees the parsed, non-blank patterns. */
+function PatternField({ label, hint, placeholder, patterns, disabled, onChange }: PatternFieldProps) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const [text, setText] = useState(() => formatPatternLines(patterns));
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Textarea
+        id={id}
+        aria-describedby={hintId}
+        className="min-h-16 font-mono text-xs"
+        placeholder={placeholder}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        value={text}
+        disabled={disabled}
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(parsePatternLines(e.target.value));
+        }}
+      />
+      <p id={hintId} className="text-xs text-muted-foreground">
+        {hint}
+      </p>
+    </div>
+  );
+}
+
+export function CrawlOptionsSheet({ config, running, listMode = false, onChange }: CrawlOptionsSheetProps) {
   function set<K extends keyof CrawlConfig>(key: K, value: CrawlConfig[K]) {
     onChange({ ...config, [key]: value });
   }
@@ -159,10 +206,28 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
                   onChange({
                     ...config,
                     renderJs: checked,
+                    compareRawHtml: checked ? config.compareRawHtml : false,
                     runAccessibilityAudit: checked ? config.runAccessibilityAudit : false,
                     runMobileUsabilityAudit: checked ? config.runMobileUsabilityAudit : false,
                   })
                 }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span id="compare-raw-html-label" className="text-sm font-medium">
+                  Compare raw and rendered HTML
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Also downloads each page's HTML before JavaScript runs and flags pages where JavaScript changes the
+                  title, canonical or meta robots, or adds most of the content or links. Requires Render JavaScript.
+                </span>
+              </div>
+              <Switch
+                aria-labelledby="compare-raw-html-label"
+                checked={config.compareRawHtml}
+                disabled={running || !config.renderJs}
+                onCheckedChange={(checked) => set("compareRawHtml", checked)}
               />
             </div>
             <div className="flex items-center justify-between gap-4">
@@ -220,6 +285,48 @@ export function CrawlOptionsSheet({ config, running, onChange }: CrawlOptionsShe
               />
             </div>
           </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-4">
+            {listMode && (
+              <p className="text-xs text-muted-foreground">
+                List mode crawls exactly the listed URLs, so include and exclude patterns are not applied.
+              </p>
+            )}
+            <PatternField
+              label="Include URL patterns"
+              hint="Regular expressions, one per line, matched against the full URL. When any are set, only matching URLs are crawled. The start URL is always crawled."
+              placeholder="/blog/"
+              patterns={config.includePatterns}
+              disabled={running || listMode}
+              onChange={(patterns) => set("includePatterns", patterns)}
+            />
+            <PatternField
+              label="Exclude URL patterns"
+              hint="Regular expressions, one per line. Matching URLs are skipped, even if they match an include pattern."
+              placeholder={String.raw`\?sort=` + "\n/tag/"}
+              patterns={config.excludePatterns}
+              disabled={running || listMode}
+              onChange={(patterns) => set("excludePatterns", patterns)}
+            />
+          </div>
+
+          <Separator />
+
+          <CustomSearchEditor
+            rules={config.customSearches}
+            disabled={running}
+            onChange={(rules) => set("customSearches", rules)}
+          />
+
+          <Separator />
+
+          <ExtractionEditor
+            rules={config.extractions}
+            disabled={running}
+            onChange={(rules) => set("extractions", rules)}
+          />
 
           <Separator />
 

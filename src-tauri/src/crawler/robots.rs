@@ -68,7 +68,11 @@ impl RobotsRules {
             }
         }
 
-        Self { disallow, allow, crawl_delay_ms }
+        Self {
+            disallow,
+            allow,
+            crawl_delay_ms,
+        }
     }
 
     /// Longest matching prefix wins; an Allow rule beats a Disallow rule of equal length.
@@ -114,7 +118,8 @@ mod tests {
 
     #[test]
     fn longer_allow_overrides_shorter_disallow() {
-        let rules = RobotsRules::parse("User-agent: *\nDisallow: /private\nAllow: /private/public-page\n");
+        let rules =
+            RobotsRules::parse("User-agent: *\nDisallow: /private\nAllow: /private/public-page\n");
         assert!(!rules.is_allowed("/private/secret"));
         assert!(rules.is_allowed("/private/public-page"));
         assert!(rules.is_allowed("/private/public-page/sub"));
@@ -141,7 +146,9 @@ mod tests {
 
     #[test]
     fn crawl_delay_outside_wildcard_group_is_ignored() {
-        let rules = RobotsRules::parse("User-agent: Bingbot\nCrawl-delay: 10\n\nUser-agent: *\nDisallow: /x\n");
+        let rules = RobotsRules::parse(
+            "User-agent: Bingbot\nCrawl-delay: 10\n\nUser-agent: *\nDisallow: /x\n",
+        );
         assert_eq!(rules.crawl_delay_ms, None);
     }
 
@@ -153,7 +160,9 @@ mod tests {
 
     #[test]
     fn comments_and_blank_lines_are_ignored() {
-        let rules = RobotsRules::parse("# a comment\n\nUser-agent: *\n# another comment\nDisallow: /x # trailing comment\n");
+        let rules = RobotsRules::parse(
+            "# a comment\n\nUser-agent: *\n# another comment\nDisallow: /x # trailing comment\n",
+        );
         assert!(!rules.is_allowed("/x"));
         assert!(rules.is_allowed("/y"));
     }

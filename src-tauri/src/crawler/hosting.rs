@@ -50,5 +50,8 @@ pub async fn lookup_org(client: &Client, ip: &str) -> Option<HostingOrgInfo> {
         return None;
     }
     let org = data.org.or(data.isp).or(data.asn);
-    Some(HostingOrgInfo { org, country: data.country })
+    Some(HostingOrgInfo {
+        org,
+        country: data.country,
+    })
 }

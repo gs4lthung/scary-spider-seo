@@ -38,7 +38,11 @@ pub fn detect_from_headers(headers: &HeaderMap) -> HeaderTech {
         None
     };
 
-    HeaderTech { server, powered_by, cdn }
+    HeaderTech {
+        server,
+        powered_by,
+        cdn,
+    }
 }
 
 /// Cheap substring-based fingerprinting of the raw homepage HTML. Not a full
@@ -105,4 +109,71 @@ pub fn detect_from_html(html: &str) -> (Option<String>, Vec<String>) {
     }
 
     (cms, technologies)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::header::HeaderValue;
+
+    fn headers(pairs: &[(&'static str, &'static str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.insert(*name, HeaderValue::from_static(value));
+        }
+        map
+    }
+
+    #[test]
+    fn reads_server_and_powered_by() {
+        let tech = detect_from_headers(&headers(&[
+            ("server", "nginx"),
+            ("x-powered-by", "PHP/8.2"),
+        ]));
+        assert_eq!(tech.server.as_deref(), Some("nginx"));
+        assert_eq!(tech.powered_by.as_deref(), Some("PHP/8.2"));
+        assert_eq!(tech.cdn, None);
+    }
+
+    #[test]
+    fn detects_cdns_from_headers() {
+        let cases: [(&[(&'static str, &'static str)], &str); 7] = [
+            (&[("cf-ray", "abc")], "Cloudflare"),
+            (&[("server", "cloudflare")], "Cloudflare"),
+            (&[("x-amz-cf-id", "abc")], "Amazon CloudFront"),
+            (&[("x-served-by", "cache-fra123")], "Fastly"),
+            (&[("x-vercel-id", "abc")], "Vercel"),
+            (&[("x-nf-request-id", "abc")], "Netlify"),
+            (&[("server", "AkamaiGHost")], "Akamai"),
+        ];
+        for (pairs, expected) in cases {
+            assert_eq!(
+                detect_from_headers(&headers(pairs)).cdn.as_deref(),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn detects_cms_case_insensitively() {
+        let (cms, _) = detect_from_html(r#"<link href="/WP-CONTENT/themes/x.css">"#);
+        assert_eq!(cms.as_deref(), Some("WordPress"));
+        let (cms, _) = detect_from_html(r#"<script src="https://cdn.shopify.com/s.js"></script>"#);
+        assert_eq!(cms.as_deref(), Some("Shopify"));
+        let (cms, technologies) = detect_from_html("<html><body>plain</body></html>");
+        assert_eq!(cms, None);
+        assert!(technologies.is_empty());
+    }
+
+    #[test]
+    fn detects_frontend_technologies() {
+        let html = r#"<script src="/_next/static/app.js"></script>
+            <script src="https://code.jquery.com/jquery.min.js"></script>
+            <script src="https://www.googletagmanager.com/gtm.js?id=X"></script>"#;
+        let (_, technologies) = detect_from_html(html);
+        assert_eq!(
+            technologies,
+            vec!["Next.js", "jQuery", "Google Tag Manager"]
+        );
+    }
 }

@@ -1,4 +1,4 @@
-import type { FilterKey } from "./filters";
+import type { IssueKey } from "./filters";
 
 export interface IssueSolution {
   title: string;
@@ -7,7 +7,7 @@ export interface IssueSolution {
   source: { label: string; url: string };
 }
 
-export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
+export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
   "4xx5xx": {
     title: "Pages returning 4xx/5xx errors",
     problem:
@@ -45,6 +45,36 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
       url: "https://developers.google.com/search/docs/appearance/title-link",
     },
   },
+  titleOverPixels: {
+    title: "Title is over 561 pixels wide",
+    problem:
+      "Google cuts off displayed titles by rendered width, not character count. At the 20 px Arial font used in results, a title wider than about 561 px (Screaming Frog's threshold) is likely to be truncated with an ellipsis, hiding the end of it. Wide letters such as W and M use up the space faster than narrow ones.",
+    fix: "Put the most important words first and trim filler, brand repetition or long separators until the title fits. Check the Title px column; the estimate is close to, but not exactly, what Google renders.",
+    source: {
+      label: "Google Search Central: Influencing title links in Google Search",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
+  titleUnderPixels: {
+    title: "Title is below 200 pixels wide",
+    problem:
+      "A very short title (under about 200 px, Screaming Frog's threshold) leaves space in the result unused and often lacks the descriptive words that help people and Google understand what the page is about, which makes Google more likely to rewrite it.",
+    fix: "Expand the title with a specific, descriptive phrase about the page's main topic, for example the product type or the question the page answers, while keeping it concise.",
+    source: {
+      label: "Google Search Central: Influencing title links in Google Search",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
+  titleSameAsH1: {
+    title: "Title is the same as the H1",
+    problem:
+      "An identical title and H1 is not an error, and Google recommends that the main heading and title agree. It is a missed opportunity, though: the title can target a slightly different phrasing or add context (such as the brand) that the on-page heading does not need.",
+    fix: "Keep both about the same topic, but consider varying the title, for example adding a qualifier, a benefit or the site name, so the page covers more of the ways people search for it.",
+    source: {
+      label: "Google Search Central: Influencing title links in Google Search",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
   duplicateTitles: {
     title: "Duplicate titles across pages",
     problem: "When multiple pages share a title, Google can't use it to tell users (or itself) which page is which, and it undermines the \"unique to the page\" guidance Google gives directly.",
@@ -72,10 +102,129 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
       url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
     },
   },
+  h1TooLong: {
+    title: "H1 is over 70 characters",
+    problem:
+      "A long main heading (over 70 characters, Screaming Frog's threshold) is harder to scan and often reads like a paragraph rather than a concise statement of the page's topic, for readers and for screen reader users navigating by headings.",
+    fix: "Shorten the H1 to a clear, concise description of the page's main topic and move supporting detail into the first paragraph or a subheading.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
+  duplicateH1: {
+    title: "Duplicate H1 across pages",
+    problem:
+      "The main heading (compared on the first H1, as Screaming Frog does) is identical on more than one page. The H1 is how readers and screen reader users confirm which page they are on, so a shared H1 makes pages hard to tell apart and often points at templated or duplicate content.",
+    fix: "Give each page an H1 that describes its own specific topic. If the pages really cover the same topic, consolidate them or point the weaker one at the stronger one with a canonical.",
+    source: {
+      label: "MDN: The HTML Section Heading elements",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+    },
+  },
+  missingH2: {
+    title: "Missing H2",
+    problem:
+      "The page has no non-empty H2, so its content has no second-level structure. Readers skimming the page and screen reader users navigating by headings have nothing to jump between below the main heading.",
+    fix: "Break the content into sections and give each one a descriptive H2 nested under the page's H1. Very short pages with a single topic can reasonably have none, so treat this as a prompt to check, not a hard error.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
+  multipleTitles: {
+    title: "Multiple title elements",
+    problem:
+      "The page has more than one <title> element. HTML allows only one per document, so browsers and search engines keep just one of them (usually the first) and the other is ignored, which often means the title you meant to show is not the one used in search results.",
+    fix: "Make the template output exactly one <title> in the <head>. Duplicates usually come from a theme and an SEO plugin both writing a title, or from a title tag pasted into the page body; remove the extra one and keep the title you want shown.",
+    source: {
+      label: "Google Search Central: Influencing your title links",
+      url: "https://developers.google.com/search/docs/appearance/title-link",
+    },
+  },
+  multipleMetaDescriptions: {
+    title: "Multiple meta descriptions",
+    problem:
+      "The page has more than one <meta name=\"description\"> tag. Search engines may pick either one, or neither, when building the snippet, so you lose control over what searchers read under the title.",
+    fix: "Emit a single meta description per page. Check whether the theme, an SEO plugin and a hardcoded template tag are each adding one, and keep only the one with the description you want.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaRefresh: {
+    title: "Meta refresh redirect",
+    problem:
+      "The page uses <meta http-equiv=\"refresh\"> to reload itself or send visitors to another URL after a delay. Google treats an instant meta refresh as a redirect but a delayed one as a weaker signal, and the automatic change of page is confusing and an accessibility failure for people who cannot read or act fast enough.",
+    fix: "Replace the meta refresh with a server-side 301 (permanent) or 302 (temporary) redirect. If the page only needs to update its content, load the new data with JavaScript instead of reloading the whole page.",
+    source: {
+      label: "Google Search Central: Redirects and Google Search",
+      url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+    },
+  },
+  paginationTargetError: {
+    title: "Pagination link to a non-200 or uncrawled URL",
+    problem:
+      "A <link rel=\"next\"> or <link rel=\"prev\"> on this page points to a URL that did not answer 200 OK (it is broken or redirects), or that was not crawled at all (another host, or beyond the crawl's depth or page limit). Pagination links that lead nowhere waste crawl budget and point crawlers at pages that do not exist.",
+    fix: "Point rel=\"next\" and rel=\"prev\" at the real, live URLs of the neighbouring pages in the series, and drop rel=\"next\" from the last page and rel=\"prev\" from the first. Make sure each page in the series is also reachable through a normal link, since Google no longer uses these hints for indexing.",
+    source: {
+      label: "Google Search Central: Pagination best practices",
+      url: "https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading",
+    },
+  },
+  multipleH2: {
+    title: "Multiple H2s",
+    problem:
+      "The page has more than one H2. That is normal for a structured page and not an error on its own, but Screaming Frog lists it so you can confirm each H2 marks a real section rather than styling text to look large.",
+    fix: "Check that every H2 introduces a distinct section of the content. Use CSS, not heading elements, for text that only needs to look prominent, and nest subsections under their H2 with H3s.",
+    source: {
+      label: "MDN: The HTML Section Heading elements",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+    },
+  },
+  duplicateH2: {
+    title: "Duplicate H2 across pages",
+    problem:
+      "The first H2 on this page is identical on other pages. When the opening section heading repeats across a site it usually comes from a shared template or duplicated content, and it gives readers no sense of what is specific to this page.",
+    fix: "Write the first H2 for this page's own content. If the heading comes from a template component (a sidebar or a newsletter box), make sure it is not the first H2 in the main content, or use a non-heading element for it.",
+    source: {
+      label: "MDN: The HTML Section Heading elements",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+    },
+  },
+  h2TooLong: {
+    title: "H2 is over 70 characters",
+    problem:
+      "At least one H2 is over 70 characters (Screaming Frog's threshold). Long subheadings read like sentences, are harder to scan, and make navigating by headings with a screen reader slower.",
+    fix: "Shorten the H2 to a concise label for the section and move the supporting detail into the paragraph that follows it.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
+  nonSequentialHeadings: {
+    title: "Non-sequential heading order",
+    problem:
+      "The heading levels skip a step somewhere on the page, for example an H1 followed directly by an H3. Screen reader users navigate by heading level, and a skipped level suggests missing sections and makes the outline confusing.",
+    fix: "Nest headings one level at a time: H2 under H1, H3 under H2, and so on. If a heading was chosen for its size, keep the correct level and change its appearance with CSS instead.",
+    source: {
+      label: "W3C WAI: Headings tutorial",
+      url: "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+    },
+  },
   duplicateContent: {
     title: "Duplicate or near-identical content",
     problem: "When multiple URLs serve the same content, Google has to pick one as canonical itself, which can dilute ranking signals (links, engagement) that would otherwise all point to a single URL.",
     fix: "Pick one preferred URL per piece of content and add <link rel=\"canonical\" href=\"...\"> pointing to it from every duplicate. Make sure the canonical target actually contains that content, returns 200, and isn't itself redirected elsewhere.",
+    source: {
+      label: "Google Search Central: Consolidate duplicate URLs",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  nearDuplicateContent: {
+    title: "Near-duplicate content",
+    problem: "The visible text of this page is almost the same as one or more other crawled pages (their 64-bit simhash fingerprints differ in 3 bits or fewer, which in practice means only a few words differ). Google groups such pages and shows one of them, so the others compete with it, and templated pages that differ only by a place name or product variant can look thin.",
+    fix: "Open the page details to see how many pages share its cluster, then either merge the pages, make each one substantially unique, or point the copies at the preferred URL with <link rel=\"canonical\" href=\"...\">. Canonicalised and noindex pages are left out of this check, so the issue clears once the copies canonicalise to one URL.",
     source: {
       label: "Google Search Central: Consolidate duplicate URLs",
       url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
@@ -144,6 +293,51 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
       url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security",
     },
   },
+  mixedContent: {
+    title: "Mixed content: HTTP scripts, styles, frames or media on an HTTPS page",
+    problem: "The page is served over HTTPS but loads scripts, stylesheets, iframes, video or audio over plain HTTP. Browsers block these requests (scripts, styles and frames) or upgrade them, so parts of the page can break, and anything fetched over HTTP can be read or altered in transit.",
+    fix: "Change each http:// subresource URL to https:// (or a relative URL) and confirm the host serves it over HTTPS. If it does not, host the file yourself. A Content-Security-Policy with upgrade-insecure-requests is a temporary safety net, not a fix.",
+    source: {
+      label: "web.dev: Fixing mixed content",
+      url: "https://web.dev/articles/fixing-mixed-content",
+    },
+  },
+  missingCsp: {
+    title: "Missing Content-Security-Policy header",
+    problem: "Without a Content-Security-Policy, the browser runs any script that ends up in the page, so a single cross-site scripting (XSS) bug or compromised third-party script can steal sessions or deface the site.",
+    fix: "Send a Content-Security-Policy response header that allows only the sources the page needs, e.g. default-src 'self'; script-src 'self' https://trusted.cdn.example. Roll it out with Content-Security-Policy-Report-Only first to find what would break.",
+    source: {
+      label: "MDN: Content-Security-Policy header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy",
+    },
+  },
+  missingFrameOptions: {
+    title: "Missing X-Frame-Options header (and no CSP frame-ancestors)",
+    problem: "Any other site can load this page in an invisible frame and trick visitors into clicking buttons on it (clickjacking), because nothing tells the browser which sites may embed it.",
+    fix: "Add Content-Security-Policy: frame-ancestors 'self' (the modern control) or X-Frame-Options: SAMEORIGIN, or DENY if the page should never be framed. Either one satisfies this check.",
+    source: {
+      label: "MDN: X-Frame-Options header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options",
+    },
+  },
+  missingContentTypeOptions: {
+    title: "Missing X-Content-Type-Options: nosniff header",
+    problem: "Without nosniff, browsers may guess (sniff) a response's type instead of trusting its Content-Type, so an uploaded file or mislabelled response can be run as a script or stylesheet.",
+    fix: "Send X-Content-Type-Options: nosniff on every response, and make sure each response has the correct Content-Type. The only valid value is nosniff.",
+    source: {
+      label: "MDN: X-Content-Type-Options header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options",
+    },
+  },
+  missingReferrerPolicy: {
+    title: "Missing Referrer-Policy header",
+    problem: "Without a Referrer-Policy the page relies on each browser's default, which may send the full URL of this page (including paths and query strings that can hold private data) to the sites it links to or loads resources from.",
+    fix: "Send Referrer-Policy: strict-origin-when-cross-origin (a good default), or a stricter value such as no-referrer or same-origin if cross-site referral data is not needed.",
+    source: {
+      label: "MDN: Referrer-Policy header",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy",
+    },
+  },
   missingLang: {
     title: "Missing <html lang> attribute",
     problem: "This is a WCAG Level A requirement (the baseline conformance level). Without it, screen readers can't select the correct pronunciation/voice, and browsers/translation tools can't reliably detect the page's language.",
@@ -160,6 +354,96 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
     source: {
       label: "Google Search Central: Tell Google about localized versions of your page",
       url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangMissingReturn: {
+    title: "Hreflang target does not link back",
+    problem:
+      "Hreflang annotations must be confirmed from both sides. This page lists an alternate version that was crawled, but that version does not list this page in its own hreflang tags, so Google may ignore the pair.",
+    fix: "Add a matching hreflang link on every alternate version pointing back to this page. Each language version should carry the same complete set of hreflang links, including one to itself.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangMissingSelf: {
+    title: "Hreflang set does not include this page",
+    problem:
+      "Every page in a hreflang set should list itself alongside its alternates. Without a self-reference, the set on this page is incomplete and Google may not treat the versions as a group.",
+    fix: "Add a hreflang link whose href is this page's own URL, with this page's language (and region, if used) as the code.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangMissingXDefault: {
+    title: "No x-default hreflang",
+    problem:
+      "The x-default value tells Google which version to show users whose language or region matches none of your listed versions. It is optional, but without it those users get whichever version Google picks.",
+    fix: "Add a hreflang=\"x-default\" link pointing to your fallback page, typically a language selector or your main language version, on every page of the set.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangInvalidCode: {
+    title: "Invalid hreflang language or region code",
+    problem:
+      "Google only understands hreflang values made of an ISO 639-1 language code, optionally followed by an ISO 15924 script code and an ISO 3166-1 alpha-2 region code, or x-default. An unknown code (such as en-UK or english) is ignored.",
+    fix: "Use a two-letter language code, optionally followed by a four-letter script code and a two-letter region code, each after a hyphen: for example en, en-GB, fr-CA, zh-Hant or zh-Hans-US. The region for the United Kingdom is GB, not UK. Never use a region on its own.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  hreflangTargetError: {
+    title: "Hreflang points to a broken or non-indexable URL",
+    problem:
+      "An hreflang alternate must be a live, indexable page. This page annotates a URL that answered an error, redirected, or is marked non-indexable (noindex or canonicalised elsewhere), so Google cannot use it as an alternate.",
+    fix: "Point the hreflang link at the final, indexable 200 URL of that language version, or remove the annotation if that version no longer exists.",
+    source: {
+      label: "Google Search Central: Tell Google about localized versions of your page",
+      url: "https://developers.google.com/search/docs/specialty/international/localized-versions",
+    },
+  },
+  metaTooLong: {
+    title: "Meta description is over 155 characters",
+    problem:
+      "Google shortens snippets to fit the device width, so a description longer than about 155 characters (Screaming Frog's threshold) is likely to be cut off in results, and the end of the message is lost.",
+    fix: "Keep the key information in the first 150 or so characters and move secondary details later or remove them. Google has no fixed limit, so this is about what shows, not a penalty.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaTooShort: {
+    title: "Meta description is below 70 characters",
+    problem:
+      "A very short description (under 70 characters, Screaming Frog's threshold) rarely summarizes the page well, so Google is more likely to ignore it and build a snippet from page text instead.",
+    fix: "Write one or two sentences that describe what the page offers and why someone should click, including specific details such as price, author or key facts where they apply.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaOverPixels: {
+    title: "Meta description is over 985 pixels wide",
+    problem:
+      "Snippets are truncated by rendered width. At the 14 px Arial font used for descriptions, text wider than about 985 px (Screaming Frog's threshold, roughly two lines on desktop) is likely to be cut off with an ellipsis.",
+    fix: "Shorten the description or front-load its key message. Check the Meta px column; the estimate is close to, but not exactly, what Google renders.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
+    },
+  },
+  metaUnderPixels: {
+    title: "Meta description is below 400 pixels wide",
+    problem:
+      "A description under about 400 px (Screaming Frog's threshold) uses less than half a line of the snippet space, so it gives searchers little reason to click and Google may replace it with text from the page.",
+    fix: "Expand it into a short, specific summary of the page, using the available space to mention what makes the page useful.",
+    source: {
+      label: "Google Search Central: Control your snippets in search results",
+      url: "https://developers.google.com/search/docs/appearance/snippet",
     },
   },
   duplicateMeta: {
@@ -189,6 +473,86 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
       url: "https://sitebulb.com/hints/indexability/canonical-points-to-a-url-that-is-not-found-404/",
     },
   },
+  missingCanonical: {
+    title: "Page has no canonical tag",
+    problem:
+      "Without a rel=\"canonical\" link, Google picks the canonical URL itself when the same content is reachable at several URLs (tracking parameters, trailing slashes, http and https). Its choice may not be the URL you want shown in search results.",
+    fix: "Add a <link rel=\"canonical\" href=\"...\"> in the <head> with the absolute URL of the preferred version. On a page that is its own preferred version, point the canonical at the page itself (a self-referencing canonical).",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  canonicalised: {
+    title: "Page is canonicalised to another URL",
+    problem:
+      "The page declares a canonical URL other than itself, so it asks search engines to index the other URL instead. That is correct for true duplicates and variants, but a mistake on a page that should rank in its own right.",
+    fix: "Check that this URL really is a duplicate or variant of its canonical target. If it should be indexed on its own, change the canonical to point at the page itself. Also link internally to the canonical URL rather than to this one.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  canonicalToNonIndexable: {
+    title: "Canonical points to a non-indexable page",
+    problem:
+      "The canonical target is itself not indexable (noindex, a redirect, an error, blocked, or canonicalised elsewhere). The signals conflict, so Google is likely to ignore the canonical and choose a URL on its own.",
+    fix: "Point the canonical at the final, indexable URL that returns 200 and has no noindex. If the target was made non-indexable on purpose, make this page self-canonical instead.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  canonicalToRedirect: {
+    title: "Canonical points to a redirecting URL",
+    problem:
+      "The canonical target redirects somewhere else. Google has to follow the redirect to find the real preferred URL, and a canonical that disagrees with the redirect destination is a weaker, mixed signal.",
+    fix: "Update the canonical to the redirect's final destination URL, so it points straight at a page that answers 200.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL with rel=\"canonical\" and other methods",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  directiveNoindex: {
+    title: "Page has a noindex directive",
+    problem:
+      "A noindex in the meta robots tag or the X-Robots-Tag header tells search engines to drop the page from their index. That is intended for thank-you pages, internal search results and similar, but a disaster on a page that should rank.",
+    fix: "Confirm the page should stay out of search results. If not, remove noindex from the robots meta tag and the X-Robots-Tag header. Do not also block the URL in robots.txt, or crawlers never see the directive.",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
+  directiveNofollow: {
+    title: "Page has a nofollow directive",
+    problem:
+      "A page-level nofollow (meta robots or X-Robots-Tag) tells search engines not to follow any link on the page, so pages linked only from here may not be discovered and receive no signals from it.",
+    fix: "Remove the page-level nofollow unless you really want crawlers to ignore every link on the page. To exclude single links, use rel=\"nofollow\" on those links instead.",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
+  directiveNone: {
+    title: "Page has a none directive",
+    problem:
+      "The none directive is shorthand for noindex, nofollow: the page is dropped from the index and none of its links are followed. It is easy to add by mistake, thinking it means \"no restrictions\".",
+    fix: "If the page should be indexed, remove none. If you want no restrictions, remove the robots directive entirely (the default is index, follow).",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
+  xRobotsTagPresent: {
+    title: "Directives set in the X-Robots-Tag header",
+    problem:
+      "The page sends robots directives in an X-Robots-Tag HTTP header. They are invisible in the HTML, so they are easy to forget when a noindex or nofollow set at the server or CDN level is no longer wanted.",
+    fix: "Review the directives in the header and confirm they are intended for this URL. Change them in the server, CDN or application configuration that adds the header.",
+    source: {
+      label: "Google Search Central: Robots meta tag, data-nosnippet, and X-Robots-Tag specifications",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+    },
+  },
   slowResponse: {
     title: "Slow server response time",
     problem: "Time to first byte (TTFB) sets a floor under Largest Contentful Paint, so a slow-responding server makes good Core Web Vitals scores hard to hit regardless of front-end optimization. Google's crawl rate itself also drops when a site responds slowly or errors, meaning fewer pages get crawled per visit.",
@@ -196,6 +560,26 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
     source: {
       label: "web.dev: Time to First Byte (TTFB)",
       url: "https://web.dev/articles/ttfb",
+    },
+  },
+  largeImage: {
+    title: "Image over 100 KB",
+    problem:
+      "Large image files take longer to download, which slows the page and often delays Largest Contentful Paint when the image is above the fold. They also cost visitors on metered mobile connections. The size here comes from the Content-Length header, and 100 KB is the threshold Screaming Frog uses for its Images tab.",
+    fix: "Compress the image, resize it to the largest size it is actually displayed at, and serve a modern format such as WebP or AVIF with a fallback where needed. Use srcset so small screens download a smaller file.",
+    source: {
+      label: "Chrome for Developers: Serve images in modern formats",
+      url: "https://developer.chrome.com/docs/lighthouse/performance/uses-webp-images",
+    },
+  },
+  imageMissingDimensions: {
+    title: "Images without width and height attributes",
+    problem:
+      "When an <img> has no width and height attributes, the browser cannot reserve space for it before the file arrives, so the content below jumps once the image loads. That layout shift counts toward Cumulative Layout Shift, a Core Web Vitals metric. This check looks at the HTML attributes only; sizing done purely in CSS is not detected.",
+    fix: "Add width and height attributes with the image's intrinsic size to every <img>, then keep it responsive in CSS with height: auto (or use aspect-ratio). The browser uses the attribute ratio to reserve the right space.",
+    source: {
+      label: "web.dev: Optimize Cumulative Layout Shift",
+      url: "https://web.dev/articles/optimize-cls",
     },
   },
   missingViewport: {
@@ -234,6 +618,126 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
       url: "https://victorious.com/blog/orphan-pages/",
     },
   },
+  nonDescriptiveAnchors: {
+    title: "Links with non-descriptive anchor text",
+    problem:
+      "This page links to another internal page with generic text such as \"click here\", \"read more\" or \"learn more\". Google uses anchor text to understand what the linked page is about, and screen reader users who jump between links hear only that text, so a generic anchor tells neither of them where the link goes.",
+    fix: "Rewrite the link text to describe the target page in a few words, for example \"read the pricing guide\" instead of \"read more\". Keep it concise and relevant to the page it points to.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  emptyAnchors: {
+    title: "Links with empty anchor text",
+    problem:
+      "This page has internal links with no anchor text at all: an empty <a> element, or an image link whose image has no alt text. Google has no words to learn about the target from, and assistive technology announces the link without a name.",
+    fix: "Give every link visible text that describes its target. For an image link, add alt text to the image that describes where the link goes; for an icon-only link, add text that is visually hidden or an aria-label.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  singleInlink: {
+    title: "Page has only one internal inlink",
+    problem:
+      "Only one other crawled page links to this page. Internal links are how Google discovers pages and judges how important they are within your site, so a page reachable from a single link is easy to miss and gets little link equity.",
+    fix: "Link to the page from other relevant pages, such as related articles, category or hub pages, and navigation where it fits. Use descriptive anchor text on those links. If the page is not worth linking to, consider whether it should exist at all.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  linksToErrorPages: {
+    title: "Internal links to non-200 pages",
+    problem:
+      "This page links to internal URLs that answered with an error or a redirect instead of 200 OK. Links to broken pages send users and crawlers to a dead end, and links to redirects add a hop that wastes crawl budget and slows users down.",
+    fix: "Update each link to point straight at the final, live URL. Restore or redirect pages that are genuinely gone, and remove links to them that no longer make sense. The page's outlinks in the detail view show which targets are affected.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  sitemapNonIndexable: {
+    title: "Non-indexable URL listed in the sitemap",
+    problem:
+      "The sitemap lists this URL, but the page cannot be indexed (it is noindex, canonicalised to another URL, redirected, blocked or broken). A sitemap should only list the canonical URLs you want in search results; listing others sends Google mixed signals and wastes crawl effort.",
+    fix: "Remove the URL from the sitemap, or make the page indexable if it should rank. When the page is canonicalised or redirected, list its canonical or final URL instead.",
+    source: {
+      label: "Google Search Central: Build and submit a sitemap",
+      url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+    },
+  },
+  sitemapNon200: {
+    title: "Sitemap URL does not answer 200",
+    problem:
+      "The sitemap lists this URL, but it answered with a redirect, an error status or no response. Google expects a sitemap to list live, final URLs, so every redirect or broken entry makes the sitemap less trustworthy.",
+    fix: "Replace redirected entries with their final destination URL, and remove URLs that return 4xx or 5xx (or fix the page if it should be live). Regenerate the sitemap from your CMS so stale entries do not come back.",
+    source: {
+      label: "Google Search Central: Build and submit a sitemap",
+      url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+    },
+  },
+  notInSitemap: {
+    title: "Indexable URL missing from the sitemap",
+    problem:
+      "This page is indexable and was found through internal links, but the sitemap does not list it. A sitemap tells Google which URLs you consider important; pages left out may be discovered and recrawled more slowly. Only checked when the crawl used a sitemap. The start URL is never reported, because it is queued before the sitemap's URLs are added.",
+    fix: "Add the URL to the sitemap if it should appear in search. If it should not, make it non-indexable (noindex or a canonical to the preferred URL) so the sitemap and the page agree.",
+    source: {
+      label: "Google Search Central: Build and submit a sitemap",
+      url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+    },
+  },
+  lowWordCount: {
+    title: "Low content page (under 200 words)",
+    problem:
+      "This page returned 200 but has fewer than 200 words of visible text. Thin pages rarely answer a searcher's question well, and Google's guidance favours pages that provide substantial, original content. Some pages are short by design (contact, login), so treat this as a prompt to review, not an automatic error.",
+    fix: "Expand the page with useful, original content that covers its topic properly, merge it into a stronger related page (and 301-redirect the old URL), or noindex it if it has no search value.",
+    source: {
+      label: "Google Search Central: Creating helpful, reliable, people-first content",
+      url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+    },
+  },
+  deepPage: {
+    title: "Deep page (more than 3 clicks from the start URL)",
+    problem:
+      "The crawler needed more than 3 link hops from the start URL to reach this page. Pages buried deep in the site structure are found and recrawled less often and receive less internal link value, so they tend to perform worse in search.",
+    fix: "Link to the page from higher-level pages: category or hub pages, related content, or navigation. Flattening the site structure so important pages sit within a few clicks of the home page helps both users and crawlers.",
+    source: {
+      label: "Google Search Central: SEO Starter Guide, site hierarchy and links",
+      url: "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+    },
+  },
+  largeHtml: {
+    title: "Large HTML document (over 1 MB)",
+    problem:
+      "The HTML of this page is larger than 1 MB. Large documents take longer to download and parse, which delays rendering, and Googlebot only processes the first 15 MB of an HTML file, so very large pages risk being cut off.",
+    fix: "Move inline scripts, styles and data blobs (for example large JSON state) into cached external files, paginate or lazy-load long lists, and remove unused markup.",
+    source: {
+      label: "Google Search Central: Googlebot file size limits",
+      url: "https://developers.google.com/search/docs/crawling-indexing/googlebot",
+    },
+  },
+  internalRedirect: {
+    title: "Internal link to a redirecting URL",
+    problem:
+      "Another page on this site links to this URL, but it redirects. Every visitor and crawler following the link pays for an extra request, and crawl budget is spent on the redirect instead of the destination. The status shown is the final one after the redirect was followed, so these URLs usually read 200.",
+    fix: "Update the internal links to point straight at the final URL shown in the redirect column. Keep the redirect itself in place for external links and bookmarks.",
+    source: {
+      label: "Google Search Central: Redirects and Google Search",
+      url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+    },
+  },
+  redirectToError: {
+    title: "Redirect ending in a non-200 page",
+    problem:
+      "This URL redirects, but the page at the end of the redirect chain does not answer 200 OK (for example a 404, a 5xx, or a redirect loop). Visitors and crawlers following it end up on an error instead of content, and any link value passed through the redirect is lost.",
+    fix: "Point the redirect at a live, relevant page that returns 200, or restore the missing destination. If there is no suitable replacement, remove the redirect and let the original URL return 404 or 410, and update any links to it.",
+    source: {
+      label: "Google Search Central: Redirects and Google Search",
+      url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+    },
+  },
   structuredDataErrors: {
     title: "Structured data (JSON-LD) parse/validation errors",
     problem: "A syntax error (mismatched brackets, a trailing comma, an unescaped quote) makes the entire JSON-LD block unparseable, and a missing required property (e.g. no image/author/datePublished for Article) makes an otherwise-valid block ineligible for rich results. Either way, Google gets nothing usable from it.",
@@ -268,6 +772,116 @@ export const ISSUE_SOLUTIONS: Partial<Record<FilterKey, IssueSolution>> = {
     source: {
       label: "web.dev: Tap targets and text size for mobile",
       url: "https://web.dev/articles/accessible-tap-targets",
+    },
+  },
+  jsChangesTitle: {
+    title: "JavaScript changes the title",
+    problem:
+      "The <title> in the raw HTML differs from the one after JavaScript runs. Google renders pages in a second, deferred step, so until then (and for crawlers and social previews that never run JavaScript) the raw title is the one they see.",
+    fix: "Put the final title in the server-sent HTML. If a framework sets it on the client, render it on the server (SSR or static generation) so the raw and rendered titles match.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsChangesCanonical: {
+    title: "JavaScript changes the canonical",
+    problem:
+      "The canonical link in the raw HTML differs from the one after rendering (added, removed or pointing elsewhere). Google may use either, so the page can be canonicalised to a URL you did not intend.",
+    fix: "Serve the correct rel=canonical in the raw HTML and do not change it with JavaScript. If JavaScript must set it, make sure the raw HTML has no conflicting canonical.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsChangesRobots: {
+    title: "JavaScript changes meta robots",
+    problem:
+      "The meta robots directives in the raw HTML differ from the rendered ones. When the raw HTML says noindex, Google may skip rendering entirely, so JavaScript that removes noindex does not work; JavaScript that adds noindex is applied late and inconsistently.",
+    fix: "Decide indexing on the server: send the final meta robots tag (or X-Robots-Tag header) in the raw response, and do not add, remove or change it with JavaScript.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsAddsMostContent: {
+    title: "Most content is added by JavaScript",
+    problem:
+      "The raw HTML has less than half the words of the rendered page. Google can index rendered content, but rendering is queued and can fail or time out, and other search engines and AI crawlers often read only the raw HTML.",
+    fix: "Render the main content on the server (SSR, static generation or hydration of server-rendered markup) so the raw HTML already carries the page's text.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  jsAddsLinks: {
+    title: "JavaScript adds internal links",
+    problem:
+      "The rendered page has more than five internal links beyond those in the raw HTML. Links that exist only after rendering are discovered later, and not at all by crawlers that do not run JavaScript, which slows or prevents crawling of the pages they point to.",
+    fix: "Output navigation and content links as plain <a href> elements in the server-sent HTML. Keep JavaScript for enhancing links, not creating them.",
+    source: {
+      label: "Google Search Central: Understand the JavaScript SEO basics",
+      url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+    },
+  },
+  urlUppercase: {
+    title: "URL contains uppercase characters",
+    problem:
+      "URL paths are case sensitive, so /Page and /page are two different URLs to Google. Mixed case invites links with the wrong case, which split signals across duplicates or lead to 404s.",
+    fix: "Use lowercase URLs. If the uppercase version is already linked or indexed, 301-redirect it to the lowercase one and update internal links to point at the lowercase URL directly.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlUnderscores: {
+    title: "URL contains underscores",
+    problem:
+      "Google recommends hyphens rather than underscores to separate words in a URL, because hyphens make the individual words easier for people and search engines to identify.",
+    fix: "Use hyphens between words in new URLs (summer-clothing, not summer_clothing). Only rename existing URLs if you can 301-redirect the old ones and update internal links; the gain is small.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlParameters: {
+    title: "URL has query parameters",
+    problem:
+      "Parameters such as sorting, tracking or session IDs can create many URLs for the same content, which wastes crawl budget and splits ranking signals between duplicates.",
+    fix: "Keep parameters out of internal links where they don't change the content (for example tracking tags), point a canonical tag at the clean URL, and prefer readable path segments for content that deserves its own URL.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlOver115: {
+    title: "URL is over 115 characters",
+    problem:
+      "Very long URLs are hard to read, share and remember, and are often a sign of deep nesting or stacked parameters. 115 characters is the threshold Screaming Frog uses; Google sets no hard limit, but recommends simple, descriptive URLs.",
+    fix: "Shorten the URL by removing filler words, redundant folders and unneeded parameters. If you change a live URL, 301-redirect the old one and update internal links.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlNonAscii: {
+    title: "URL contains non-ASCII characters",
+    problem:
+      "Characters outside ASCII must be percent-encoded in the URL. Google accepts UTF-8 URLs, but tools, logs and people sometimes see or copy the encoded form, and links written with the unencoded form can fail when not encoded consistently.",
+    fix: "Make sure every link to this URL uses the same UTF-8 percent-encoding. For sites in Latin-script languages, consider ASCII-only slugs (for example cafe instead of café) to avoid the problem altogether.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlMultipleSlashes: {
+    title: "URL contains multiple consecutive slashes",
+    problem:
+      "A path like /a//b is a different URL from /a/b, but most servers return the same page for both, which creates duplicate content. It is usually caused by a template joining paths incorrectly.",
+    fix: "Fix the link or template that produces the double slash, and 301-redirect URLs with repeated slashes to the single-slash version.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
     },
   },
 };

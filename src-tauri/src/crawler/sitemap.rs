@@ -67,3 +67,46 @@ pub async fn fetch_sitemap_urls(client: &Client, origin: &Url) -> Vec<Url> {
 
     locs
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn locs(xml: &str) -> Vec<String> {
+        parse_locs(xml).iter().map(|u| u.to_string()).collect()
+    }
+
+    #[test]
+    fn parses_every_loc_in_a_urlset() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/</loc><lastmod>2024-01-01</lastmod></url>
+  <url><loc> https://example.com/about </loc></url>
+</urlset>"#;
+        assert_eq!(
+            locs(xml),
+            vec!["https://example.com/", "https://example.com/about"]
+        );
+    }
+
+    #[test]
+    fn skips_locs_that_are_not_absolute_urls() {
+        let xml = "<urlset><url><loc>/relative</loc></url><url><loc>https://example.com/ok</loc></url></urlset>";
+        assert_eq!(locs(xml), vec!["https://example.com/ok"]);
+    }
+
+    #[test]
+    fn reads_child_sitemaps_from_an_index() {
+        let xml =
+            "<sitemapindex><sitemap><loc>https://example.com/a.xml</loc></sitemap></sitemapindex>";
+        assert_eq!(locs(xml), vec!["https://example.com/a.xml"]);
+    }
+
+    #[test]
+    fn ignores_text_outside_loc_and_malformed_input() {
+        assert!(
+            locs("<urlset><url><lastmod>https://example.com/</lastmod></url></urlset>").is_empty()
+        );
+        assert!(locs("not xml at all").is_empty());
+    }
+}

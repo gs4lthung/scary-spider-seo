@@ -27,14 +27,10 @@ export function UrlCombobox({
   preferHttps,
   onToggleScheme,
 }: UrlComboboxProps) {
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>(getUrlHistory);
   const [open, setOpen] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState(value);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setHistory(getUrlHistory());
-  }, []);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedQuery(value), 150);

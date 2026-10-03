@@ -1,6 +1,7 @@
 mod commands;
 mod crawler;
 mod export;
+mod snapshot;
 mod state;
 
 use state::AppState;
@@ -21,6 +22,8 @@ pub fn run() {
             commands::export_csv,
             commands::save_crawl,
             commands::load_crawl,
+            commands::read_crawl_snapshot,
+            commands::save_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

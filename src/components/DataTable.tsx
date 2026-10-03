@@ -23,6 +23,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 
 declare module "@tanstack/react-table" {
+  // Declaration merging requires the exact type parameter list, even though it is unused here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
     /** Shown in a tooltip on the column header to explain what the column means. */
     description?: string;
@@ -31,6 +33,7 @@ declare module "@tanstack/react-table" {
 
 interface DataTableProps<T> {
   data: T[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TanStack's idiom for columns with mixed value types
   columns: ColumnDef<T, any>[];
   rowHeight?: number;
   emptyLabel?: string;

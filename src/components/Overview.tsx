@@ -2,39 +2,52 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import type { CrawlProgress, PageResult, ResourceResult } from "../types";
+import type { CrawlProgress, PageResult } from "../types";
 import {
+  type CustomSearchStat,
   type FilterKey,
-  LOW_TEXT_RATIO_THRESHOLD_PCT,
-  SLOW_RESPONSE_THRESHOLD_MS,
-  TITLE_MAX_LENGTH,
-  TITLE_MIN_LENGTH,
+  type IssueKey,
+  type OverviewSection,
+  ISSUE_DEFS,
+  customSearchFilterKey,
+  parseCustomSearchFilter,
 } from "../lib/filters";
 
 interface OverviewProps {
   pages: PageResult[];
-  resources: ResourceResult[];
-  linkedUrls: Set<string>;
-  // Passed down from App rather than recomputed here — App already builds these
-  // once per `pages` change for table filtering, so reusing them avoids running
-  // the same O(n) scan over `pages` a second time on every crawl update.
-  duplicateTitles: Set<string>;
-  duplicateContent: Set<string>;
-  duplicateMeta: Set<string>;
-  canonicalStatusMap: Map<string, number | null>;
+  /** Affected pages or resources per issue, from App's `IssueCounter` (updated per flush in
+   * proportion to the new pages, never recounted here). */
+  issueCounts: Record<IssueKey, number>;
   progress: CrawlProgress | null;
   running: boolean;
   paused: boolean;
   activeFilter: FilterKey;
   onSelectFilter: (filter: FilterKey) => void;
+  /** Custom search rules of the results on screen with their page counts, from App's
+   * incremental tracker (no per-render rescan of every page). */
+  customSearches?: CustomSearchStat[];
 }
 
+const CUSTOM_SEARCH_GROUP = "Custom search";
+
 interface StatDef {
-  key: FilterKey;
-  value: number;
+  key: IssueKey;
   label: string;
   tone?: "ok" | "warn" | "bad";
 }
+
+/** Overview accordion sections, derived from the issue registry: every issue with a
+ * `section`, grouped in the order sections first appear in `ISSUE_DEFS`. */
+const SECTIONS: Array<{ title: OverviewSection; items: StatDef[] }> = (() => {
+  const byTitle = new Map<OverviewSection, StatDef[]>();
+  for (const def of ISSUE_DEFS) {
+    if (!def.section) continue;
+    const items = byTitle.get(def.section) ?? [];
+    items.push({ key: def.key, label: def.label, tone: def.tone });
+    byTitle.set(def.section, items);
+  }
+  return [...byTitle].map(([title, items]) => ({ title, items }));
+})();
 
 const TONE_TEXT: Record<"ok" | "warn" | "bad", string> = {
   ok: "text-emerald-600 dark:text-emerald-400",
@@ -74,214 +87,31 @@ function StatTile({
 
 export function Overview({
   pages,
-  resources,
-  linkedUrls,
-  duplicateTitles: duplicateTitleSet,
-  duplicateContent: duplicateContentSet,
-  duplicateMeta: duplicateMetaSet,
-  canonicalStatusMap,
+  issueCounts,
   progress,
   running,
   paused,
   activeFilter,
   onSelectFilter,
+  customSearches = [],
 }: OverviewProps) {
-  const summary = useMemo(() => {
-    const byStatus: Record<string, number> = {};
-    let missingTitle = 0;
-    let missingMeta = 0;
-    let missingH1 = 0;
-    let multipleH1 = 0;
-    let unminified = 0;
-    let missingAlt = 0;
-    let insecureLinks = 0;
-    let missingHsts = 0;
-    let titleTooShort = 0;
-    let titleTooLong = 0;
-    let missingLang = 0;
-    let missingHreflang = 0;
-    let nofollowLinks = 0;
-    let lowTextRatio = 0;
-    let multipleCanonical = 0;
-    let slowResponse = 0;
-    let missingViewport = 0;
-    let missingSocialTags = 0;
-    let redirectChainTooLong = 0;
-    let orphanPage = 0;
-    let structuredDataErrors = 0;
-    let missingStructuredData = 0;
-    let accessibilityIssues = 0;
-    let mobileUsabilityIssues = 0;
-
+  const byStatus = useMemo(() => {
+    const counts: Record<string, number> = {};
     for (const p of pages) {
       const bucket = p.status ? `${Math.floor(p.status / 100)}xx` : "error";
-      byStatus[bucket] = (byStatus[bucket] ?? 0) + 1;
-      if (!p.title) missingTitle++;
-      if (p.title && p.titleLength < TITLE_MIN_LENGTH) titleTooShort++;
-      if (p.titleLength > TITLE_MAX_LENGTH) titleTooLong++;
-      if (!p.metaDescription) missingMeta++;
-      if (p.h1Count === 0) missingH1++;
-      if (p.h1Count > 1) multipleH1++;
-      if (p.htmlSizeBytes > 0 && !p.isMinified) unminified++;
-      if (p.htmlSizeBytes > 0 && p.textRatioPct < LOW_TEXT_RATIO_THRESHOLD_PCT) lowTextRatio++;
-      if (p.missingAltCount > 0) missingAlt++;
-      if (p.insecureLinkCount > 0) insecureLinks++;
-      if (p.url.startsWith("https:") && !p.hsts) missingHsts++;
-      if (p.htmlSizeBytes > 0 && !p.lang) missingLang++;
-      if (p.htmlSizeBytes > 0 && p.hreflangValues.length === 0) missingHreflang++;
-      if (p.internalNofollowCount > 0) nofollowLinks++;
-      if (p.canonicalCount > 1) multipleCanonical++;
-      if (p.responseTimeMs > SLOW_RESPONSE_THRESHOLD_MS) slowResponse++;
-      if (p.htmlSizeBytes > 0 && !p.viewport) missingViewport++;
-      if (p.htmlSizeBytes > 0 && !p.hasOpenGraph && !p.hasTwitterCard) missingSocialTags++;
-      if (p.redirectChain.length > 1) redirectChainTooLong++;
-      if (p.discoveredViaSitemap && !linkedUrls.has(p.url)) orphanPage++;
-      if (p.structuredDataErrors.length > 0) structuredDataErrors++;
-      if (p.htmlSizeBytes > 0 && p.structuredDataTypes.length === 0) missingStructuredData++;
-      if (p.accessibilityViolations.length > 0) accessibilityIssues++;
-      if (p.mobileUsabilityViolations.length > 0) mobileUsabilityIssues++;
+      counts[bucket] = (counts[bucket] ?? 0) + 1;
     }
+    return counts;
+  }, [pages]);
 
-    let brokenCanonicalTarget = 0;
-    for (const p of pages) {
-      if (!p.canonical || p.canonical === p.url) continue;
-      if (!canonicalStatusMap.has(p.canonical)) continue;
-      const targetStatus = canonicalStatusMap.get(p.canonical);
-      if (targetStatus === null || targetStatus === undefined || targetStatus >= 400) brokenCanonicalTarget++;
-    }
-
-    const duplicateTitles = duplicateTitleSet.size;
-    const duplicateContent = duplicateContentSet.size;
-    const duplicateMeta = duplicateMetaSet.size;
-    const brokenResources = resources.filter((r) => (r.status && r.status >= 400) || r.error).length;
-
-    return {
-      byStatus,
-      missingTitle,
-      missingMeta,
-      missingH1,
-      multipleH1,
-      unminified,
-      duplicateTitles,
-      duplicateContent,
-      duplicateMeta,
-      brokenResources,
-      missingAlt,
-      insecureLinks,
-      missingHsts,
-      titleTooShort,
-      titleTooLong,
-      missingLang,
-      missingHreflang,
-      nofollowLinks,
-      lowTextRatio,
-      multipleCanonical,
-      brokenCanonicalTarget,
-      slowResponse,
-      missingViewport,
-      missingSocialTags,
-      redirectChainTooLong,
-      orphanPage,
-      structuredDataErrors,
-      missingStructuredData,
-      accessibilityIssues,
-      mobileUsabilityIssues,
-    };
-  }, [pages, resources, linkedUrls, duplicateTitleSet, duplicateContentSet, duplicateMetaSet, canonicalStatusMap]);
-
-  const groups: Array<{ title: string; items: StatDef[] }> = [
-    {
-      title: "Titles",
-      items: [
-        { key: "missingTitle", value: summary.missingTitle, label: "Missing title" },
-        { key: "duplicateTitles", value: summary.duplicateTitles, label: "Duplicate titles" },
-        { key: "titleTooShort", value: summary.titleTooShort, label: "Title too short" },
-        { key: "titleTooLong", value: summary.titleTooLong, label: "Title too long" },
-      ],
-    },
-    {
-      title: "Content",
-      items: [
-        { key: "missingMeta", value: summary.missingMeta, label: "Missing meta desc." },
-        { key: "duplicateMeta", value: summary.duplicateMeta, label: "Duplicate meta desc." },
-        { key: "h1Issues", value: summary.missingH1 + summary.multipleH1, label: "H1 issues" },
-        { key: "duplicateContent", value: summary.duplicateContent, label: "Duplicate content" },
-        { key: "lowTextRatio", value: summary.lowTextRatio, label: "Low text/HTML ratio", tone: "warn" },
-        { key: "missingAlt", value: summary.missingAlt, label: "Missing alt text", tone: "warn" },
-        { key: "nofollowLinks", value: summary.nofollowLinks, label: "Nofollow links" },
-        { key: "unminified", value: summary.unminified, label: "Unminified pages", tone: "warn" },
-      ],
-    },
-    {
-      title: "Canonical & Indexing",
-      items: [
-        { key: "multipleCanonical", value: summary.multipleCanonical, label: "Multiple canonical tags", tone: "warn" },
-        {
-          key: "brokenCanonicalTarget",
-          value: summary.brokenCanonicalTarget,
-          label: "Canonical points to broken page",
-          tone: "bad",
-        },
-        { key: "redirectChainTooLong", value: summary.redirectChainTooLong, label: "Long redirect chains", tone: "warn" },
-        { key: "orphanPage", value: summary.orphanPage, label: "Orphan pages (sitemap only)", tone: "warn" },
-      ],
-    },
-    {
-      title: "Performance",
-      items: [{ key: "slowResponse", value: summary.slowResponse, label: "Slow response (>600ms)", tone: "warn" }],
-    },
-    {
-      title: "Meta & Social",
-      items: [{ key: "missingSocialTags", value: summary.missingSocialTags, label: "Missing OG/Twitter tags" }],
-    },
-    {
-      title: "Mobile Usability",
-      items: [
-        { key: "missingViewport", value: summary.missingViewport, label: "Missing viewport tag", tone: "warn" },
-        {
-          key: "mobileUsabilityIssues",
-          value: summary.mobileUsabilityIssues,
-          label: "Mobile usability issues",
-          tone: "bad",
-        },
-      ],
-    },
-    {
-      title: "Structured Data",
-      items: [
-        { key: "structuredDataErrors", value: summary.structuredDataErrors, label: "Invalid structured data", tone: "bad" },
-        { key: "missingStructuredData", value: summary.missingStructuredData, label: "No structured data" },
-      ],
-    },
-    {
-      title: "Accessibility",
-      items: [
-        { key: "accessibilityIssues", value: summary.accessibilityIssues, label: "Accessibility violations", tone: "bad" },
-      ],
-    },
-    {
-      title: "Security",
-      items: [
-        { key: "broken", value: summary.brokenResources, label: "Broken links/images", tone: "bad" },
-        { key: "insecureLinks", value: summary.insecureLinks, label: "Insecure links", tone: "bad" },
-        { key: "missingHsts", value: summary.missingHsts, label: "Missing HSTS", tone: "warn" },
-      ],
-    },
-    {
-      title: "International",
-      items: [
-        { key: "missingLang", value: summary.missingLang, label: "Missing lang attr." },
-        { key: "missingHreflang", value: summary.missingHreflang, label: "Missing hreflang" },
-      ],
-    },
-  ];
-
-  const totalIssues = groups.flatMap((g) => g.items).reduce((sum, i) => sum + i.value, 0);
+  const totalIssues = SECTIONS.flatMap((g) => g.items).reduce((sum, i) => sum + issueCounts[i.key], 0);
 
   const activeGroupTitle = useMemo(
-    () => groups.find((g) => g.items.some((i) => i.key === activeFilter))?.title,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeFilter, summary],
+    () =>
+      parseCustomSearchFilter(activeFilter)
+        ? CUSTOM_SEARCH_GROUP
+        : SECTIONS.find((g) => g.items.some((i) => i.key === activeFilter))?.title,
+    [activeFilter],
   );
 
   const [openGroups, setOpenGroups] = useState<string[]>([]);
@@ -298,21 +128,21 @@ export function Overview({
         <StatTile active={false} value={progress?.queued ?? 0} label="Queued" onClick={() => {}} />
         <StatTile
           active={activeFilter === "2xx"}
-          value={summary.byStatus["2xx"] ?? 0}
+          value={byStatus["2xx"] ?? 0}
           label="2xx"
           tone="ok"
           onClick={() => onSelectFilter("2xx")}
         />
         <StatTile
           active={activeFilter === "3xx"}
-          value={summary.byStatus["3xx"] ?? 0}
+          value={byStatus["3xx"] ?? 0}
           label="3xx"
           tone="warn"
           onClick={() => onSelectFilter("3xx")}
         />
         <StatTile
           active={activeFilter === "4xx5xx"}
-          value={(summary.byStatus["4xx"] ?? 0) + (summary.byStatus["5xx"] ?? 0) + (summary.byStatus["error"] ?? 0)}
+          value={issueCounts["4xx5xx"]}
           label="4xx/5xx/Error"
           tone="bad"
           onClick={() => onSelectFilter("4xx5xx")}
@@ -328,8 +158,8 @@ export function Overview({
       </div>
 
       <Accordion type="multiple" value={openGroups} onValueChange={setOpenGroups}>
-        {groups.map((group) => {
-          const groupTotal = group.items.reduce((sum, i) => sum + i.value, 0);
+        {SECTIONS.map((group) => {
+          const groupTotal = group.items.reduce((sum, i) => sum + issueCounts[i.key], 0);
           return (
             <AccordionItem key={group.title} value={group.title}>
               <AccordionTrigger>
@@ -349,7 +179,7 @@ export function Overview({
                     <StatTile
                       key={item.key}
                       active={activeFilter === item.key}
-                      value={item.value}
+                      value={issueCounts[item.key]}
                       label={item.label}
                       tone={item.tone}
                       onClick={() => onSelectFilter(item.key)}
@@ -360,6 +190,37 @@ export function Overview({
             </AccordionItem>
           );
         })}
+        {customSearches.length > 0 && (
+          // Informational, not issues: these counts are not added to the issue total.
+          <AccordionItem value={CUSTOM_SEARCH_GROUP}>
+            <AccordionTrigger>
+              <span className="flex items-center gap-2">
+                {CUSTOM_SEARCH_GROUP}
+                <Badge variant="outline" className="h-auto min-w-9 justify-center py-0 tabular-nums">
+                  {customSearches.length}
+                </Badge>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="flex flex-wrap gap-2">
+                {customSearches.flatMap((rule) =>
+                  (["contains", "missing"] as const).map((mode) => {
+                    const key = customSearchFilterKey(rule.id, mode);
+                    return (
+                      <StatTile
+                        key={key}
+                        active={activeFilter === key}
+                        value={mode === "contains" ? rule.contains : rule.missing}
+                        label={`${rule.label}: ${mode === "contains" ? "contains" : "does not contain"}`}
+                        onClick={() => onSelectFilter(key)}
+                      />
+                    );
+                  }),
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
       </Accordion>
     </div>
   );

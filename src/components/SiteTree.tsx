@@ -2,15 +2,11 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { PageResult } from "../types";
-import { getPageIssueKeys } from "../lib/filters";
+import { type FilterContext, getPageIssueKeys } from "../lib/filters";
 
 interface SiteTreeProps {
   pages: PageResult[];
-  duplicateTitles: Set<string>;
-  duplicateContent: Set<string>;
-  duplicateMeta: Set<string>;
-  canonicalStatusMap: Map<string, number | null>;
-  linkedUrls: Set<string>;
+  filterContext: FilterContext;
   /** Opens the same detail modal a Pages-table row click does. */
   onSelectPage: (page: PageResult) => void;
   /** Switches to the Pages tab with the search box set to this node's path (a substring
@@ -176,19 +172,14 @@ function TreeRow({
 
 export function SiteTree({
   pages,
-  duplicateTitles,
-  duplicateContent,
-  duplicateMeta,
-  canonicalStatusMap,
-  linkedUrls,
+  filterContext,
   onSelectPage,
   onViewInPages,
 }: SiteTreeProps) {
   const tree = useMemo(() => {
-    const issueCountOf = (page: PageResult) =>
-      getPageIssueKeys(page, duplicateTitles, duplicateContent, duplicateMeta, canonicalStatusMap, linkedUrls).length;
+    const issueCountOf = (page: PageResult) => getPageIssueKeys(page, filterContext).length;
     return buildTree(pages, issueCountOf);
-  }, [pages, duplicateTitles, duplicateContent, duplicateMeta, canonicalStatusMap, linkedUrls]);
+  }, [pages, filterContext]);
 
   const [overrides, setOverrides] = useState<Map<string, boolean>>(new Map());
   const handleToggle = (node: TreeNode, depth: number) => {

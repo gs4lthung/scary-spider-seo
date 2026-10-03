@@ -25,6 +25,7 @@ jobs:
       app: ${{ steps.filter.outputs.app }}
       website: ${{ steps.filter.outputs.website }}
       blog: ${{ steps.filter.outputs.blog }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -45,6 +46,9 @@ jobs:
             blog:
               - 'blog/**'
               - '.github/workflows/**'
+            dashboard:
+              - 'cf-dashboard/**'
+              - '.github/workflows/**'
 
   app-frontend:
     needs: changes
@@ -57,6 +61,8 @@ jobs:
           node-version: lts/*
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - run: npm run build
 
@@ -71,6 +77,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - working-directory: src-tauri
+        run: cargo fmt --check
+      - working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      # Includes the fixture-site crawl tests (src/crawler/fixture_tests.rs).
       - working-directory: src-tauri
         run: cargo test
 
@@ -111,3 +124,20 @@ jobs:
       - run: npm run cf:typegen
       - run: npx tsc --noEmit
       - run: npm run cf:build
+
+  dashboard:
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cf-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: cf-dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run build
