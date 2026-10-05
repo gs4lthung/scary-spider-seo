@@ -84,6 +84,10 @@ export function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>&copy; {new Date().getFullYear()} Scary Spider SEO.</p>
+          <a href="https://sellwithboost.com" target="_blank" rel="noopener noreferrer" className="self-start sm:self-auto">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="https://sellwithboost.com/badge/listing.svg" alt="Listed on Sell With boost" className="h-10 w-auto" />
+          </a>
           <p className="font-mono text-xs tracking-wide">Crawl. Index. Rank.</p>
         </div>
       </div>

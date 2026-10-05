@@ -63,6 +63,10 @@ export function Footer() {
 
         <div className="flex flex-col gap-2 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} Scary Spider SEO</span>
+          <a href="https://sellwithboost.com" target="_blank" rel="noopener noreferrer" className="self-start sm:self-auto">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="https://sellwithboost.com/badge/listing.svg" alt="Listed on Sell With boost" className="h-10 w-auto" />
+          </a>
           <span className="font-mono tracking-wide">Crawl. Inspect. Fix.</span>
         </div>
       </div>
