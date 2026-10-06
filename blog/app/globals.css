@@ -198,6 +198,25 @@
   --tw-prose-td-borders: var(--color-border);
 }
 
+/* The typography plugin renders inline code as bold text wrapped in literal
+   backticks (::before/::after content: "`"), which read as stray "``"
+   characters outside the code. Show inline code as a subtle chip instead,
+   in the editor and on published posts alike. Code inside <pre> keeps the
+   plugin's block styling. */
+.prose-brand :where(code):not(:where(pre code))::before,
+.prose-brand :where(code):not(:where(pre code))::after {
+  content: none;
+}
+
+.prose-brand :where(code):not(:where(pre code)) {
+  border-radius: 0.25rem;
+  background: var(--color-secondary);
+  padding: 0.125rem 0.375rem;
+  font-size: 0.875em;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
 /* Tiptap's table extension needs explicit affordances while editing
    (resize handle, selected-cell highlight, borders on empty cells) that
    the typography plugin's read-only table styles don't cover. */
