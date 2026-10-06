@@ -38,6 +38,7 @@ import {
 } from "@phosphor-icons/react";
 import { fileToWebP } from "@/lib/webp";
 import type { PendingImage } from "@/lib/pending-images";
+import { convertMarkdownCode } from "@/lib/markdown-code";
 import { MediaPicker } from "@/components/MediaPicker";
 
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36];
@@ -373,7 +374,9 @@ export function RichTextEditor({
   function importHtml() {
     const html = extractHtmlFragment(htmlImport);
     if (!html || !editor) return;
-    editor.commands.setContent(html);
+    // Markdown backticks in the pasted HTML become real inline code / code
+    // blocks (setContent skips Tiptap's typing and paste rules).
+    editor.commands.setContent(convertMarkdownCode(html));
     setHtmlImport("");
     setHtmlImportOpen(false);
   }

@@ -40,17 +40,31 @@ const POST_HTML_OPTIONS: sanitizeHtml.IOptions = {
   },
 };
 
-function decodeEscapedMarkup(html: string): string {
-  if (!/&lt;\/?(?:h[2-6]|p|br|hr|ul|ol|li|blockquote|pre|code|a|img|strong|em|u|s|span|table|thead|tbody|tr|th|td)(?:\s|\/?>)/i.test(html)) {
-    return html;
-  }
+const ESCAPED_TAG = /&lt;\/?(?:h[2-6]|p|br|hr|ul|ol|li|blockquote|pre|code|a|img|strong|em|u|s|span|table|thead|tbody|tr|th|td)(?:\s|\/?>|\/?&gt;)/i;
+// <pre>/<code> elements, matched whole so their contents are left alone.
+const CODE_SEGMENT = /(<pre\b[\s\S]*?<\/pre>|<code\b[\s\S]*?<\/code>)/gi;
 
-  return html
+function unescapeMarkup(text: string): string {
+  return text
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&#x27;/gi, "'")
     .replace(/&amp;/gi, "&");
+}
+
+// Repairs article HTML that was pasted into the editor as text (so it got
+// escaped, e.g. "<p>&lt;h2&gt;Title&lt;/h2&gt;</p>") by turning the escaped
+// tags back into markup. Code is never touched: "<code>&lt;a href&gt;</code>"
+// is a deliberately escaped example and must stay text, or the sanitizer would
+// turn it into a real link (or drop it). Only the parts outside <pre>/<code>
+// are checked and decoded.
+function decodeEscapedMarkup(html: string): string {
+  const parts = html.split(CODE_SEGMENT);
+  // split() with a capture group puts the code segments at odd indexes.
+  const outsideCode = parts.filter((_, i) => i % 2 === 0);
+  if (!outsideCode.some((part) => ESCAPED_TAG.test(part))) return html;
+  return parts.map((part, i) => (i % 2 === 0 ? unescapeMarkup(part) : part)).join("");
 }
 
 export function sanitizePostHtml(html: string): string {
