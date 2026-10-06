@@ -11,11 +11,25 @@ import { serializeTakeaways, serializeFaqs } from "@/lib/post-sections";
 import { sanitizePostHtml, stripTags } from "@/lib/sanitize";
 import { requireUser } from "@/lib/authz";
 import { deleteMediaKeys } from "@/app/admin/media-actions";
+import { RESERVED_SLUGS, slugify } from "@/lib/slug";
+
+// Friendly checks before the insert/update. posts.slug is UNIQUE, so without
+// this a duplicate slug surfaces as a raw D1 constraint error.
+async function slugProblem(slug: string, ownId?: number): Promise<string | null> {
+  if (RESERVED_SLUGS.has(slug)) return `"${slug}" is reserved by the site. Choose a different slug.`;
+  const db = await getDb();
+  const [clash] = await db.select({ id: posts.id, title: posts.title }).from(posts).where(eq(posts.slug, slug));
+  if (clash && clash.id !== ownId) return `The slug "${slug}" is already used by "${clash.title}". Choose a different slug.`;
+  return null;
+}
 
 function fromForm(formData: FormData) {
   const status = formData.get("status") === "published" ? "published" : "draft";
   return {
-    slug: String(formData.get("slug") ?? "").trim(),
+    // Re-applied server-side: the form only fully cleans the slug on blur
+    // (Enter can submit before that), and a crafted request could send
+    // anything.
+    slug: slugify(String(formData.get("slug") ?? "")),
     title: String(formData.get("title") ?? "").trim(),
     excerpt: (String(formData.get("excerpt") ?? "").trim() || null) as string | null,
     content: sanitizePostHtml(String(formData.get("content") ?? "")),
@@ -66,6 +80,8 @@ export async function createPost(_prevState: string | null, formData: FormData):
   if (data.coverImageKey && !data.coverImageAlt) {
     return "Cover image alt text is required whenever a cover image is set.";
   }
+  const createSlugProblem = await slugProblem(data.slug);
+  if (createSlugProblem) return createSlugProblem;
 
   const db = await getDb();
   const [created] = await db.insert(posts).values({
@@ -90,6 +106,9 @@ export async function updatePost(id: number, _prevState: string | null, formData
   if (data.coverImageKey && !data.coverImageAlt) {
     return "Cover image alt text is required whenever a cover image is set.";
   }
+
+  const updateSlugProblem = await slugProblem(data.slug, id);
+  if (updateSlugProblem) return updateSlugProblem;
 
   const db = await getDb();
   const [existing] = await db.select().from(posts).where(eq(posts.id, id));

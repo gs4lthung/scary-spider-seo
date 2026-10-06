@@ -13,18 +13,12 @@ import { resolvePendingImageUploads, type PendingImage } from "@/lib/pending-ima
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
 import { parseFaqs, parseTakeaways, type PostFaq } from "@/lib/post-sections";
 import { readingTimeMinutes } from "@/lib/reading-time";
+import { MAX_SLUG_LENGTH, slugify, slugifyWhileTyping } from "@/lib/slug";
 
 type Post = typeof posts.$inferSelect;
 
 type Action = (prevState: string | null, formData: FormData) => Promise<string | null>;
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 function wordCountFromHtml(html: string) {
   const text = html.replace(/<[^>]*>/g, " ").trim();
@@ -81,9 +75,11 @@ export function PostForm({
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
   // False until the user edits the slug by hand, so the title keeps driving
-  // the slug (including on the edit page). Clearing the slug resets it back
-  // to false so title-driven generation resumes.
-  const [slugTouched, setSlugTouched] = useState(false);
+  // the slug. Clearing the slug resets it back to false so title-driven
+  // generation resumes. A published post starts "touched": its slug is a live
+  // URL, so fixing a typo in the title must not silently change it.
+  const [slugTouched, setSlugTouched] = useState(post?.status === "published");
+  const slugChangedOnLivePost = post?.status === "published" && slugify(slug) !== post.slug;
   const [metaTitle, setMetaTitle] = useState(post?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
   const [readingTime, setReadingTime] = useState(String(post?.readingTime ?? readingTimeMinutes(post?.content ?? "")));
@@ -193,13 +189,24 @@ export function PostForm({
           required
           value={slug}
           onChange={(e) => {
-            const next = slugify(e.target.value);
+            const next = slugifyWhileTyping(e.target.value);
             setSlug(next);
             // An emptied slug hands control back to the title.
             setSlugTouched(next !== "");
           }}
+          onBlur={() => setSlug((current) => slugify(current))}
+          maxLength={MAX_SLUG_LENGTH}
           className="mt-1 w-full rounded border px-3 py-2 font-mono text-sm"
         />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Lowercase letters, numbers and hyphens. Accented letters are converted (e.g. &quot;ư&quot; becomes &quot;u&quot;).
+        </p>
+        {slugChangedOnLivePost ? (
+          <p className="mt-1 text-xs text-amber-700">
+            This post is published. Changing the slug changes its URL, and the old address (/{post?.slug}) will stop
+            working for anyone who linked to it.
+          </p>
+        ) : null}
       </div>
 
       <div>
