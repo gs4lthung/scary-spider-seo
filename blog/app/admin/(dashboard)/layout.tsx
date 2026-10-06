@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getPendingCommentCount } from "@/lib/db/comment-queries";
 import { SITE_URL } from "@/lib/site";
 import { NavLink } from "./NavLink";
+import { ScrollJumpButtons } from "@/components/ScrollJumpButtons";
 
 function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -108,6 +109,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </aside>
 
       <main className="min-w-0 flex-1 px-10 py-10">{children}</main>
+      <ScrollJumpButtons />
     </div>
   );
 }
