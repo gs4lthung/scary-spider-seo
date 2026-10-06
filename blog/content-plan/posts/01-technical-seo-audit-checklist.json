@@ -1,0 +1,86 @@
+{
+  "id": 1,
+  "title": "Technical SEO Audit Checklist: A Practical Guide for Small Sites",
+  "slug": "technical-seo-audit-checklist",
+  "category": "Technical SEO",
+  "excerpt": "A prioritized technical SEO audit checklist you can run in an afternoon: crawlability, indexing, status codes, redirects, sitemaps, duplicates, speed and mobile.",
+  "meta_title": "Technical SEO Audit Checklist for Small Sites",
+  "meta_description": "Use this technical SEO audit checklist to find crawl, indexing, redirect and sitemap problems on a small site, then fix them in order of real impact.",
+  "key_takeaways": [
+    "A technical audit checks whether search engines can find, crawl and index the pages you want to rank.",
+    "Work in order, starting with robots.txt and indexability, because early problems hide later ones.",
+    "Compare your XML sitemap against a crawl to catch dead, redirected and orphaned URLs.",
+    "Prioritize issues by how many important pages they affect, and group fixes by root cause.",
+    "Re-crawl after fixing and use Search Console's Validate Fix to confirm the problems are gone."
+  ],
+  "content_html": "<p>You publish good content, you fix the obvious things, and your traffic still sits flat. Often the problem is not the writing. It is something underneath it: a page Google cannot crawl, a template that adds <code>noindex</code> to half the blog, or a redirect that loops back on itself.</p><p>These problems are invisible when you browse your own site. Everything looks fine in a browser, so nobody checks. Meanwhile search engines quietly skip the pages that matter most.</p><p>This technical SEO audit checklist gives you a prioritized, step-by-step process you can run on a small site in an afternoon. You will learn what to check, in what order, what a problem looks like, and how to decide which fixes come first. If you are new to the three pillars of SEO, start with <a href=\"https://blog.scaryspiderseo.com/dont-let-your-website-turn-invisible-a-beginner-guide\">our beginner's guide to how search works</a> and come back.</p><h2>What a technical SEO audit actually covers</h2><p>A technical audit answers one question: <strong>can search engines find, crawl, understand and index the pages you want to rank?</strong> It does not judge whether your content is good. That comes later.</p><p>Google publishes a short list of minimum requirements a page must meet to be eligible for indexing. Per its <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/essentials/technical\">technical requirements for Google Search</a>, Googlebot must not be blocked, the page must return an HTTP 200 status, and it must have indexable content. Almost every step below is a way of checking those three things at scale.</p><p>For example, say you run a bakery site with 40 pages. A technical audit would tell you that your new \"Wedding cakes\" page returns a 404 from the menu, that two old URLs redirect three times before landing anywhere, and that your sitemap still lists a page you deleted last year.</p><h2>Before you start: tools you need</h2><p>You do not need an expensive stack. Three things cover most small sites:</p><ul><li><strong>Google Search Console</strong>, verified for your domain. It shows what Google has actually crawled and indexed.</li><li><strong>A site crawler</strong> that walks your pages the way a search engine does and lists status codes, redirects, titles and directives. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags these issues in a sortable table and exports them to CSV.</li><li><strong>A spreadsheet</strong> to log each issue, the affected URLs, the fix and who owns it.</li></ul><p>Run a full crawl first, then work through the checklist with the crawl data and Search Console open side by side.</p><h2>The technical SEO audit checklist, step by step</h2><p>Work through these in order. Each early step can hide problems in later ones, so there is no point tuning page speed on a page Google is not allowed to crawl.</p><h3>1. Crawlability: check robots.txt</h3><p>Open <code>yoursite.com/robots.txt</code> in a browser. You are looking for rules that block pages or folders you want in search.</p><p>The classic disaster is a leftover <code>Disallow: /</code> from a staging site, which blocks everything. A quieter one is blocking the CSS or JavaScript folders Google needs to render your pages.</p><ul><li>Confirm no rule blocks your key sections.</li><li>Confirm the file lists your sitemap URL.</li><li>Crawl once with robots.txt rules respected and compare against a crawl that ignores them, so you can see exactly which URLs are blocked.</li></ul><p>For syntax and safe examples, see <a href=\"https://blog.scaryspiderseo.com/technical-seo/robots-txt-guide\">what to block in robots.txt</a>.</p><h3>2. Indexability: noindex, canonicals and Search Console</h3><p>A page can be crawlable and still be excluded from the index. The usual causes are a <code>noindex</code> meta robots tag, an <code>X-Robots-Tag</code> HTTP header, or a canonical tag that points at a different URL.</p><p>In your crawl, filter for pages marked noindex and for pages whose canonical is not themselves. Then open the <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://support.google.com/webmasters/answer/7440203\">Page indexing report in Search Console</a>, which lists the reasons Google gives for each URL it has not indexed.</p><p><strong>Not every non-indexed page is a problem.</strong> A thank-you page or a cart page should stay out. What matters is whether any page you want to rank is on that list.</p><h3>3. Status codes: find 4xx and 5xx errors</h3><p>Sort your crawl by status code. Anything other than 200 on a page linked from your own site needs a look:</p><ul><li><strong>404 and 410</strong>: the page is gone. Fix or remove the links pointing to it.</li><li><strong>5xx</strong>: your server failed. If this happens on real pages, treat it as urgent, because Google cannot index a page it cannot fetch.</li><li><strong>Broken images</strong> count too, since they hurt the page experience.</li></ul><p>For a full process, including when to restore a page versus redirect it, read <a href=\"https://blog.scaryspiderseo.com/technical-seo/find-and-fix-broken-links\">how to find and fix broken links</a>.</p><h3>4. Redirects: chains, loops and internal redirects</h3><p>Redirects are fine when used on purpose. Problems start when they pile up. A redirect chain (A to B to C) slows users down and makes crawlers do extra work. A loop (A to B to A) means the page never loads at all.</p><p>In your crawl, look for chains of more than one hop and for internal links that point at a redirecting URL instead of the final destination. Update those links to point straight at the final URL.</p><p>Also check the type: a permanent move should use a 301 or 308, not a 302. The details are in <a href=\"https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects\">our guide to 301 and 302 redirects</a>.</p><h3>5. XML sitemap: does it match reality?</h3><p>Your sitemap should be a clean list of the URLs you want indexed: canonical, indexable and returning 200. Compare it against your crawl and look for three mismatches:</p><ul><li>URLs in the sitemap that redirect, 404 or are noindexed.</li><li>Indexable pages your crawl found that are missing from the sitemap.</li><li>Pages in the sitemap that no internal link points to (orphan pages).</li></ul><p>If any of these show up, follow the steps to <a href=\"https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide\">clean up your XML sitemap</a>.</p><h3>6. Duplicates: titles, descriptions and URL variants</h3><p>Check that each page has a unique title and meta description, and that your site loads on only one version of its address. Type <code>http://</code>, <code>https://</code>, with and without <code>www</code>, into the browser. All four should end on the same final URL.</p><p>Duplicate titles across pages usually point to a template problem, such as every product page using the shop name as its title. Near-duplicate pages, such as several location pages with only the town name changed, compete with each other instead of supporting each other.</p><h3>7. Internal links and click depth</h3><p>Important pages should be reachable within a few clicks of the home page. Pages buried more than three clicks deep, or linked from only one other page, tend to get crawled less often and send weaker signals about their importance.</p><p>Sort your crawl by depth and by number of inlinks. If a key service page sits at depth 5 with one inlink, link to it from the main navigation or from related posts.</p><h3>8. Speed and Core Web Vitals</h3><p>Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/core-web-vitals\">Core Web Vitals guidance</a> recommends a Largest Contentful Paint within 2.5 seconds, an Interaction to Next Paint under 200 milliseconds and a Cumulative Layout Shift under 0.1. Check the Core Web Vitals report in Search Console for real-user data, and PageSpeed Insights for individual URLs.</p><p>For a small site, the usual quick wins are oversized images, images without width and height attributes, and slow server response times. Treat speed as a tiebreaker, not a replacement for relevance.</p><h3>9. Mobile and HTTPS</h3><p>Google uses the mobile version of your content for indexing and ranking, according to its <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing\">mobile-first indexing best practices</a>. So check that every page has a viewport meta tag and that your mobile layout shows the same content, links and structured data as desktop.</p><p>Then check security basics: every page should load over HTTPS, HTTP URLs should redirect to HTTPS, and pages should not load images or scripts over plain HTTP (mixed content).</p><h2>How to prioritize what you find</h2><p>A first audit on even a small site can produce a long list. <strong>Rank every issue by how many important pages it affects and how badly it blocks them</strong>, not by how alarming it sounds.</p><table><thead><tr><th>Priority</th><th>What it looks like</th><th>Why</th></tr></thead><tbody><tr><td>Fix today</td><td>Sitewide <code>Disallow: /</code>, noindex on key pages, 5xx errors, HTTPS not working</td><td>Pages cannot be crawled or indexed at all</td></tr><tr><td>Fix this week</td><td>Broken internal links, redirect chains, sitemap listing dead URLs, duplicate titles from a template</td><td>Wastes crawling and splits signals across URLs</td></tr><tr><td>Fix this month</td><td>Deep pages, pages with one inlink, slow pages, missing image dimensions</td><td>Real gains, but only once the basics work</td></tr><tr><td>Polish</td><td>Uppercase in URLs, single long redirect on an old campaign link</td><td>Low impact on a small site</td></tr></tbody></table><p>One fix often clears dozens of rows. If 200 pages share a duplicate title because of one template setting, that is one task, not 200.</p><h2>Turn the audit into a fix list</h2><p>An audit only helps if the fixes ship. Keep it simple:</p><ol><li>Export the crawl to CSV and group issues by cause, not by URL.</li><li>Write one row per cause with the fix, the owner and a target date.</li><li>Fix the \"today\" items first, then re-crawl to confirm they are gone.</li><li>For indexing issues, use the Validate Fix button in the Page indexing report so Google rechecks the affected URLs.</li><li>Save the crawl export. Next time, compare the two and see what changed.</li></ol><h2>How often to run a site audit</h2><p>For a small, stable site, a full audit every quarter is usually enough. Run an extra one after any big change: a redesign, a CMS or theme switch, a domain or HTTPS move, or a bulk URL change.</p><p>Between audits, glance at the Page indexing report once a month. A sudden jump in non-indexed pages is the earliest warning you will get.</p><h2>The bottom line</h2><p>A technical SEO audit checklist is not about chasing every warning. It is about confirming that Google can crawl and index your important pages, then removing the friction that wastes crawling and splits your signals.</p><p>Work top to bottom: robots.txt, indexability, status codes, redirects, sitemap, duplicates, internal links, speed, mobile and HTTPS. Fix what blocks pages first, then what dilutes them, then polish.</p><p><strong>Your next step:</strong> crawl your site today, open robots.txt and the Page indexing report, and write down the first three issues that affect pages you actually want to rank.</p>",
+  "faqs": [
+    {
+      "question": "How long does a technical SEO audit take?",
+      "answer": "For a small site of a few hundred pages, a crawl plus a first pass through the checklist usually fits in an afternoon. Fixing what you find can take longer, depending on whether the causes are in templates, content or server settings."
+    },
+    {
+      "question": "Can I do a technical SEO audit for free?",
+      "answer": "Yes. Google Search Console is free, PageSpeed Insights is free, and there are free desktop crawlers that list status codes, redirects, titles and directives. A spreadsheet covers the rest."
+    },
+    {
+      "question": "What is the difference between a technical audit and a content audit?",
+      "answer": "A technical audit checks whether search engines can access and index your pages. A content audit judges whether those pages are useful, accurate and match what searchers want. Run the technical audit first, because great content cannot rank if it is not indexed."
+    },
+    {
+      "question": "Should I fix every warning an audit tool reports?",
+      "answer": "No. Many warnings are low impact on a small site. Fix anything that blocks crawling or indexing of important pages first, then issues that waste crawling or split signals, and leave cosmetic items for last."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/dont-let-your-website-turn-invisible-a-beginner-guide",
+      "anchor": "our beginner's guide to how search works"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/robots-txt-guide",
+      "anchor": "what to block in robots.txt"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/find-and-fix-broken-links",
+      "anchor": "how to find and fix broken links"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects",
+      "anchor": "our guide to 301 and 302 redirects"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide",
+      "anchor": "clean up your XML sitemap"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/essentials/technical",
+      "anchor": "technical requirements for Google Search",
+      "supports": "Google's minimum requirements for indexing: Googlebot not blocked, HTTP 200, indexable content."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/7440203",
+      "anchor": "Page indexing report in Search Console",
+      "supports": "The Page indexing report lists reasons Google did not index URLs."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/core-web-vitals",
+      "anchor": "Core Web Vitals guidance",
+      "supports": "Core Web Vitals good thresholds: LCP within 2.5 s, INP under 200 ms, CLS under 0.1."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing",
+      "anchor": "mobile-first indexing best practices",
+      "supports": "Google uses the mobile version of content for indexing and ranking."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of a real crawl sorted by status code, with a short note on what you found first.",
+    "In the prioritization section, add a real example of one template fix that cleared many issues at once.",
+    "In step 2, add a screenshot of the Page indexing report with a typical 'not indexed' reason highlighted.",
+    "Share how long a first audit took on one of your own sites, if you have the data."
+  ],
+  "image_idea": "A spider with a clipboard inspecting the threads of a large web, ticking off sections one by one."
+}

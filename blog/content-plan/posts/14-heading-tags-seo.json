@@ -1,0 +1,86 @@
+{
+  "id": 14,
+  "title": "Heading Tags for SEO: How to Structure H1, H2 and H3",
+  "slug": "heading-tags-seo",
+  "category": "On-page SEO",
+  "excerpt": "How heading tags help SEO, readers and screen readers: one clear H1, H2 and H3 nesting without skipped levels, question-style headings and common theme mistakes.",
+  "meta_title": "Heading Tags for SEO: H1, H2 and H3 Structure Guide",
+  "meta_description": "Learn how heading tags affect SEO and readers: one clear H1, H2 and H3 nesting without skipped levels, better headings, and fixes for common CMS mistakes.",
+  "key_takeaways": [
+    "Headings describe the outline of a page and help skimmers, screen reader users and search engines understand it.",
+    "Give every page exactly one H1 that names its specific topic, not the site name or logo.",
+    "Nest H2s and H3s by their place in the outline and avoid skipping levels, such as an H2 followed by an H4.",
+    "Descriptive or question-style headings help readers find answers and naturally use the words people search for.",
+    "Most heading problems come from themes and templates, so audit with a crawl and fix the template once."
+  ],
+  "content_html": "<p>A page can look perfectly organized in the browser and still be a mess underneath. Run a crawl on a typical small business site and you will often find the logo marked up as an H1 on every page, two or three competing H1s on the home page, a jump from H2 straight to H4, and \"headings\" that are really just bold paragraphs.</p>\n<p>None of that is visible to a sighted visitor scrolling the page. It is very visible to someone using a screen reader, and it makes it harder for search engines to tell what the main topic of the page is.</p>\n<p>This guide explains how heading tags affect SEO and readers, how to use one clear H1, how to nest H2 and H3 headings logically, how to write headings that answer real questions, and how to spot the heading mistakes that themes and page builders introduce. Headings are one item on a full <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">on-page SEO checklist</a>, and one of the quickest to fix.</p>\n\n<h2>What heading tags do for SEO, readers, and screen readers</h2>\n<p>HTML has six heading levels, <code>&lt;h1&gt;</code> to <code>&lt;h6&gt;</code>. They are not font sizes. They describe the outline of the page: the main topic, the sections under it, and the subsections under those.</p>\n<p>That outline helps three audiences:</p>\n<ul>\n<li><strong>Readers who skim.</strong> Many people scan headings first to decide whether the page has what they need.</li>\n<li><strong>Screen reader users.</strong> A common way to explore a page with a screen reader is to jump from heading to heading, as <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements\">MDN's heading element reference</a> describes. Missing or out-of-order headings make that much harder.</li>\n<li><strong>Search engines.</strong> Google lists heading elements, such as the H1, among the sources it uses to <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/title-link\">generate title links in search results</a>.</li>\n</ul>\n<p>It is worth being honest about the SEO side. Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/fundamentals/seo-starter-guide\">SEO Starter Guide</a> says that from a Google Search perspective it does not matter if headings are out of order, and that there is no ideal number of headings. <strong>Good heading tags help SEO mostly by making the page clear: clear to the reader, clear about its main topic, and easy to scan.</strong> They are not a ranking trick, and stuffing keywords into them will not help.</p>\n\n<h2>Use one clear H1 per page</h2>\n<p>The H1 is the visible main title of the page. It should say, in plain words, what the page is about.</p>\n<p>HTML technically allows more than one H1, but MDN recommends using only one per page, and it is the most predictable choice for both screen readers and search engines. Google's title link documentation also warns that when a page has several large, equally prominent headings, it can be unclear which one is the main title.</p>\n<p><strong>Give every page exactly one H1 that names its specific topic, and make sure it is the first heading in the main content.</strong></p>\n<p>The H1 and the title tag usually cover the same topic, but they do different jobs. The title tag is written for the search result, where space is short and the brand may be added. The H1 is written for the person already on the page. If you want the details on that difference, see our guide to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/how-to-write-title-tags\">title tags and how they differ from H1s</a>.</p>\n<p>Example for a hypothetical dog grooming business:</p>\n<ul>\n<li>Title tag: \"Dog Grooming in Northampton: Prices and Booking\"</li>\n<li>H1: \"Dog Grooming in Northampton\"</li>\n</ul>\n<p>What to do:</p>\n<ul>\n<li>Check that every template (home, page, post, product, category) outputs exactly one H1.</li>\n<li>Make sure the H1 is the page's own topic, not the site name repeated on every page.</li>\n<li>Keep it short enough to read at a glance.</li>\n</ul>\n\n<h2>Build a logical heading structure (no skipped levels)</h2>\n<p>Under the H1, use H2s for the main sections and H3s for subsections inside an H2. Go deeper only if the content genuinely has that many levels, which most blog posts and service pages do not.</p>\n<p>The W3C's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.w3.org/WAI/tutorials/page-structure/headings/\">headings tutorial</a> recommends nesting headings by rank and avoiding skipped levels, such as an H2 followed directly by an H4. Going back up is fine: an H2 that starts a new section can follow an H4 that ended the previous one.</p>\n<p>Here is a heading outline for a hypothetical service page:</p>\n<pre><code>H1  Boiler Repair in Bristol\n  H2  Common boiler problems we fix\n    H3  No heating or hot water\n    H3  Low boiler pressure\n    H3  Strange noises from the boiler\n  H2  How much does a boiler repair cost?\n  H2  How booking works\n    H3  Same-day callouts\n    H3  What to check before we arrive\n  H2  Areas we cover</code></pre>\n<p>Read only the headings and you know exactly what the page covers. <strong>That is the test: if the headings alone make sense as a table of contents, the structure is right.</strong></p>\n<p>What to do:</p>\n<ul>\n<li>Pick the heading level by position in the outline, never by how big you want the text to look.</li>\n<li>If a heading level looks too large or small, change the style with CSS. MDN specifically advises against using heading elements to resize text.</li>\n<li>Keep sidebar and footer headings consistent across pages rather than renumbering them to fit each article.</li>\n</ul>\n\n<h2>Write headings that answer real questions</h2>\n<p>A heading like \"Overview\", \"Details\", or \"More info\" tells a skimmer nothing. A heading that states the point of the section, or asks the question it answers, does much more work.</p>\n<p>Compare these for a hypothetical bakery's custom cake page:</p>\n<table>\n<thead><tr><th>Vague heading</th><th>Descriptive heading</th></tr></thead>\n<tbody>\n<tr><td>Pricing</td><td>How much does a custom cake cost?</td></tr>\n<tr><td>Options</td><td>Gluten-free and vegan cake options</td></tr>\n<tr><td>Info</td><td>How far in advance should you order?</td></tr>\n<tr><td>Delivery</td><td>Delivery areas and collection times</td></tr>\n</tbody>\n</table>\n<p>The descriptive versions use the words people actually type into search, and they let a reader jump straight to the part they care about. <strong>Write each heading so that it would still make sense if it were the only line someone read.</strong></p>\n<p>What to do:</p>\n<ul>\n<li>Use question-style headings where the section genuinely answers a question people ask.</li>\n<li>Answer the question in the first sentence or two under the heading, then add detail.</li>\n<li>Use your main topic naturally in a heading or two. Do not repeat the same keyword in every heading.</li>\n</ul>\n\n<h2>Common CMS and theme heading mistakes</h2>\n<p>Most heading problems are not written by the author. They come from the theme, a page builder, or a plugin, which means they repeat on every page. These are the ones to look for:</p>\n<ul>\n<li><strong>The logo or site name as the H1.</strong> Some themes wrap the logo in an H1 on every page, so each page's real title becomes a second H1 or gets pushed down to an H2.</li>\n<li><strong>Post titles as H2 on single posts.</strong> The blog index shows titles as H2s, which is fine, but some themes keep the same markup on the individual post page, leaving it without its own H1.</li>\n<li><strong>Styled paragraphs instead of headings.</strong> Text made big and bold with the formatting toolbar looks like a heading but has no heading markup, so screen readers and crawlers do not treat it as one.</li>\n<li><strong>Headings used for styling.</strong> A short promotional line set as an H2 because the author liked the large font.</li>\n<li><strong>Widget and footer titles before the content.</strong> A sidebar that outputs \"Recent Posts\" and \"Categories\" as H2s ahead of the main content in the HTML.</li>\n<li><strong>Empty headings.</strong> Leftover blocks from a page builder that contain no text at all.</li>\n<li><strong>Image-only headings.</strong> When an H1 contains only a logo or banner image, its alt text becomes the heading text. Missing alt text leaves an empty heading, so it is worth knowing how to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text\">write alt text for images</a> properly.</li>\n</ul>\n<p>Say you run a 40-page site on a theme that puts the logo in an H1. That is 40 pages with a duplicate, meaningless H1, all caused by one line in the header template. Fixing the template fixes every page at once.</p>\n\n<h2>How to audit heading tags across your site</h2>\n<p>You can check one page quickly in the browser. Right-click the page, choose Inspect, and search the HTML for <code>&lt;h1</code>, <code>&lt;h2</code> and so on. That works for spot checks, but not for a whole site.</p>\n<p>For every page at once, crawl the site. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags H1 issues, missing or duplicate H2s, and non-sequential headings for each page, with a short explanation of the fix. Heading checks fit naturally into a broader <a href=\"https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist\">technical SEO audit</a>, so it is worth running them together.</p>\n<p>Then work through the results in this order:</p>\n<ol>\n<li><strong>Template problems first.</strong> If the same issue appears on every page of one type, fix the theme or template, not the individual pages.</li>\n<li><strong>Missing H1s.</strong> Every indexable page should have one that names its topic.</li>\n<li><strong>Multiple H1s.</strong> Decide which is the real title and change the others to H2 or plain text.</li>\n<li><strong>Skipped levels.</strong> Usually a sign that someone picked a heading level for its size. Change the level and adjust the styling in CSS.</li>\n<li><strong>Vague headings on key pages.</strong> Rewrite them on your most visited pages so they describe the section.</li>\n</ol>\n\n<h2>The bottom line</h2>\n<p>Heading tags for SEO are less about rankings and more about clarity. One clear H1, logically nested H2s and H3s, and descriptive wording make a page easier to skim, easier to use with a screen reader, and easier for search engines to understand.</p>\n<p>The biggest problems usually live in templates, not in individual posts. Find them with a crawl, fix them once in the theme, and then write good headings into your publishing routine.</p>\n<p><strong>Your next step:</strong> open your three most important pages, read only the headings from top to bottom, and fix any page where they do not work as a clear table of contents.</p>",
+  "faqs": [
+    {
+      "question": "Is it bad to have multiple H1 tags on a page?",
+      "answer": "HTML allows it and Google can handle it, but one H1 per page is the clearer choice. MDN recommends a single H1, and several equally prominent headings can make it unclear which one is the main title."
+    },
+    {
+      "question": "Should the H1 be the same as the title tag?",
+      "answer": "They should cover the same topic but do not need to match word for word. The title tag is written for the search result, while the H1 is written for the visitor already on the page."
+    },
+    {
+      "question": "Do heading tags help Google rankings?",
+      "answer": "Not as a direct trick. Google says the order and number of headings do not matter for Search, but clear headings help Google and readers understand the page, and the H1 is one of the sources Google uses for title links."
+    },
+    {
+      "question": "Can I skip from H2 to H4?",
+      "answer": "Avoid it. Skipped levels can confuse screen reader users who move through the page by heading. If an H3 looks too large, change its size with CSS instead of picking a lower level."
+    },
+    {
+      "question": "How do I check the headings on my page?",
+      "answer": "For a single page, inspect the HTML in your browser or use a heading outline browser extension. For a whole site, run a crawl that reports missing, multiple and non-sequential headings for every page."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist",
+      "anchor": "on-page SEO checklist"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/how-to-write-title-tags",
+      "anchor": "title tags and how they differ from H1s"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text",
+      "anchor": "write alt text for images"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist",
+      "anchor": "technical SEO audit"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/Heading_Elements",
+      "anchor": "MDN's heading element reference",
+      "supports": "Screen reader users navigate by headings; avoid skipping levels; prefer one H1; do not use headings to resize text."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+      "anchor": "SEO Starter Guide",
+      "supports": "Google says heading order and number do not matter from a Google Search perspective."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/title-link",
+      "anchor": "generate title links in search results",
+      "supports": "Google uses heading elements such as H1 as a title link source and warns that multiple equally prominent headings make the main title unclear."
+    },
+    {
+      "url": "https://www.w3.org/WAI/tutorials/page-structure/headings/",
+      "anchor": "headings tutorial",
+      "supports": "W3C guidance to nest headings by rank and avoid skipping levels, with going back up allowed."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of a real theme's HTML where the logo is wrapped in an H1, and the fixed version.",
+    "Add a before/after heading outline from one of your own pages that you restructured.",
+    "Share a real example of a page builder or theme that outputs headings in an unexpected order.",
+    "Add a screenshot of crawl results filtered to multiple H1 or non-sequential heading issues."
+  ],
+  "image_idea": "A neatly stacked set of nested wooden boxes, largest at the bottom, viewed from above so each level is clearly visible."
+}

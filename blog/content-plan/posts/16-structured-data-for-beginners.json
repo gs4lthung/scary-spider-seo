@@ -1,0 +1,91 @@
+{
+  "id": 16,
+  "title": "Structured Data for Beginners: A Practical Schema Markup Guide",
+  "slug": "structured-data-for-beginners",
+  "category": "On-page SEO",
+  "excerpt": "What structured data is, why JSON-LD is the format to use, which schema types still earn rich results for small sites, and how to write and test your markup.",
+  "meta_title": "Structured Data for Beginners: Schema Markup Guide",
+  "meta_description": "A beginner's guide to structured data: JSON-LD vs microdata, which schema types still earn rich results, a worked example, and how to test your markup.",
+  "key_takeaways": [
+    "Structured data labels page content with the schema.org vocabulary so search engines can understand it and show rich results.",
+    "Google supports JSON-LD, microdata and RDFa, and recommends JSON-LD because it is easiest to maintain.",
+    "Organization, Article, Product, LocalBusiness and BreadcrumbList cover what most small sites need.",
+    "FAQ and How-to rich results are no longer shown in Google Search, so check the search gallery before adding any type.",
+    "Markup must match the visible content of the page, and correct markup makes a page eligible for rich results but never guarantees them."
+  ],
+  "content_html": "<p>Search for a recipe, a product, or a local event and some results look richer than others. They show a star rating, a price and stock status, a cooking time, or event dates right in the listing. Next to them, a plain blue link with two lines of text can look like the weaker option.</p>\n<p>Most of those enhanced listings depend on structured data: a small block of code that describes the page to search engines in a format they can read reliably. It is less technical than it sounds, and most small sites only need a handful of types.</p>\n<p>This guide explains what structured data is, why JSON-LD is the format to use, which schema types are worth adding for a small site (and which are no longer worth the effort), how a JSON-LD block is put together, and how to test it. Structured data is one item on our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">on-page SEO checklist</a>, usually done once per template rather than once per page.</p>\n\n<h2>What structured data is</h2>\n<p>Structured data is a standardized way of labeling the content on a page. Instead of Google having to guess that \"4.6\" is a rating or that \"£24.99\" is a price, you state it directly using a shared vocabulary from schema.org.</p>\n<p>According to Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data\">introduction to structured data</a>, Google uses it to understand the content of a page and to show special search result features, called rich results. Recipes, products, events, and articles are common examples.</p>\n<p><strong>Structured data makes a page eligible for rich results. It does not guarantee them, and it is not a shortcut to higher rankings.</strong> Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/structured-data/sd-policies\">structured data guidelines</a> say plainly that correct markup does not guarantee a rich result will appear, even if it passes the Rich Results Test.</p>\n<p>Say you run a hypothetical cookery blog with 60 recipes. Adding Recipe markup lets Google show cooking times and ratings for those pages. It does not change whether Google considers your recipe the best answer for the search.</p>\n\n<h2>JSON-LD vs microdata: which format to use</h2>\n<p>Google supports three formats: JSON-LD, microdata, and RDFa. Google says all three are equally fine as long as they are valid, but recommends JSON-LD because it is the easiest to implement and maintain at scale.</p>\n<ul>\n<li><strong>JSON-LD</strong> is a self-contained block of code inside a <code>&lt;script type=\"application/ld+json\"&gt;</code> tag. It sits apart from your visible HTML, so you can add or change it without touching the page layout.</li>\n<li><strong>Microdata</strong> adds attributes such as <code>itemprop</code> directly to your HTML elements. It works, but the markup gets tangled with your design, and a theme change can break it.</li>\n<li><strong>RDFa</strong> works in a similar way to microdata and is less common on small sites.</li>\n</ul>\n<p>Google can also read JSON-LD that is added to the page by JavaScript, which is how many CMS plugins and tag managers insert it. <strong>For a small site, use JSON-LD unless your platform forces something else.</strong></p>\n\n<h2>Which schema types are worth it for a small site</h2>\n<p>Schema.org has hundreds of types. Google only uses a subset for rich results, listed in its <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/structured-data/search-gallery\">structured data search gallery</a>. For most small businesses and blogs, these are the ones that matter:</p>\n<h3>Organization</h3>\n<p>Describes your business: name, logo, website, social profiles, and contact details. Google says some of these properties can influence which logo appears in search results and in your knowledge panel. Add it once, usually on the home page or about page.</p>\n<h3>Article</h3>\n<p>For blog posts and news content, using <code>Article</code>, <code>BlogPosting</code>, or <code>NewsArticle</code>. Google lists no required properties, but recommended ones such as the headline, images, author, and publish and modified dates help it understand the article.</p>\n<h3>Product</h3>\n<p>For pages about a single product. Product snippets can show price, availability, and review ratings. Google requires the product name and at least one of <code>offers</code>, <code>review</code>, or <code>aggregateRating</code>. If customers can buy directly from you, Google also documents merchant listing markup with more shopping detail.</p>\n<h3>LocalBusiness</h3>\n<p>For businesses with a physical location or service area: address, opening hours, phone number, and geo coordinates. The name and address are required. For local visibility, your Google Business Profile usually matters more than this markup, which is covered in our guide to <a href=\"https://blog.scaryspiderseo.com/offpage-seo/off-page-seo-guide\">building authority off your site</a>.</p>\n<h3>BreadcrumbList</h3>\n<p>Shows where a page sits in your site structure, such as Home &gt; Guides &gt; Composting. Since January 2025, Google shows breadcrumbs only in desktop results, not on mobile, according to its <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/updates\">Search documentation updates log</a>. It is still easy to add and useful on desktop.</p>\n<h3>Types to skip</h3>\n<p>Some markup that was popular a few years ago no longer produces rich results:</p>\n<ul>\n<li><strong>FAQ rich results.</strong> Google limited them to well-known government and health sites in 2023, then stopped showing the FAQ rich result in Google Search from May 2026 and removed its documentation.</li>\n<li><strong>How-to rich results.</strong> No longer shown on desktop or mobile since 2023.</li>\n<li><strong>Several niche types</strong>, including course info, estimated salary, special announcement, and vehicle listing, were phased out in 2025.</li>\n</ul>\n<p>Before adding any type, check that it is still listed in Google's search gallery. Rich result support changes over time, and plenty of older tutorials still recommend markup Google no longer displays.</p>\n\n<h2>How a JSON-LD block is put together</h2>\n<p>Here is a complete example for a hypothetical blog post. It goes anywhere in the page's <code>&lt;head&gt;</code> or <code>&lt;body&gt;</code>:</p>\n<pre><code>&lt;script type=\"application/ld+json\"&gt;\n{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"BlogPosting\",\n  \"headline\": \"How to Start a Compost Bin in a Small Garden\",\n  \"image\": \"https://www.example.com/images/compost-bin.jpg\",\n  \"datePublished\": \"2026-03-14\",\n  \"dateModified\": \"2026-09-02\",\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"Sam Taylor\",\n    \"url\": \"https://www.example.com/about/sam-taylor\"\n  }\n}\n&lt;/script&gt;</code></pre>\n<p>Line by line:</p>\n<ul>\n<li><code>@context</code> says which vocabulary you are using. It is always <code>https://schema.org</code>.</li>\n<li><code>@type</code> says what the thing is: here, a blog post.</li>\n<li>The other lines are properties of that thing. Each one must match what is visible on the page: the same headline, the same dates, the same author.</li>\n<li><code>author</code> is a nested object with its own <code>@type</code>. Nesting is how you describe related things, like a person who wrote the post or an offer attached to a product.</li>\n</ul>\n<p><strong>In practice, most small sites should add structured data through their CMS or an SEO plugin, then check the output, rather than writing it by hand on every page.</strong> Hand-written JSON-LD is mainly useful in custom templates, where you write it once and fill it from page data.</p>\n\n<h2>How to test structured data</h2>\n<p>Use two free tools, because they check different things:</p>\n<ul>\n<li><strong>Google's Rich Results Test</strong> shows which Google rich results the page is eligible for, and flags errors and warnings for those features. Errors on required properties make the page ineligible for that feature. Warnings usually mean a recommended property is missing.</li>\n<li><strong>The <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://validator.schema.org/\">Schema Markup Validator</a></strong> checks your markup against the whole schema.org vocabulary, including types Google does not use for rich results. It is useful for catching typos and wrong property names.</li>\n</ul>\n<p>After the page is live, use the URL Inspection tool in Search Console to confirm Google has seen the markup, and keep an eye on the rich result reports in Search Console. Google recommends this because markup that worked in testing can break after deployment due to templating or serving issues.</p>\n\n<h2>Common structured data mistakes</h2>\n<p>Most structured data problems are not syntax errors. They are markup that says something the page does not.</p>\n<ul>\n<li><strong>Markup that does not match the visible content.</strong> Google's guidelines say structured data should represent the main content of the page and not describe content hidden from users. A price, rating, or review in the markup must be on the page too. The same rule applies to your snippet text, which is why it helps to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks\">write meta descriptions that match the page</a>.</li>\n<li><strong>Stale values.</strong> The price or stock status in the markup no longer matches the page after a sale ends, because the markup is hard-coded.</li>\n<li><strong>Wrong type for the page.</strong> Product markup on a category page listing 30 products, or Article markup on a contact page.</li>\n<li><strong>Duplicate or conflicting blocks.</strong> A theme and an SEO plugin both output Organization markup with different names or logos.</li>\n<li><strong>Missing required properties.</strong> Google says you must include all required properties for a page to be eligible for that rich result.</li>\n<li><strong>Self-made reviews and ratings.</strong> Ratings you made up, or reviews not shown on the page, break Google's guidelines and can lead to a manual action.</li>\n</ul>\n\n<h2>How to audit structured data across a site</h2>\n<p>Testing pages one at a time works for a few templates. To find pages where markup is missing or broken across the whole site, crawl it. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags pages with invalid or missing structured data alongside other issues, so you can see which templates need attention.</p>\n<p>Because structured data is usually generated by templates, fix the template and then retest one page of each type in the Rich Results Test. If you are reviewing the whole site, add structured data as a step in your regular <a href=\"https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist\">technical SEO site audit</a>.</p>\n\n<h2>The bottom line</h2>\n<p>Structured data helps search engines understand your pages and makes them eligible for rich results, but it does not guarantee them or boost rankings on its own. For most small sites, Organization, Article, Product, LocalBusiness, and BreadcrumbList cover everything that matters, written in JSON-LD.</p>\n<p>Keep the markup honest and in sync with what is on the page, check Google's search gallery before adding a type, and test every template with the Rich Results Test before and after it goes live.</p>\n<p><strong>Your next step:</strong> run your home page and one blog post or product page through the Rich Results Test, and fix any errors or mismatches it shows before adding new types.</p>",
+  "faqs": [
+    {
+      "question": "Does structured data improve rankings?",
+      "answer": "Not directly. Structured data helps Google understand a page and makes it eligible for rich results, which can make a listing more useful to searchers. It does not make Google rank a page higher on its own."
+    },
+    {
+      "question": "What is the difference between schema markup and structured data?",
+      "answer": "The terms are often used interchangeably. Structured data is the general idea of labeling content in a standard format, and schema markup usually means structured data written with the schema.org vocabulary, which is what Google uses."
+    },
+    {
+      "question": "Why are my rich results not showing?",
+      "answer": "Valid markup only makes a page eligible. Google may not show a rich result if the markup does not match the visible content, required properties are missing, the feature is no longer supported, or Google decides a plain result fits the search better."
+    },
+    {
+      "question": "Should I still add FAQ schema?",
+      "answer": "Not for Google rich results. Google stopped showing the FAQ rich result in Search in 2026 and removed its documentation, so the time is better spent on types that are still supported."
+    },
+    {
+      "question": "Can I add structured data without coding?",
+      "answer": "Yes. Most CMS platforms and SEO plugins can output JSON-LD from fields you fill in. Test the output with the Rich Results Test, because plugins and themes can produce duplicate or incomplete markup."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist",
+      "anchor": "on-page SEO checklist"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/offpage-seo/off-page-seo-guide",
+      "anchor": "building authority off your site"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks",
+      "anchor": "write meta descriptions that match the page"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist",
+      "anchor": "technical SEO site audit"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data",
+      "anchor": "introduction to structured data",
+      "supports": "How Google uses structured data, the three supported formats, JSON-LD recommended, JSON-LD can be injected by JavaScript, required properties needed for eligibility, test before and after deployment."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/structured-data/sd-policies",
+      "anchor": "structured data guidelines",
+      "supports": "Correct markup does not guarantee rich results; markup must represent main content and not describe hidden content."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/structured-data/search-gallery",
+      "anchor": "structured data search gallery",
+      "supports": "The current list of structured data features Google supports in Search."
+    },
+    {
+      "url": "https://developers.google.com/search/updates",
+      "anchor": "Search documentation updates log",
+      "supports": "Breadcrumbs shown only on desktop since January 2025; FAQ rich result no longer shown from May 2026; How-to and other types deprecated."
+    },
+    {
+      "url": "https://validator.schema.org/",
+      "anchor": "Schema Markup Validator",
+      "supports": "Validates markup against the full schema.org vocabulary."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of a Rich Results Test result for one of your own pages, showing detected items and any warnings.",
+    "Share a real example of conflicting Organization markup from a theme and a plugin on the same site, and how you resolved it.",
+    "Add a screenshot of a search result with a rich result next to a plain listing for the same query.",
+    "Mention which CMS or plugin you use to output JSON-LD and any gaps you had to fill by hand."
+  ],
+  "image_idea": "Neatly labeled jars and boxes on a pantry shelf, each with a clear tag, beside one unlabeled jumble of containers."
+}

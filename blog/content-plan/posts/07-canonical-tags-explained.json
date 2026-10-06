@@ -1,0 +1,91 @@
+{
+  "id": 7,
+  "title": "Canonical Tags Explained: Fix Duplicate URLs the Right Way",
+  "slug": "canonical-tags-explained",
+  "category": "Technical SEO",
+  "excerpt": "What a canonical tag really does, why every page needs a self-referencing one, the duplicate URLs small sites create by accident, and the canonical mistakes to fix first.",
+  "meta_title": "Canonical Tag Guide: How rel=canonical Works",
+  "meta_description": "Learn how the canonical tag works, why self-referencing canonicals matter, and how to fix canonicals pointing to redirects, 404s or noindexed pages.",
+  "key_takeaways": [
+    "A canonical tag is a strong hint about your preferred URL, and Google can still choose a different one.",
+    "Every indexable page should have a self-referencing canonical tag that uses an absolute URL.",
+    "Fix site-wide duplicates like HTTP, non-www and trailing slash variants with permanent redirects as well as canonicals.",
+    "Canonicals should never point to a redirect, a 404, a noindexed page or an unrelated page.",
+    "Canonical tags, internal links, sitemaps and redirects should all name the same URL."
+  ],
+  "content_html": "<p>Your shop has one product page, but a crawl finds it at five addresses: with and without <code>www</code>, with a tracking parameter from a newsletter, with a sort parameter, and with a trailing slash. To you it is one page. To a search engine it is five URLs with the same content, and unless a canonical tag says otherwise, it has to pick one on its own.</p>\n<p>The <strong>canonical tag</strong> is how you tell Google which one you prefer. Used well, it quietly consolidates duplicates into a single URL. Used badly, it can point Google at a broken page, or get ignored entirely.</p>\n<p>This guide covers what <code>rel=\"canonical\"</code> actually does, why every page should have a self-referencing canonical, the URL duplicates small sites create without noticing, the canonical mistakes that cause real problems, and how to audit your canonicals in an afternoon.</p>\n\n<h2>What a canonical tag does (and does not do)</h2>\n<p>A canonical tag is a line in the <code>&lt;head&gt;</code> of a page that names the preferred URL for that content:</p>\n<pre><code>&lt;link rel=\"canonical\" href=\"https://www.example.com/mugs/blue-mug\" /&gt;</code></pre>\n<p>When Google finds several pages with the same or very similar main content, it groups them and picks one as the canonical. That is the version it crawls most often and usually shows in results. The others become duplicates that are crawled less.</p>\n<p><strong>Your canonical tag is a strong hint, not a command.</strong> Google's overview of <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/canonicalization\">what canonicalization is</a> states this directly: indicating a canonical preference is a hint, not a rule, and Google may choose a different page. It weighs your tag alongside redirects, sitemap inclusion, HTTPS versus HTTP and other signals.</p>\n<p>That is why canonical problems rarely come from one tag in isolation. <strong>They come from signals that disagree.</strong> If your canonical says one URL, your internal links point to another, and your sitemap lists a third, Google has to guess.</p>\n<p>Canonical selection also explains several statuses in Search Console's indexing report, such as \"Duplicate, Google chose different canonical than user.\" If pages are missing from Google entirely, start with the wider guide on <a href=\"https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages\">diagnosing pages Google is not indexing</a>.</p>\n\n<h2>Why every page needs a self-referencing canonical tag</h2>\n<p>A self-referencing canonical is a canonical tag that points to the page's own URL. It looks redundant, but it does real work.</p>\n<p>Say your blue mug page lives at <code>https://www.example.com/mugs/blue-mug</code>. A newsletter link adds <code>?utm_source=newsletter</code>. Without a canonical, that tagged URL is a separate address with identical content. With a self-referencing canonical on the page, every variant that loads the same template automatically declares the clean URL as the preferred one.</p>\n<p>Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls\">guide to specifying a canonical URL</a> recommends adding the self-referential canonical to the canonical page itself, and using absolute URLs rather than relative paths. A relative canonical like <code>/mugs/blue-mug</code> works, but if a staging copy of your site is ever crawled, it can end up pointing at the staging host.</p>\n<p>What to do:</p>\n<ul>\n<li>Give every indexable page a canonical tag pointing at its own clean, absolute URL.</li>\n<li>Make sure the URL uses your chosen protocol and host, for example <code>https://www.</code>.</li>\n<li>Strip tracking and session parameters from the canonical URL.</li>\n</ul>\n\n<h2>The duplicate URLs small sites create without noticing</h2>\n<p>Most duplicates are not copied content. They are the same page reachable through slightly different URLs. The common ones:</p>\n<table>\n<thead><tr><th>Duplicate type</th><th>Example</th><th>Best fix</th></tr></thead>\n<tbody>\n<tr><td>Protocol</td><td><code>http://</code> and <code>https://</code></td><td>301 redirect to HTTPS, plus canonical</td></tr>\n<tr><td>Host</td><td><code>example.com</code> and <code>www.example.com</code></td><td>301 redirect to one host, plus canonical</td></tr>\n<tr><td>Trailing slash</td><td><code>/about</code> and <code>/about/</code></td><td>301 redirect to one form, plus canonical</td></tr>\n<tr><td>Tracking parameters</td><td><code>?utm_source=...</code>, <code>?gclid=...</code></td><td>Self-referencing canonical to the clean URL</td></tr>\n<tr><td>Sort and filter parameters</td><td><code>?sort=price</code>, <code>?color=blue</code></td><td>Canonical to the main category URL</td></tr>\n<tr><td>Product variants</td><td>One URL per color with identical text</td><td>Canonical to the main product, or unique content per variant</td></tr>\n</tbody>\n</table>\n<p><strong>For site-wide variants like protocol, host and trailing slash, use redirects first and canonicals second.</strong> Google lists redirects as the strongest canonicalization signal and canonical tags as a strong one, and the signals stack when they agree. A redirect means visitors and crawlers never see the duplicate. For variants that must keep working, such as filtered views, the canonical tag is the right tool.</p>\n<p>When you set up those site-wide redirects, use permanent ones. A temporary redirect is not treated as a canonical signal; this guide on <a href=\"https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects\">choosing between 301 and 302 redirects</a> explains why.</p>\n\n<h2>Canonical mistakes that cause real problems</h2>\n<p>A missing canonical is usually harmless, because Google will pick a version itself. A wrong canonical is worse, because you are actively pointing Google at the wrong place.</p>\n\n<h3>Canonical pointing to a redirect or a 404</h3>\n<p>The canonical URL should be the final page, returning a 200 status. If it points to a URL that redirects, you are saying \"prefer URL A\" while URL A says \"go to URL B.\" If it points to a 404, you are naming a page that does not exist. Both are common after a redesign, when templates keep old URLs.</p>\n<p>Fix: update the canonical to the final, live URL.</p>\n\n<h3>Canonical pointing to a noindexed page</h3>\n<p>If page A canonicalizes to page B, and page B has a <code>noindex</code> directive, the signals contradict each other: \"index B instead of me\" and \"do not index B.\" Google's guidance also says not to use noindex as a way to choose a canonical within a site, because it blocks the page from Search completely. Our comparison of <a href=\"https://blog.scaryspiderseo.com/technical-seo/noindex-vs-disallow\">noindex and robots.txt disallow</a> explains when noindex is the right choice.</p>\n<p>Fix: canonicalize only to indexable pages.</p>\n\n<h3>Multiple canonical tags on one page</h3>\n<p>This happens when a theme and an SEO plugin each add a canonical, or when a script injects a second one. Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics\">JavaScript SEO basics</a> warn that conflicting or multiple canonical tags may lead to unexpected results.</p>\n<p>Fix: view the page source, search for <code>rel=\"canonical\"</code>, and remove every copy but one.</p>\n\n<h3>JavaScript changing the canonical</h3>\n<p>Some single-page apps and tag managers rewrite the canonical after the page loads. Google says you should not use JavaScript to change the canonical to something other than the URL in the original HTML. If you must set it with JavaScript, leave it out of the HTML entirely so there is only one value.</p>\n<p>Fix: compare the canonical in the raw HTML with the one in the rendered page. They should match.</p>\n\n<h3>Canonicalizing different pages to one URL</h3>\n<p>A canonical is meant for duplicate or near-duplicate pages. Pointing page two of a blog archive, or a different product, at a single URL does not merge them in any useful way. Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://support.google.com/webmasters/answer/7440203\">Page indexing report help</a> is blunt about it: a duplicate page must be similar to the canonical, and if the declared canonical is not similar, Google will not choose it.</p>\n<p>Fix: if pages are genuinely different, give each a self-referencing canonical. If they overlap heavily, decide whether to merge, rewrite or canonicalize, as covered in this guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo\">handling duplicate content</a>.</p>\n\n<h2>Keep your canonical signals consistent</h2>\n<p>Canonical tags work best when everything else on the site agrees with them. Check these four signals for each important page:</p>\n<ol>\n<li><strong>Canonical tag:</strong> points to the clean, live, indexable URL.</li>\n<li><strong>Internal links:</strong> your menus and body links use that same URL. Google recommends linking to the canonical URL rather than a duplicate.</li>\n<li><strong>Sitemap:</strong> lists only canonical URLs. Google counts sitemap inclusion as a weak canonical signal, so listing duplicates muddies it. Here is <a href=\"https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide\">what belongs in your sitemap</a>.</li>\n<li><strong>Redirects:</strong> any old or variant URL redirects to that same canonical URL.</li>\n</ol>\n<p>Say your canonical points to <code>https://www.example.com/services/</code>, but your main menu links to <code>https://example.com/services</code> without the trailing slash. Even if a redirect cleans it up, Google sees mixed messages from your own site. Fix the menu link and all four signals line up.</p>\n\n<h2>How to audit your canonical tags</h2>\n<p>For a small site, a canonical audit takes a few steps:</p>\n<ol>\n<li><strong>Crawl the site</strong> and export each URL with its canonical tag and status code.</li>\n<li><strong>Find pages with no canonical</strong> and add a self-referencing one, ideally through your template or SEO plugin.</li>\n<li><strong>Find canonicals that point elsewhere</strong> and confirm each target is a 200, indexable page with similar content.</li>\n<li><strong>Find pages with more than one canonical</strong> and remove the extras.</li>\n<li><strong>Spot-check rendered pages</strong> if your site uses JavaScript heavily, to see whether scripts change the canonical.</li>\n<li><strong>Compare with Google's choice</strong> in the URL Inspection tool for your key pages. Look at the user-declared canonical and the Google-selected canonical.</li>\n</ol>\n<p>A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> covers steps 1 to 5 in one pass: it flags missing and multiple canonicals, canonicals pointing to broken, redirecting or non-indexable pages, and, with optional rendering, JavaScript that changes the canonical.</p>\n<p>If Google still picks a different canonical after you fix the technical signals, Google's guide to <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/canonicalization-troubleshooting\">fixing canonicalization issues</a> is the next stop. It notes that pages may stay in a duplicate cluster for up to two weeks after a content change, and that the fix usually comes down to making clustered pages sufficiently different.</p>\n\n<h2>The bottom line</h2>\n<p>A canonical tag tells Google which URL you prefer for a piece of content. It is a strong hint, not a guarantee, and it works best when redirects, internal links and your sitemap all name the same URL.</p>\n<p>Give every page a self-referencing canonical, redirect site-wide variants, and remove canonicals that point at redirects, 404s, noindexed pages or unrelated content. Most canonical problems are signal conflicts you created yourself, which means you can fix them.</p>\n<p><strong>Your next step:</strong> open the source of your five most important pages, search for <code>rel=\"canonical\"</code>, and confirm each one appears exactly once and points to a live, absolute URL.</p>",
+  "faqs": [
+    {
+      "question": "Does every page need a canonical tag?",
+      "answer": "It is not required, because Google will choose a canonical on its own if you do not specify one. A self-referencing canonical on every indexable page is still good practice, since it covers tracking parameters and other accidental URL variants automatically."
+    },
+    {
+      "question": "Can a canonical tag point to a different domain?",
+      "answer": "Yes, cross-domain canonicals are supported, for example when the same article is published on two sites you control. The content must be essentially the same, and Google still treats the tag as a hint. For syndication to third-party sites, Google recommends that partners block indexing of the copy instead."
+    },
+    {
+      "question": "What is the difference between a canonical tag and a 301 redirect?",
+      "answer": "A 301 redirect sends visitors and crawlers to the new URL, so the old version is no longer seen. A canonical tag leaves both URLs working and only tells search engines which one to prefer. Use redirects when the duplicate should disappear and canonicals when it needs to stay usable."
+    },
+    {
+      "question": "Why is Google ignoring my canonical tag?",
+      "answer": "Usually because other signals disagree, such as internal links, redirects or the sitemap pointing to a different URL, or because the pages are not similar enough to be duplicates. Check the Google-selected canonical in the URL Inspection tool and align your signals before changing anything else."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages",
+      "anchor": "diagnosing pages Google is not indexing"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects",
+      "anchor": "choosing between 301 and 302 redirects"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/noindex-vs-disallow",
+      "anchor": "noindex and robots.txt disallow"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo",
+      "anchor": "handling duplicate content"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide",
+      "anchor": "what belongs in your sitemap"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/canonicalization",
+      "anchor": "what canonicalization is",
+      "supports": "Indicating a canonical preference is a hint, not a rule; canonical pages are crawled most regularly."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+      "anchor": "guide to specifying a canonical URL",
+      "supports": "Redirects are a strong signal, rel=canonical strong, sitemap weak; use self-referential canonicals and absolute URLs; do not use noindex to choose a canonical; link internally to the canonical URL."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+      "anchor": "JavaScript SEO basics",
+      "supports": "Multiple or conflicting canonical tags may lead to unexpected results; do not use JavaScript to change the canonical from the original HTML."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/7440203",
+      "anchor": "Page indexing report help",
+      "supports": "A duplicate page must be similar to the canonical; Google will not choose a dissimilar user-declared canonical."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/canonicalization-troubleshooting",
+      "anchor": "fixing canonicalization issues",
+      "supports": "Google may hold pages in a duplicate cluster for up to two weeks; fixes usually mean making clustered pages sufficiently different."
+    }
+  ],
+  "editor_notes": [
+    "Add a real example of a CMS or plugin conflict that produced two canonical tags on one page, with a source code screenshot.",
+    "Add a URL Inspection screenshot comparing the user-declared and Google-selected canonical from a real site.",
+    "Share a crawl export from an audit showing canonicals pointing to redirects or 404s and how many pages were affected.",
+    "Note the exact setting in a common CMS where canonical URLs are configured."
+  ],
+  "image_idea": "Five identical keys on a ring with one key painted gold, hanging beside a single front door."
+}

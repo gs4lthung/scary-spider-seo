@@ -70,3 +70,13 @@ export async function getCategoriesWithCounts() {
   const countByName = new Map(postCounts.map((p) => [p.category, p.count]));
   return cats.map((c) => ({ ...c, postCount: countByName.get(c.name) ?? 0 }));
 }
+
+// Published posts the content prompt may link to (see buildInternalLinkLibrary).
+export async function getLinkablePosts() {
+  const db = await getDb();
+  return db
+    .select({ title: posts.title, slug: posts.slug, category: posts.category, excerpt: posts.excerpt })
+    .from(posts)
+    .where(eq(posts.status, "published"))
+    .orderBy(desc(posts.publishedAt));
+}

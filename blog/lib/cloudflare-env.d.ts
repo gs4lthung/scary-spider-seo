@@ -9,6 +9,10 @@ interface CloudflareEnv {
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_SITE_KEY: string;
   TURNSTILE_HOSTNAME: string;
+  // Password reset email (lib/password-reset.ts). RESEND_API_KEY is a secret;
+  // RESEND_FROM is optional and must use a domain verified in Resend.
+  RESEND_API_KEY?: string;
+  RESEND_FROM?: string;
   RATE_LIMITS: KVNamespace;
   COMMENT_NOTIFICATIONS: Queue;
   MEDIA: R2Bucket;

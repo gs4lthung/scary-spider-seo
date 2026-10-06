@@ -1,0 +1,94 @@
+{
+  "id": 11,
+  "title": "On-Page SEO Checklist: 12 Things to Check Before You Publish",
+  "slug": "on-page-seo-checklist",
+  "category": "On-page SEO",
+  "excerpt": "A practical on-page SEO checklist: 12 quick checks covering intent, titles, meta descriptions, headings, links, images, schema, and trust before you publish.",
+  "meta_title": "On-Page SEO Checklist: 12 Checks Before You Publish",
+  "meta_description": "Use this on-page SEO checklist before you publish: 12 practical checks for intent, titles, meta descriptions, headings, links, images, schema, and trust.",
+  "key_takeaways": [
+    "Start every page by checking the search intent behind the main keyword and making sure the page delivers it early.",
+    "Give each page a specific, unique title tag and meta description, and a short, readable, hyphenated URL slug.",
+    "Use one clear H1, logical headings, descriptive alt text, and internal links both to and from the new page.",
+    "Add structured data only for information that is visible on the page, and validate it before publishing.",
+    "Show who wrote the page, cite sources, and update dates only when the content has meaningfully changed."
+  ],
+  "content_html": "<p>Most on-page SEO problems are not hard to fix. They are just easy to forget. A page goes live with the CMS default title, a stock meta description, a hero image called <code>IMG_4471.jpg</code>, and no links to or from the rest of the site. Nobody notices until the page fails to get traffic.</p><p>An on-page SEO checklist solves that by turning the important checks into a routine you run before you hit publish. None of the items take long, and together they cover what you control on the page itself.</p><p>Below are 12 checks in the order you would naturally work through them, from planning to final review. Each one explains what to look for, gives an example, and tells you exactly what to do. Where a topic needs more depth, there is a link to a dedicated guide.</p><h2>How to use this on-page SEO checklist</h2><p>Run it on every new page, and on old pages when you update them. Copy the 12 items into your CMS notes, a project board, or a printed sheet next to your desk.</p><p><strong>Do not treat it as a scoring system.</strong> Google's own SEO Starter Guide is blunt about several popular myths: there is <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/fundamentals/seo-starter-guide\">no magical word count target</a>, heading order does not matter to Google (it matters to screen reader users), and E-E-A-T is not a ranking factor in itself. The checklist exists to make pages clear and useful, not to tick boxes for an algorithm.</p><p>If you are new to SEO and want the bigger picture first, start with our <a href=\"https://blog.scaryspiderseo.com/dont-let-your-website-turn-invisible-a-beginner-guide\">beginner's guide to SEO</a>, then come back here.</p><h2>Before you write</h2><h3>1. Match the search intent</h3><p>Search intent is what the searcher actually wants when they type a query. Look at the current top results for your main keyword before you write anything. Are they guides, product pages, comparison lists, or local listings?</p><p>Example: if everyone ranking for \"sourdough starter\" has a step-by-step guide, a product page selling starter kits will struggle for that query, however well optimized it is.</p><p><strong>Action:</strong> write one sentence describing what the searcher needs, and check your page delivers it in the first screen.</p><h2>In the search result</h2><h3>2. Write a specific title tag</h3><p>The title tag is the most likely source of the clickable headline in search results. Put the main topic near the start, keep it roughly 30 to 60 characters so it is less likely to be cut off, and make it different from every other title on your site.</p><p>Example: \"Home\" tells a searcher nothing. \"Wedding Cakes in Bristol: Prices and Flavors\" tells them exactly what they will get.</p><p><strong>Action:</strong> read the title on its own and ask whether a stranger would know what the page is about. Our guide on <a href=\"https://blog.scaryspiderseo.com/on-page-seo/how-to-write-title-tags\">writing title tags that get clicked</a> covers length, branding, and why Google sometimes rewrites them.</p><h3>3. Write a meta description that earns the click</h3><p>The meta description does not affect rankings, but Google sometimes shows it as the snippet under your title. A good one summarizes the page, includes the main keyword naturally, and gives a reason to click.</p><p>Example: \"Compare our three wedding cake sizes, see prices, and book a free tasting in central Bristol.\" That is specific and unique to one page.</p><p><strong>Action:</strong> aim for about 70 to 155 characters and never reuse a description across pages. See our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks\">meta description examples and formula</a> for page-by-page templates.</p><h3>4. Keep the URL slug short and readable</h3><p>Google recommends <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/url-structure\">readable words separated by hyphens</a> in URLs rather than long ID numbers or underscores. Short slugs are also easier to share and less likely to need changing later.</p><p>Example: <code>/wedding-cakes/</code> beats <code>/index.php?page_id=4471</code> and <code>/our-amazing-handmade-wedding-cakes-for-2025/</code>.</p><p><strong>Action:</strong> set the slug before publishing, leave out dates unless the content is truly time-bound, and avoid changing it afterward. If you must change it, redirect the old URL.</p><h2>On the page</h2><h3>5. Use one clear H1 and a logical heading structure</h3><p>The H1 is the main visible title of the page. Below it, H2s mark the main sections and H3s sit inside them. This outline helps readers skim, helps screen reader users jump between sections, and makes the page's topic obvious.</p><p>Example: a common CMS mistake is a theme that wraps the logo in an H1, so every page has the same H1 and the real title is demoted to an H2.</p><p><strong>Action:</strong> check the page has one H1 that matches its topic and headings that do not skip levels. Our guide to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo\">structuring headings for SEO and readers</a> shows a full outline example.</p><h3>6. Answer the question in the introduction</h3><p>Readers decide within a few lines whether to stay. An intro that restates the problem and then says what the page delivers keeps them reading. An intro that warms up for four paragraphs loses them.</p><p>Example: a page on \"how long to bake a sourdough loaf\" should give the time range in the first few sentences, then explain what changes it.</p><p><strong>Action:</strong> make sure the main keyword and the main answer appear in the first paragraph or two.</p><h3>7. Add internal links in both directions</h3><p>Internal links help visitors find related pages and help search engines understand how your content fits together. A new page with no links to it is easy for both to miss.</p><p>Example: a new post on cake tasting appointments should link to the wedding cakes page, and the wedding cakes page should link back to it.</p><p><strong>Action:</strong> link out to two or three relevant pages with descriptive anchor text, then add a link to the new page from at least two existing pages.</p><h3>8. Optimize images and write alt text</h3><p>Images need descriptive file names, alt text that explains what the image shows, sensible file sizes, and width and height attributes so the layout does not jump while loading.</p><p>Example: <code>alt=\"three-tier lemon wedding cake with fresh flowers\"</code> is useful. <code>alt=\"cake cake wedding cake bristol\"</code> is keyword stuffing, and an empty alt is correct only for purely decorative images.</p><p><strong>Action:</strong> rename files before upload, compress them, and write alt text for every meaningful image. Our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text\">image SEO and alt text guide</a> covers formats, compression, and lazy loading.</p><h3>9. Add structured data where it fits</h3><p>Structured data is code (usually JSON-LD) that describes the page to search engines in a standard format, such as Article, Product, or LocalBusiness. It can make a page eligible for rich results, though it never guarantees them.</p><p>Example: a bakery's location page can describe its address, opening hours, and phone number with LocalBusiness markup.</p><p><strong>Action:</strong> only mark up information that is visible on the page; Google's guidelines say not to <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/structured-data/sd-policies\">mark up content that is not visible</a> to readers. Start with our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/structured-data-for-beginners\">beginner's guide to schema markup</a>, then validate with the Rich Results Test.</p><h2>Quality and trust</h2><h3>10. Cover the topic properly</h3><p>Depth is not word count. It means answering the follow-up questions a reader will have, with specifics they cannot get from the first three results.</p><p>Example: a page on wedding cake pricing that lists actual price ranges, what drives cost, and how far ahead to order is more useful than a longer page of general advice.</p><p><strong>Action:</strong> list the questions a customer has asked you about this topic and check each one is answered. If you drafted with AI, read our steps to <a href=\"https://blog.scaryspiderseo.com/ai-seo/5-steps-to-humanize-ai-content-save-seo\">make AI drafts sound human</a> before publishing.</p><h3>11. Show who wrote it and why they know</h3><p>Google's guidance on helpful content suggests asking \"Who, How, and Why\" about every page, and it <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/fundamentals/creating-helpful-content\">encourages accurate bylines</a> where readers would expect them. These signals help readers decide whether to trust you.</p><p>Example: a recipe page with the baker's name, a short bio, and photos of their own bakes is more convincing than an anonymous page with stock images.</p><p><strong>Action:</strong> add an author name linked to a real bio, include first-hand details only you could provide, and cite sources for any facts or figures.</p><h3>12. Keep it fresh, honestly</h3><p>Updating content keeps it accurate. Changing the date without changing the content does not help, and Google's helpful content guidance lists it as a warning sign.</p><p>Example: a pricing page updated with this year's prices deserves a new \"last updated\" date. A post where you fixed one typo does not.</p><p><strong>Action:</strong> set a review reminder for pages with prices, statistics, or yearly details, and update the date only when the content meaningfully changes.</p><h2>Check the page after it goes live</h2><p>A checklist catches most problems before launch, but templates and plugins can still undo your work. A quick crawl after publishing confirms what search engines actually see.</p><p>A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags missing or duplicate titles and meta descriptions, H1 problems, missing alt text, missing structured data, and low word count across the whole site in one table, which makes it easy to spot pages that slipped through.</p><h2>The bottom line</h2><p>An on-page SEO checklist is less about tricks and more about consistency. Twelve quick checks, run every time, catch the forgotten titles, missing alt text, and unlinked pages that quietly hold sites back.</p><p>Start with intent and finish with trust. If the page answers the searcher's question clearly, is easy to scan, and shows who stands behind it, the technical details mostly fall into place.</p><p><strong>Your next step:</strong> pick your most important page, run it through all 12 checks today, and note which items fail. Those failures are your template fixes for every page that follows.</p>",
+  "faqs": [
+    {
+      "question": "What is on-page SEO?",
+      "answer": "On-page SEO covers everything you control on the page itself: the content, title tag, meta description, headings, URL, images, internal links, and structured data. It differs from technical SEO, which deals with crawling and indexing, and off-page SEO, which deals with links and mentions from other sites."
+    },
+    {
+      "question": "How long should a page be for SEO?",
+      "answer": "There is no ideal length. Google states that content length alone does not matter for ranking and that there is no magic word count. Write enough to fully answer the searcher's question and stop there."
+    },
+    {
+      "question": "Do I still need meta keywords?",
+      "answer": "No. Google Search does not use the keywords meta tag, so filling it in has no effect on Google rankings. Spend that time on the title tag and meta description instead."
+    },
+    {
+      "question": "How often should I review on-page SEO on old pages?",
+      "answer": "Review pages whenever their information changes, and set a regular reminder for pages with prices, statistics, or yearly details. Run the same checklist you use for new pages, and only change the published date when the content has meaningfully changed."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/dont-let-your-website-turn-invisible-a-beginner-guide",
+      "anchor": "beginner's guide to SEO"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/how-to-write-title-tags",
+      "anchor": "writing title tags that get clicked"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks",
+      "anchor": "meta description examples and formula"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo",
+      "anchor": "structuring headings for SEO and readers"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text",
+      "anchor": "image SEO and alt text guide"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/structured-data-for-beginners",
+      "anchor": "beginner's guide to schema markup"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/ai-seo/5-steps-to-humanize-ai-content-save-seo",
+      "anchor": "make AI drafts sound human"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
+      "anchor": "no magical word count target",
+      "supports": "Google's SEO Starter Guide says there is no magical word count, heading order does not matter to Google, and E-E-A-T is not a ranking factor."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+      "anchor": "readable words separated by hyphens",
+      "supports": "Google recommends descriptive, readable words in URLs and hyphens rather than underscores to separate words."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/structured-data/sd-policies",
+      "anchor": "mark up content that is not visible",
+      "supports": "Google's structured data guidelines say not to mark up content that is not visible to readers of the page."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+      "anchor": "encourages accurate bylines",
+      "supports": "Google's helpful content guidance suggests asking Who, How, and Why, encourages accurate bylines, and flags changing dates without substantial changes."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of your own pre-publish checklist in your CMS or project board.",
+    "Add a real before and after example of a page you fixed using these checks, such as a rewritten title and meta description.",
+    "Add a first-hand example of a CMS theme that put the logo in an H1, and how you fixed it.",
+    "Add a short note on which of the 12 checks you find most often missed on client or personal sites, based on your own audits."
+  ],
+  "image_idea": "A spider ticking items off a long paper checklist pinned to its web with a tiny pencil, beside a freshly built web ready to go live."
+}

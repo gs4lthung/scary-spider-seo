@@ -1,0 +1,87 @@
+{
+  "id": 15,
+  "title": "Image SEO: Alt Text, File Size, and Dimensions Done Right",
+  "slug": "image-seo-alt-text",
+  "category": "On-page SEO",
+  "excerpt": "A practical image SEO guide: how to write useful alt text, name files, pick WebP or AVIF, compress and resize, set width and height, and lazy-load the right images.",
+  "meta_title": "Image SEO: Alt Text, File Size and Dimensions Guide",
+  "meta_description": "Practical image SEO: write useful alt text, name files well, choose WebP or AVIF, compress images, set width and height, and lazy-load the right images.",
+  "key_takeaways": [
+    "Put important images in img tags, because Google does not index CSS background images.",
+    "Alt text should describe what an image shows in context, and decorative images should use an empty alt attribute.",
+    "Resizing images to their display size is usually the biggest saving, followed by modern formats like WebP or AVIF.",
+    "Always set width and height attributes so the browser reserves space and the layout does not shift.",
+    "Lazy-load images below the fold, but never the hero image or anything visible when the page first loads."
+  ],
+  "content_html": "<p>Images are often the heaviest thing on a page and the easiest thing to get wrong. A typical example: a product photo uploaded straight from a phone at 4,000 pixels wide and several megabytes, a file name like <code>IMG_4021.jpg</code>, no alt text, and no width or height, so the text jumps down the screen as the image loads.</p>\n<p>Each of those is a small problem. Together they make the page slower, harder to use with a screen reader, and harder for search engines to understand.</p>\n<p>This image SEO guide walks through what to fix and in which order: writing useful alt text, naming files, choosing formats, compressing and resizing, setting dimensions, lazy loading, and when an image sitemap is worth it. It fits into the images step of a broader <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">on-page SEO checklist</a> you can run before publishing.</p>\n\n<h2>Why image SEO matters beyond Google Images</h2>\n<p>Image SEO is not only about ranking in Google Images, although that can bring useful traffic for products, recipes, and local businesses. It affects three things on every page:</p>\n<ul>\n<li><strong>Understanding.</strong> Google uses alt text, file names, captions, and the text around an image to work out what the image shows and how it relates to the page.</li>\n<li><strong>Accessibility.</strong> Screen readers read alt text aloud. Without it, a blind visitor may hear a file name or nothing at all.</li>\n<li><strong>Speed and stability.</strong> Oversized images slow the page down, and images without dimensions make the layout shift as they load.</li>\n</ul>\n<p>One technical point matters before anything else. Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/google-images\">image SEO best practices</a> state that Google finds images in the <code>src</code> of an <code>&lt;img&gt;</code> element and does not index CSS background images. <strong>If an image matters for search, put it in an <code>&lt;img&gt;</code> tag, not a CSS background.</strong></p>\n\n<h2>How to write useful alt text</h2>\n<p>Alt text is the <code>alt</code> attribute on an image. It should describe what the image shows in the context of the page, in a short phrase or sentence.</p>\n<p>The question to ask is: if the image did not load, what would the reader need to know? The answer depends on why the image is there.</p>\n<table>\n<thead><tr><th>Image</th><th>Weak alt text</th><th>Better alt text</th></tr></thead>\n<tbody>\n<tr><td>Product photo</td><td><code>alt=\"backpack\"</code></td><td><code>alt=\"Green 30L hiking backpack with front zip pocket and side bottle holders\"</code></td></tr>\n<tr><td>Team photo on an About page</td><td><code>alt=\"image of people\"</code></td><td><code>alt=\"The five-person bakery team standing outside the shop on opening day\"</code></td></tr>\n<tr><td>Chart in a report</td><td><code>alt=\"chart\"</code></td><td><code>alt=\"Bar chart showing online orders doubled between March and June\"</code> (with the data also in the text)</td></tr>\n<tr><td>Linked logo in the header</td><td><code>alt=\"logo\"</code></td><td><code>alt=\"Smith Plumbing home\"</code></td></tr>\n<tr><td>Decorative divider or background flourish</td><td><code>alt=\"decorative swirl\"</code></td><td><code>alt=\"\"</code></td></tr>\n</tbody>\n</table>\n<p>That last row matters. The W3C's guidance on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.w3.org/WAI/tutorials/images/decorative/\">decorative images</a> is to give them an empty alt attribute (<code>alt=\"\"</code>) so screen readers skip them. Leaving the attribute out entirely is different, and often worse, because some screen readers will then read the file name.</p>\n<p>Images inside headings need extra care. If your H1 is a logo or banner image, its alt text effectively becomes the heading text, which ties into how you <a href=\"https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo\">structure headings on the page</a>.</p>\n<p>What to do:</p>\n<ul>\n<li>Describe the content and purpose of the image, not just its category.</li>\n<li>Skip \"image of\" or \"picture of\". Screen readers already announce that it is an image.</li>\n<li>Use a keyword only if it naturally describes the image. Google's documentation gives keyword-stuffed alt text as a bad example and warns it can make a site look spammy.</li>\n<li>For a linked image, describe where the link goes.</li>\n</ul>\n\n<h2>Use descriptive file names</h2>\n<p>File names are a small signal, but a free one. Google's documentation says file names can give it very light clues about the subject of an image, and gives the example that <code>my-new-black-kitten.jpg</code> is better than <code>IMG00023.JPG</code>.</p>\n<p>Rename images before you upload them, because many CMSs bake the file name into the URL. Use lowercase words separated by hyphens, keep it short, and describe the image: <code>green-30l-hiking-backpack.jpg</code>, not <code>final-v2-NEW.jpg</code>.</p>\n\n<h2>Choose the right image format</h2>\n<p>Google Search supports BMP, GIF, JPEG, PNG, WebP, SVG, and AVIF images. Within that list, the right choice depends on what the image is:</p>\n<ul>\n<li><strong>Photos:</strong> WebP or AVIF usually give much smaller files than JPEG at similar visual quality. JPEG is the safe fallback.</li>\n<li><strong>Logos and icons:</strong> SVG, because it stays sharp at any size and is usually tiny.</li>\n<li><strong>Screenshots and graphics with text:</strong> PNG or lossless WebP, which keep text edges crisp.</li>\n<li><strong>Animations:</strong> animated WebP or a short video rather than a large GIF.</li>\n</ul>\n<p>If you want to serve AVIF or WebP with a fallback for older browsers, the <code>&lt;picture&gt;</code> element handles it. The browser picks the first format it supports:</p>\n<pre><code>&lt;picture&gt;\n  &lt;source srcset=\"green-backpack.avif\" type=\"image/avif\"&gt;\n  &lt;source srcset=\"green-backpack.webp\" type=\"image/webp\"&gt;\n  &lt;img src=\"green-backpack.jpg\" alt=\"Green 30L hiking backpack with front zip pocket\"\n       width=\"800\" height=\"600\"&gt;\n&lt;/picture&gt;</code></pre>\n<p>Many CMSs and image plugins can generate these versions automatically, so check your platform's settings before doing it by hand.</p>\n\n<h2>Compress and resize before you upload</h2>\n<p><strong>The biggest image win on most small sites is simply not uploading images far larger than they are displayed.</strong> A photo shown 800 pixels wide does not need to be 4,000 pixels wide. Resizing it is often a bigger saving than any change of format.</p>\n<p>A practical routine:</p>\n<ol>\n<li>Resize to the largest size the image is actually shown at. Up to about twice that width covers high-density phone and laptop screens.</li>\n<li>Export in a modern format, or let your CMS convert it.</li>\n<li>Compress with a quality setting you have checked by eye. Lower it until you can see a difference, then step back up.</li>\n<li>For images shown at very different sizes on mobile and desktop, use <code>srcset</code> so phones get a smaller file.</li>\n</ol>\n<p>As a rule of thumb, treat any content image over about 100 KB as worth a second look. That is a prompt to review, not a hard limit: a large, full-width hero photo may reasonably be bigger, while a small thumbnail of that size almost certainly is not compressed.</p>\n\n<h2>Always set width and height</h2>\n<p>When an image has no dimensions in the HTML, the browser does not know how much space to reserve, so the content below jumps when the image arrives. That movement counts towards Cumulative Layout Shift (CLS), one of the Core Web Vitals.</p>\n<p>web.dev's guide to <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://web.dev/articles/optimize-cls\">optimizing layout shift</a> lists images without dimensions as one of the most common causes of poor CLS, and recommends always including <code>width</code> and <code>height</code> attributes (or reserving the space with CSS <code>aspect-ratio</code>).</p>\n<p>Set the attributes to the image's real pixel size, without units, for example <code>width=\"800\" height=\"600\"</code>. Then add <code>height: auto</code> in your CSS so the image still scales down on small screens. The browser uses the ratio to reserve the right amount of space.</p>\n\n<h2>Lazy-load images below the fold, never the hero</h2>\n<p>Adding <code>loading=\"lazy\"</code> to an image tells the browser to wait until the user scrolls near it before downloading it. It is supported natively in modern browsers and saves data on long pages with many images.</p>\n<p>The catch is where you use it. web.dev's article on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://web.dev/articles/browser-level-image-lazy-loading\">browser-level lazy loading</a> warns against lazy-loading images that are likely to be in the viewport when the page loads, especially the image that is the Largest Contentful Paint element. <strong>Lazy-loading your hero image makes the most important image on the page load later, not sooner.</strong></p>\n<p>What to do:</p>\n<ul>\n<li>Leave the hero image and anything visible on first load without <code>loading=\"lazy\"</code>.</li>\n<li>Add <code>loading=\"lazy\"</code> to images further down the page, such as gallery images, product grids, and blog post images below the intro.</li>\n<li>Check what your CMS or plugin does by default. Some lazy-load every image, including the hero.</li>\n</ul>\n\n<h2>Image sitemaps: when you need one</h2>\n<p>Most small sites do not need a separate image sitemap. If your images are in normal <code>&lt;img&gt;</code> tags on pages Google can crawl, it can find them.</p>\n<p>Google describes <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps\">image sitemaps</a> as a way to tell it about images it might not otherwise find, such as images loaded with JavaScript. You can either create a separate image sitemap or add image tags to your existing sitemap. If you run a gallery or shop where images are loaded by a script, it is worth considering. Otherwise, focus on the basics above first.</p>\n\n<h2>How to audit images across your site</h2>\n<p>Checking images one page at a time does not scale past a handful of pages. A crawl gives you the full list. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags images missing alt text, images over 100 KB, images missing width or height attributes, and broken images, and lets you export the list to CSV.</p>\n<p>Work through the results in this order: broken images, then missing alt text on meaningful images, then the largest files on your most visited pages, then missing dimensions. If you are running image checks as part of a wider review, our <a href=\"https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist\">technical SEO audit checklist</a> shows where they fit alongside speed and crawlability.</p>\n\n<h2>The bottom line</h2>\n<p>Good image SEO comes down to a few habits: describe images with useful alt text (or <code>alt=\"\"</code> if they are decorative), give files descriptive names, use modern formats at sensible sizes, always set width and height, and lazy-load only what sits below the fold.</p>\n<p>None of these take long once they are part of your upload routine. The hard part is fixing years of old uploads, and a crawl turns that into a sorted to-do list instead of guesswork.</p>\n<p><strong>Your next step:</strong> crawl your site, sort images by file size, and fix the five largest images on your most visited pages, adding alt text and dimensions as you go.</p>",
+  "faqs": [
+    {
+      "question": "How long should alt text be?",
+      "answer": "There is no fixed limit, but a short phrase or one sentence is usually enough. Describe what matters about the image in context and move longer explanations, such as chart data, into the page text."
+    },
+    {
+      "question": "Do decorative images need alt text?",
+      "answer": "They need an alt attribute, but it should be empty, written as alt with two quote marks and nothing between them. That tells screen readers to skip the image instead of reading out its file name."
+    },
+    {
+      "question": "Is WebP or AVIF better for SEO?",
+      "answer": "Google supports both, so neither has a direct ranking advantage. Both are usually smaller than JPEG at similar quality, which helps speed. Use whichever your CMS and audience support, with a JPEG fallback if needed."
+    },
+    {
+      "question": "What size should images be for a website?",
+      "answer": "Resize each image to roughly the largest size it is displayed at, up to about twice that width for high-density screens. Many content images can be well under 100 KB, while large hero photos may need more."
+    },
+    {
+      "question": "Should I lazy load all images?",
+      "answer": "No. Lazy-load images further down the page, but load the hero image and anything visible on first load normally. Lazy-loading the main image delays it and can hurt Largest Contentful Paint."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist",
+      "anchor": "on-page SEO checklist"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo",
+      "anchor": "structure headings on the page"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist",
+      "anchor": "technical SEO audit checklist"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/appearance/google-images",
+      "anchor": "image SEO best practices",
+      "supports": "Google does not index CSS images, uses alt text and file names as signals, warns against keyword stuffing, and lists supported formats."
+    },
+    {
+      "url": "https://www.w3.org/WAI/tutorials/images/decorative/",
+      "anchor": "decorative images",
+      "supports": "Decorative images should use an empty alt attribute so assistive technologies ignore them."
+    },
+    {
+      "url": "https://web.dev/articles/optimize-cls",
+      "anchor": "optimizing layout shift",
+      "supports": "Images without dimensions are a common cause of poor CLS; always include width and height or reserve space."
+    },
+    {
+      "url": "https://web.dev/articles/browser-level-image-lazy-loading",
+      "anchor": "browser-level lazy loading",
+      "supports": "Do not lazy-load images likely to be in the viewport on load, especially LCP images."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps",
+      "anchor": "image sitemaps",
+      "supports": "Image sitemaps help Google find images it might not otherwise discover, such as those loaded with JavaScript."
+    }
+  ],
+  "editor_notes": [
+    "Add a before/after file size comparison from one of your own images after resizing and converting to WebP or AVIF.",
+    "Add a screenshot of a crawl filtered to images missing alt text or over 100 KB.",
+    "Share a real example of a CMS or plugin that lazy-loads the hero image by default, and how you turned it off.",
+    "Include your own example of rewriting weak alt text on a real product or team photo."
+  ],
+  "image_idea": "A heavy stone block being carefully carved down into a light, precise small sculpture on a workbench."
+}

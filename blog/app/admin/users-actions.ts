@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 import { requirePermission, requireUser } from "@/lib/authz";
+import { issuePasswordReset, normalizeEmail, notifyLoginEmailChanged, MIN_PASSWORD_LENGTH } from "@/lib/password-reset";
 
 async function requireAdmin() {
   return requirePermission("users:write");
@@ -90,18 +91,39 @@ export async function updateProfile(_prevState: string | null, formData: FormDat
   const twitter = String(formData.get("twitter") ?? "").trim() || null;
   const linkedin = String(formData.get("linkedin") ?? "").trim() || null;
   const facebook = String(formData.get("facebook") ?? "").trim() || null;
+  const loginEmailInput = String(formData.get("loginEmail") ?? "").trim();
+  const loginEmail = loginEmailInput ? normalizeEmail(loginEmailInput) : null;
+  if (loginEmailInput && !loginEmail) return "Enter a valid login email address.";
 
   const db = await getDb();
+  const [current] = await db.select().from(users).where(eq(users.id, session.userId));
+  if (!current) throw new Error("Not authenticated.");
+
+  // The login email receives password reset links, so changing it is as
+  // sensitive as changing the password: require the current password, so a
+  // hijacked session can't point resets at another inbox.
+  const loginEmailChanged = loginEmail !== (current.loginEmail ?? null);
+  if (loginEmailChanged) {
+    const currentPassword = String(formData.get("currentPassword") ?? "");
+    if (!currentPassword) return "Enter your current password to change your login email.";
+    if (!(await verifyPassword(currentPassword, current.passwordHash))) {
+      return "Current password is incorrect. Your login email was not changed.";
+    }
+  }
+  if (loginEmail) {
+    const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.loginEmail, loginEmail));
+    if (taken && taken.id !== session.userId) return "Another user already has that login email.";
+  }
   await db
     .update(users)
-    .set({ displayName, jobTitle, bio, avatarKey, website, email, github, twitter, linkedin, facebook })
+    .set({ displayName, jobTitle, bio, avatarKey, website, email, github, twitter, linkedin, facebook, loginEmail })
     .where(eq(users.id, session.userId));
+  if (loginEmailChanged && current.loginEmail) await notifyLoginEmailChanged(current.loginEmail, current.username);
   revalidatePath(`/author/${session.username}`);
   redirect(`/admin/profile?toast=${encodeURIComponent("Profile saved")}`);
   return null;
 }
 
-const MIN_PASSWORD_LENGTH = 8;
 
 // Changes the caller's own password, verified against the current hash.
 // Sessions are stateless HMAC-signed cookies, so an already-issued session is
@@ -129,4 +151,46 @@ export async function changePassword(_prevState: string | null, formData: FormDa
   await db.update(users).set({ passwordHash: await hashPassword(newPassword) }).where(eq(users.id, user.id));
   redirect(`/admin/profile?toast=${encodeURIComponent("Password changed")}`);
   return null;
+}
+
+// Sets (or clears) a user's private login email, used only for password
+// reset links. Admin-only; users set their own on /admin/profile.
+export async function setUserLoginEmail(id: number, value: string): Promise<{ ok: true } | { error: string }> {
+  const session = await requireAdmin();
+  // Your own login email needs your current password, which only the
+  // profile form asks for.
+  if (id === session.userId) return { error: "Change your own login email on My profile." };
+  const trimmed = value.trim();
+  const loginEmail = trimmed ? normalizeEmail(trimmed) : null;
+  if (trimmed && !loginEmail) return { error: "Enter a valid email address." };
+
+  const db = await getDb();
+  const [target] = await db.select().from(users).where(eq(users.id, id));
+  if (!target) return { error: "User not found." };
+  if (loginEmail) {
+    const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.loginEmail, loginEmail));
+    if (taken && taken.id !== id) return { error: "Another user already has that login email." };
+  }
+  await db.update(users).set({ loginEmail }).where(eq(users.id, id));
+  if (target.loginEmail && target.loginEmail !== loginEmail) {
+    await notifyLoginEmailChanged(target.loginEmail, target.username);
+  }
+  revalidatePath("/admin/users");
+  return { ok: true };
+}
+
+// Emails a password reset link to a user's login email. Admin-only.
+export async function sendPasswordResetLink(id: number): Promise<{ ok: true } | { error: string }> {
+  await requireAdmin();
+  const db = await getDb();
+  const [user] = await db.select().from(users).where(eq(users.id, id));
+  if (!user) return { error: "User not found." };
+  if (!user.loginEmail) return { error: "Add a login email for this user first." };
+  try {
+    await issuePasswordReset({ id: user.id, username: user.username, loginEmail: user.loginEmail });
+    return { ok: true };
+  } catch (err) {
+    console.error("Failed to send password reset email", err);
+    return { error: err instanceof Error ? err.message : "Couldn't send the reset email." };
+  }
 }

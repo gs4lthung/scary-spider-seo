@@ -1,0 +1,82 @@
+{
+  "id": 8,
+  "title": "Noindex vs Disallow: Which One Keeps a Page Out of Google?",
+  "slug": "noindex-vs-disallow",
+  "category": "Technical SEO",
+  "excerpt": "Disallow stops crawling, noindex stops indexing. Learn when to use each, why combining them backfires, and how to remove a page from Google results fast.",
+  "meta_title": "Noindex vs Disallow: Which One to Use and When",
+  "meta_description": "Noindex vs disallow explained: why robots.txt does not keep pages out of Google, when to use meta robots or X-Robots-Tag, and how to remove a page fast.",
+  "key_takeaways": [
+    "Disallow in robots.txt controls crawling, while noindex controls whether a page can appear in search results.",
+    "A disallowed URL can still be indexed without its content if other pages link to it.",
+    "Combining disallow and noindex backfires because Google cannot crawl the page to see the noindex.",
+    "Use a meta robots tag for HTML pages and the X-Robots-Tag HTTP header for PDFs and other files.",
+    "For urgent removals, use the Search Console Removals tool, then make it permanent with a 404, 410, password or noindex."
+  ],
+  "content_html": "<p>You added <code>Disallow: /thank-you/</code> to your robots.txt to keep your form confirmation page out of Google. A month later, a search for your brand shows that exact URL in the results, with a note that no description is available. You blocked it. So why is it there?</p>\n<p>Because blocking crawling and blocking indexing are two different things. The <strong>noindex vs disallow</strong> choice decides whether Google can read the page, whether it can list the page, or both, and mixing them up is one of the most common technical SEO mistakes on small sites.</p>\n<p>In this guide you will see a side-by-side comparison, why using both on the same page backfires, when to use a meta robots tag versus an <code>X-Robots-Tag</code> header, which pages actually deserve a noindex, and how to get a page out of Google quickly.</p>\n\n<h2>Noindex vs disallow: the short version</h2>\n<p><strong>Disallow controls crawling. Noindex controls indexing.</strong> A <code>Disallow</code> rule in robots.txt asks crawlers not to fetch a URL. A <code>noindex</code> directive, in a meta tag or HTTP header, tells search engines not to show a page they have fetched.</p>\n<table>\n<thead><tr><th></th><th>Disallow (robots.txt)</th><th>Noindex (meta tag or header)</th></tr></thead>\n<tbody>\n<tr><td>What it controls</td><td>Whether Googlebot fetches the URL</td><td>Whether the page can appear in results</td></tr>\n<tr><td>Where it lives</td><td>One robots.txt file at the site root</td><td>Each page's HTML head, or its HTTP response</td></tr>\n<tr><td>Keeps the URL out of Google?</td><td>No. The URL can still be indexed if linked from elsewhere</td><td>Yes, once Google recrawls the page</td></tr>\n<tr><td>Google must crawl the page?</td><td>No, that is the point</td><td>Yes, or it never sees the noindex</td></tr>\n<tr><td>Works for PDFs and images?</td><td>Yes, blocks crawling of any URL</td><td>Yes, via the X-Robots-Tag header</td></tr>\n<tr><td>Best for</td><td>Saving crawl effort on low-value URLs</td><td>Keeping specific pages out of search results</td></tr>\n</tbody>\n</table>\n<p>Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/robots/intro\">introduction to robots.txt</a> is explicit that it is not a mechanism for keeping a page out of Google. If other pages link to a disallowed URL, Google can still index the address, without visiting it, and show it with no description. The full syntax is covered in our guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/robots-txt-guide\">robots.txt rules and common mistakes</a>.</p>\n\n<h2>Why disallow plus noindex backfires</h2>\n<p>This is the trap. You want a page gone, so you add a noindex tag and, to be extra safe, disallow it in robots.txt as well. The result is the opposite of what you wanted.</p>\n<p>Google's documentation on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/block-indexing\">blocking indexing with noindex</a> explains why: for noindex to work, the page must not be blocked by robots.txt. <strong>If Googlebot is not allowed to fetch the page, it never sees the noindex tag.</strong> The URL can then stay in results, especially if other pages link to it.</p>\n<p>Say you run a 50-page agency site and you have an old \"Spring offer\" landing page you want removed from Google. The right sequence is:</p>\n<ol>\n<li>Add <code>&lt;meta name=\"robots\" content=\"noindex\"&gt;</code> to the page.</li>\n<li>Make sure robots.txt does <em>not</em> block it.</li>\n<li>Wait for Google to recrawl it, or request a recrawl in the URL Inspection tool.</li>\n<li>Once it has dropped out, you can leave the noindex in place, or delete the page and return a 404 or 410.</li>\n</ol>\n<p>If you add a disallow rule later, do it only after the page has left the index, and only if you have a real reason to stop crawling it.</p>\n<p>One more detail: a <code>noindex</code> line inside robots.txt does nothing in Google. Google's documentation states that specifying noindex in robots.txt is not supported.</p>\n\n<h2>Meta robots tag vs X-Robots-Tag header</h2>\n<p>There are two ways to send a noindex, and Google says they have the same effect. Pick the one that fits the content type.</p>\n\n<h3>The meta robots tag (for HTML pages)</h3>\n<p>Place this in the <code>&lt;head&gt;</code> of the page:</p>\n<pre><code>&lt;meta name=\"robots\" content=\"noindex\"&gt;</code></pre>\n<p>Most CMSs and SEO plugins expose this as a per-page checkbox, such as \"Hide from search engines.\" That is usually the easiest route for HTML pages. Use <code>name=\"googlebot\"</code> instead of <code>robots</code> only if you want to target Google alone.</p>\n\n<h3>The X-Robots-Tag header (for PDFs, images and other files)</h3>\n<p>A PDF has no HTML head, so it cannot carry a meta tag. Instead, the server sends the directive as an HTTP header: <code>X-Robots-Tag: noindex</code>.</p>\n<p>Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag\">robots meta tag and X-Robots-Tag specification</a> shows how to apply it to every PDF on an Apache server through <code>.htaccess</code>, using a <code>&lt;Files&gt;</code> block that sets the header for files ending in <code>.pdf</code>, with an equivalent <code>add_header</code> rule for NGINX.</p>\n<p>Say your site hosts price lists as PDFs that you would rather people reach through the HTML pricing page. A header rule for those files keeps them out of results without touching each document. Check the header is actually sent by running <code>curl -I</code> on one of the PDF URLs.</p>\n\n<h2>Which pages to noindex (and which to leave alone)</h2>\n<p><strong>Noindex is for pages that should exist for visitors but have no value as a search result.</strong> Typical candidates on a small site:</p>\n<ul>\n<li><strong>Thank-you and confirmation pages</strong> after a form or purchase.</li>\n<li><strong>Internal search results pages</strong>, such as <code>/search?q=</code>.</li>\n<li><strong>Account, cart and checkout pages</strong>, if your platform does not already handle them.</li>\n<li><strong>Thin tag or author archives</strong> that list a couple of posts and duplicate your categories.</li>\n<li><strong>Printer-friendly or filtered versions</strong> of pages, if a canonical tag is not a better fit.</li>\n</ul>\n<p>Pages to leave alone: anything you want to rank, and duplicate URLs that should pass their signals to a main version. For those duplicates, a canonical tag is usually better than noindex. Our guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/canonical-tags-explained\">choosing the right canonical URL</a> covers that case.</p>\n<p>Also keep noindexed URLs out of your sitemap. A sitemap says \"please index these pages,\" so listing a noindexed URL sends a contradictory signal. Here is how to <a href=\"https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide\">build a sitemap with only indexable URLs</a>.</p>\n\n<h3>What about staging sites?</h3>\n<p>A staging or development copy of your site should not be in Google at all. A robots.txt <code>Disallow: /</code> is the usual approach, but for the reasons above it does not guarantee the URLs stay out. <strong>Password protection is the safest option</strong>, and Google lists it alongside noindex as a reliable way to keep pages out of search.</p>\n<p>Whatever you use on staging, remove it on launch day. A leftover <code>Disallow: /</code> or site-wide noindex on a live site is one of the fastest ways to lose search traffic, and it is a common reason a <a href=\"https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages\">page is not indexed by Google</a>.</p>\n\n<h2>How to remove a page from Google fast</h2>\n<p>A noindex only works after Google recrawls the page, which, according to Google, can take months for less important pages. When you need something gone quickly, combine a temporary block with a permanent fix.</p>\n<ol>\n<li><strong>Request a temporary removal.</strong> The <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://support.google.com/webmasters/answer/9689846\">Removals tool in Search Console</a> hides a URL from Google results for about six months. It does not remove the page from your site or stop Google crawling it.</li>\n<li><strong>Make the removal permanent within that window.</strong> Delete the page and return a 404 or 410, put it behind a password, or add a noindex tag. Google's help page notes noindex is less secure than the other two, and warns against using robots.txt for this.</li>\n<li><strong>Confirm the result.</strong> Use the URL Inspection tool to check that Google sees the 404, 410 or noindex on the live page.</li>\n</ol>\n<p>Say a staff member's personal phone number was published on a contact page. Remove it from the page first. Then use the Removals tool's \"Clear snippet in search\" option for that URL, so the outdated snippet stops showing while Google recrawls the corrected page.</p>\n<h2>How to check which rule a page is using</h2>\n<p>Before you change anything, confirm what is actually in place. Directives can come from a theme, a plugin, a server rule or a CDN, and the settings screen does not always match what Google receives.</p>\n<ul>\n<li><strong>Meta robots:</strong> view the page source and search for <code>name=\"robots\"</code>.</li>\n<li><strong>X-Robots-Tag:</strong> run <code>curl -I</code> on the URL and look for the header in the response.</li>\n<li><strong>Robots.txt:</strong> open <code>/robots.txt</code> on your domain and check whether any Disallow rule matches the path.</li>\n<li><strong>Google's view:</strong> in the URL Inspection tool, check whether crawling and indexing are allowed, then run a live test after any change.</li>\n</ul>\n<p>To catch these issues across a whole site, a free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags noindex and nofollow directives, including those sent through the X-Robots-Tag header, and lists non-indexable URLs that still appear in your sitemap.</p>\n\n<h2>The bottom line</h2>\n<p>The noindex vs disallow decision comes down to one question: do you want Google to stop reading the page, or stop showing it? Disallow stops crawling but can leave the URL in results. Noindex removes the page from results, but only if Google is allowed to crawl it and see the directive.</p>\n<p>Never combine the two on a page you want removed. Use meta robots for HTML, the X-Robots-Tag header for PDFs and other files, password protection for staging, and the Removals tool when you need a page gone today.</p>\n<p><strong>Your next step:</strong> open your robots.txt and list every Disallow rule, then check whether any of those paths also carry a noindex tag. If they do, decide which one you actually need and remove the other.</p>",
+  "faqs": [
+    {
+      "question": "Can I put noindex in my robots.txt file?",
+      "answer": "No. Google does not support a noindex rule inside robots.txt. Use a meta robots tag in the page's HTML or an X-Robots-Tag HTTP header instead, and make sure the URL is not disallowed so Google can see it."
+    },
+    {
+      "question": "How long does it take for a noindexed page to disappear from Google?",
+      "answer": "It disappears after Google recrawls the page and sees the noindex. For important pages that can be quick, but Google says it may take months for less important pages. Requesting a recrawl in the URL Inspection tool can speed it up."
+    },
+    {
+      "question": "Does noindex also stop Google from following links on the page?",
+      "answer": "Not on its own. The nofollow rule controls whether links are followed, and you can combine them as noindex, nofollow. In most cases a plain noindex is enough."
+    },
+    {
+      "question": "Should I noindex category and tag pages?",
+      "answer": "Only if they are thin or duplicate other archives. Category pages that group useful content and receive internal links are often worth indexing. Look at whether each archive offers something a searcher would want before adding noindex."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/robots-txt-guide",
+      "anchor": "robots.txt rules and common mistakes"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/canonical-tags-explained",
+      "anchor": "choosing the right canonical URL"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide",
+      "anchor": "build a sitemap with only indexable URLs"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages",
+      "anchor": "page is not indexed by Google"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+      "anchor": "introduction to robots.txt",
+      "supports": "robots.txt is not a mechanism for keeping a page out of Google; disallowed URLs can be indexed without content if linked; use noindex or password protection."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/block-indexing",
+      "anchor": "blocking indexing with noindex",
+      "supports": "noindex only works if the page is not blocked by robots.txt; meta tag and header have the same effect; noindex in robots.txt is not supported; recrawl can take months."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+      "anchor": "robots meta tag and X-Robots-Tag specification",
+      "supports": "X-Robots-Tag can be applied to all PDF files via Apache .htaccess or NGINX configuration."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/9689846",
+      "anchor": "Removals tool in Search Console",
+      "supports": "Temporary removal lasts about six months and does not stop crawling; permanent removal requires 404/410, password protection or noindex, not robots.txt."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of an \"Indexed, though blocked by robots.txt\" warning from a real Search Console property.",
+    "Share a real case where a staging Disallow or site-wide noindex was left in place after launch, and how quickly traffic recovered once fixed.",
+    "Add curl -I output from a real PDF showing the X-Robots-Tag header.",
+    "Show the noindex setting in the CMS or SEO plugin you use most."
+  ],
+  "image_idea": "A shop window with a closed blind beside an open shop whose door carries a small private sign, contrasting hidden and unlisted."
+}

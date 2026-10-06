@@ -30,6 +30,7 @@ export default async function UsersPage() {
             <tr className="border-b border-border bg-card text-xs text-muted-foreground uppercase">
               <th className="px-4 py-3 font-semibold">Username</th>
               <th className="px-4 py-3 font-semibold">Role</th>
+              <th className="px-4 py-3 font-semibold">Login email</th>
               <th className="px-4 py-3 font-semibold">Created</th>
               <th className="px-4 py-3 font-semibold">
                 <span className="sr-only">Actions</span>

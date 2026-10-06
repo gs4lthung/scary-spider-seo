@@ -4,7 +4,11 @@ import { SESSION_COOKIE, verifySessionCookieValue } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/admin/login") return NextResponse.next();
+  // Logged-out pages: sign in, and the password reset flow
+  // (app/admin/password-reset-actions.ts).
+  if (pathname === "/admin/login" || pathname === "/admin/forgot-password" || pathname === "/admin/reset-password") {
+    return NextResponse.next();
+  }
 
   const { env } = getCloudflareContext();
   const token = request.cookies.get(SESSION_COOKIE)?.value;

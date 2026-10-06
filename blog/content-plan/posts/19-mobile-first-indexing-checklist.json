@@ -1,0 +1,85 @@
+{
+  "id": 19,
+  "title": "Mobile-First Indexing: A Checklist for Small Business Sites",
+  "slug": "mobile-first-indexing-checklist",
+  "category": "Web Performance",
+  "excerpt": "Google ranks the mobile version of your site. Use this checklist to match content, links and metadata across devices and fix viewport, tap target and pop-up issues.",
+  "meta_title": "Mobile-First Indexing Checklist for Small Sites",
+  "meta_description": "A mobile-first indexing checklist: match content, links, metadata and structured data across devices, and fix viewport, tap targets, text size and pop-ups.",
+  "key_takeaways": [
+    "Under mobile-first indexing, Google uses the mobile version of your pages, crawled with its smartphone crawler, for indexing and ranking.",
+    "Content, headings, internal links, metadata, robots tags and structured data should be equivalent on mobile and desktop.",
+    "Google will not load content that needs a click, swipe or typing to appear, so primary content must load without interaction.",
+    "Every page needs a viewport meta tag that allows zooming, tap targets of about 48 by 48 pixels, and readable text.",
+    "With the Mobile-Friendly Test retired, test with URL Inspection, Lighthouse, a real phone and a site-wide crawl."
+  ],
+  "content_html": "<p>On a laptop, your site looks complete: a full services list, customer reviews, an FAQ section and a footer full of useful links. On a phone, the theme quietly drops the reviews, cuts the FAQ, and tucks the navigation into a menu with half the links missing. Under mobile-first indexing, that stripped-down phone version is the one that counts.</p><p>Most owners never notice, because they edit and check the site on a desktop. But with <strong>mobile-first indexing</strong>, Google uses the mobile version of your pages for indexing and ranking. Whatever your phone layout leaves out is, as far as Google is concerned, not there.</p><p>This checklist walks through what mobile-first indexing means, what has to match between mobile and desktop, the mobile usability basics (viewport, tap targets, text size, pop-ups), and how to test it all now that some of Google's older mobile tools are gone. It pairs well with the broader <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">pre-publish on-page SEO checklist</a>.</p><h2>What mobile-first indexing means</h2><p>Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing\">mobile-first indexing best practices</a> put it simply: Google uses the mobile version of a site's content, crawled with its smartphone crawler, for indexing and ranking. There is no separate mobile index. The mobile version simply is the version Google looks at.</p><p>How much work this means depends on how your site is built:</p><ul><li><strong>Responsive design:</strong> the same HTML on the same URL, styled differently by screen size. Google recommends this setup as the easiest to implement and maintain, and content and metadata automatically match.</li><li><strong>Dynamic serving:</strong> the same URL, but the server sends different HTML depending on the device. Parity has to be checked.</li><li><strong>Separate mobile URLs:</strong> for example <code>m.example.com</code>. Parity has to be checked, and the two versions need correct <code>rel=\"canonical\"</code> and <code>rel=\"alternate\"</code> links between them.</li></ul><p><strong>If your site is responsive, most of the parity checks below pass by default, but themes and page builders can still hide content or links on small screens.</strong> If you run a separate m-dot site, it is worth asking whether moving to responsive design would save you ongoing work.</p><h2>The parity checklist: mobile must match desktop</h2><h3>1. Same main content</h3><p>Google is explicit that the mobile page should contain the same content as the desktop page, with the same clear headings. If you need to save space on mobile, Google suggests moving content into accordions or tabs instead of removing it, as long as the content stays equivalent.</p><p>Say a dentist's desktop service page has 800 words explaining a treatment, and the mobile layout shows 150 words and a \"Book now\" button. Google ranks the 150-word version.</p><p>Action: open your five most important pages on a phone and compare them, section by section, with the desktop version.</p><h3>2. Same internal links</h3><p>Mobile menus are often trimmed, and footers are frequently collapsed or cut down. Since Google crawls the mobile version, the links missing on mobile are links Google may not follow. Check that every important page is still reachable from the mobile navigation or from links in the content.</p><h3>3. Same titles, meta descriptions and robots tags</h3><p>The title and meta description should be equivalent on both versions. Robots meta tags must match: a <code>noindex</code> or <code>nofollow</code> that exists only on mobile can stop pages from being crawled or indexed.</p><h3>4. Same structured data</h3><p>If your desktop pages carry structured data (Product, Breadcrumb, LocalBusiness and so on), it must be present on mobile too, with URLs pointing to the mobile versions if you use separate URLs.</p><h3>5. Same images, with the same alt text</h3><p>Use the same images, alt text, captions and file names on mobile, and avoid tiny or low-resolution images there. Our guide to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text\">writing alt text and sizing images</a> covers the details.</p><h3>6. Content that loads without interaction</h3><p>Google will not load content that requires a swipe, click or typing to appear. Lazy loading is fine as long as the content loads when it comes into view, not only after a tap. If content on your mobile pages is assembled by JavaScript, read our guide on <a href=\"https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering\">how JavaScript rendering affects indexing</a>.</p><h3>7. Resources Google can crawl</h3><p>Mobile pages often load different images, scripts or stylesheets. Make sure robots.txt does not block any of them, and that it uses the same rules for both versions.</p><h2>Mobile usability: the basics that still matter</h2><h3>The viewport meta tag</h3><p>Without a viewport tag, mobile browsers lay the page out at a desktop width and shrink it, leaving visitors to pinch and zoom. One line in the <code>&lt;head&gt;</code> fixes it:</p><pre><code>&lt;meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"&gt;</code></pre><p><strong>Every page needs a viewport tag, and it should not disable zooming.</strong> Avoid <code>user-scalable=no</code> or a low <code>maximum-scale</code>; people with low vision rely on zoom. MDN's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport\">viewport meta tag reference</a> explains each value.</p><h3>Tap targets</h3><p>Buttons and links that are too small or too close together cause mis-taps, which is frustrating on a contact or checkout page. Google's web.dev guidance on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://web.dev/articles/accessible-tap-targets\">accessible tap targets</a> recommends a minimum target of about 48 by 48 pixels with around 8 pixels of space between targets.</p><p>Typical offenders are footer links stacked tightly together, small social icons, and inline links packed into a short paragraph. Add padding rather than enlarging the visible icon if you want to keep the design.</p><p>Tap target size overlaps with accessibility requirements, and so do several other mobile basics. See our guide to <a href=\"https://blog.scaryspiderseo.com/accessibility/accessibility-and-seo\">accessibility and SEO</a> for the wider picture.</p><h3>Readable text</h3><p>Visitors should not need to zoom to read your content. A base font size around 16 pixels is a common, comfortable default for body text, with enough line height and contrast to read outdoors. Check long paragraphs on a real phone, not only in a browser window shrunk on your desktop.</p><h3>Pop-ups and interstitials</h3><p>A full-screen newsletter pop-up that appears the moment someone arrives from Google is the classic mobile annoyance. Google's guidance on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/avoid-intrusive-interstitials\">intrusive interstitials and dialogs</a> says they frustrate users and can make it harder for Google to understand your content. It recommends not covering the entire page and not redirecting people to a separate page for consent or input.</p><p>Legally required notices, such as cookie consent or an age check, are treated differently, but they should still overlay the content rather than replace it.</p><p>Action: replace full-screen promotional pop-ups with a small banner, and delay them until the visitor has engaged with the page.</p><h2>Speed on mobile</h2><p>Phones have slower processors and often slower connections, so mobile performance is usually where sites struggle. Large hero images, heavy sliders and stacks of third-party scripts hurt most. Our guide to <a href=\"https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained\">LCP, INP and CLS</a> explains how to read your mobile scores and what to fix first.</p><h2>How to test mobile-first indexing readiness</h2><p>Google retired its standalone Mobile-Friendly Test and the Mobile Usability report in Search Console in late 2023, so testing now means combining a few tools:</p><ol><li><strong>URL Inspection in Search Console.</strong> Run a live test on a key URL. Google tests it with its smartphone crawler, so the screenshot and HTML show what Google indexes.</li><li><strong>Lighthouse in Chrome DevTools or PageSpeed Insights.</strong> Run the mobile audit for performance, a missing viewport tag, and touch target size (now checked in the accessibility section).</li><li><strong>Device mode in DevTools.</strong> Switch between phone and desktop views to compare content and links side by side.</li><li><strong>A real phone.</strong> Tap through your menu, forms and checkout. Nothing replaces it.</li><li><strong>A site-wide crawl.</strong> A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags pages missing a viewport tag and other mobile usability issues across the whole site, so one broken template does not go unnoticed.</li></ol><h2>The quick checklist</h2><ul><li>Mobile pages have the same main content and headings as desktop.</li><li>Important internal links are reachable on mobile.</li><li>Titles, meta descriptions and robots tags match.</li><li>Structured data is present on mobile.</li><li>Images and alt text match, and images are not tiny.</li><li>No content requires a tap or swipe to load.</li><li>robots.txt does not block mobile resources.</li><li>Every page has a viewport tag that allows zooming.</li><li>Tap targets are about 48 by 48 pixels with space between them.</li><li>Body text is readable without zooming.</li><li>No full-screen promotional pop-ups on arrival.</li></ul><h2>The bottom line</h2><p>Mobile-first indexing means the phone version of your site is the version Google reads, indexes and ranks. If content, links, metadata or structured data exist only on desktop, Google is ranking a weaker version of your site than the one you see.</p><p>For most small business sites on a responsive theme, the work is a short audit: check that nothing important is hidden on small screens, add a proper viewport tag, make buttons easy to tap, and remove intrusive pop-ups. Then test with URL Inspection and a real phone.</p><p><strong>Your next step:</strong> open your three most important pages on your phone and on your desktop side by side, and list every section, link or image that is missing from the mobile version.</p>",
+  "faqs": [
+    {
+      "question": "Does mobile-first indexing mean desktop pages are ignored?",
+      "answer": "Google uses the mobile version of your content for indexing and ranking, and there is no separate mobile index. Desktop searchers still see your pages in results, but the content Google ranks is what it found on the mobile version."
+    },
+    {
+      "question": "Is content in accordions and tabs indexed on mobile?",
+      "answer": "Google's mobile-first indexing guidance suggests moving content into accordions or tabs on mobile instead of removing it, as long as the content stays equivalent to desktop. The content should be in the page when it loads, not fetched only after someone taps."
+    },
+    {
+      "question": "What replaced Google's Mobile-Friendly Test?",
+      "answer": "Google retired the Mobile-Friendly Test and the Mobile Usability report in late 2023. You can use Lighthouse in Chrome DevTools or PageSpeed Insights for mobile audits, and the URL Inspection tool in Search Console to see how Google's smartphone crawler sees a page."
+    },
+    {
+      "question": "Do I need a separate mobile site?",
+      "answer": "No. Google recommends responsive design, where the same HTML works on every screen size, as the easiest setup to implement and maintain. Separate mobile URLs work but need extra care to keep content and tags in sync."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist",
+      "anchor": "pre-publish on-page SEO checklist"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text",
+      "anchor": "writing alt text and sizing images"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering",
+      "anchor": "how JavaScript rendering affects indexing"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/accessibility/accessibility-and-seo",
+      "anchor": "accessibility and SEO"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained",
+      "anchor": "LCP, INP and CLS"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing",
+      "anchor": "mobile-first indexing best practices",
+      "supports": "Google uses the mobile version of content, crawled with the smartphone agent, for indexing and ranking; recommends responsive design; requires parity of content, headings, robots meta, structured data and images; won't load content that needs user interaction."
+    },
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport",
+      "anchor": "viewport meta tag reference",
+      "supports": "Reference for the viewport meta tag and its values, including width=device-width and zoom-related settings."
+    },
+    {
+      "url": "https://web.dev/articles/accessible-tap-targets",
+      "anchor": "accessible tap targets",
+      "supports": "Tap targets should be at least about 48 by 48 pixels and spaced about 8 pixels apart."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/avoid-intrusive-interstitials",
+      "anchor": "intrusive interstitials and dialogs",
+      "supports": "Intrusive interstitials and dialogs frustrate users and can hurt how Google understands content; avoid covering the whole page or redirecting for consent."
+    }
+  ],
+  "editor_notes": [
+    "Add side-by-side desktop and mobile screenshots of a page where the mobile theme hid content or links.",
+    "Add a URL Inspection live test screenshot showing the smartphone crawler result.",
+    "Mention a theme or page builder setting you have seen hide sections on mobile, if you have first-hand experience with one."
+  ],
+  "image_idea": "A spider weaving an identical web across a large window and a small phone-shaped frame, with one strand missing in the small frame."
+}

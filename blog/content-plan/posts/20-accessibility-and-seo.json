@@ -1,0 +1,90 @@
+{
+  "id": 20,
+  "title": "Accessibility and SEO: Where They Overlap and Why It Matters",
+  "slug": "accessibility-and-seo",
+  "category": "Accessibility",
+  "excerpt": "Alt text, headings, link text and semantic HTML help both people and search engines. Learn where accessibility and SEO overlap, what WCAG is, and how to test properly.",
+  "meta_title": "Accessibility and SEO: Where They Overlap",
+  "meta_description": "Accessibility and SEO share many fixes: alt text, headings, link text and semantic HTML. Learn WCAG basics and why automated tests only catch part of it.",
+  "key_takeaways": [
+    "Accessibility is not a Google ranking factor in itself, but many accessibility fixes also help search engines understand your pages.",
+    "Alt text, clear headings, descriptive link text, page titles and semantic HTML serve screen reader users and search engines at the same time.",
+    "WCAG is the international accessibility standard, organized into four principles and success criteria at levels A, AA and AAA.",
+    "Automated tools such as axe-core find common issues quickly but cannot check everything, so human judgment is still required.",
+    "Testing with only a keyboard and a free screen reader reveals problems that automated reports miss."
+  ],
+  "content_html": "<p>Picture someone using a screen reader on a local plumber's website. The images are announced as \"IMG_4021 dot jpg\". Every link says \"click here\". The headings are just bold text, so there is no way to jump to the section about emergency callouts. They give up and call someone else. This is where accessibility and SEO meet.</p><p>Now look at the same page as a search engine: images with no useful description, links that say nothing about where they go, and no clear structure. The problems are almost identical.</p><p><strong>Accessibility and SEO</strong> share a lot of ground like this. To be clear from the start: Google does not list accessibility as a ranking factor, so a perfect audit score will not move you up the results on its own. But many of the same fixes help both people and search engines, and accessibility shapes how visitors experience your site just as much as <a href=\"https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained\">Core Web Vitals and page speed</a> do. This guide covers where the two overlap, what WCAG is in plain English, and how to test properly.</p><h2>Why accessibility is worth your time</h2><p>Accessibility means people with disabilities can perceive, understand, navigate and use your site. That includes people who are blind or have low vision, people who are deaf or hard of hearing, people who cannot use a mouse, and people with cognitive differences. It also helps everyone on a small screen, in bright sunlight, or with a temporary injury.</p><p><strong>The business case does not depend on rankings: an inaccessible site turns away customers who wanted to buy from you.</strong> In many places, accessibility is also a legal requirement for some organizations, so it is worth checking what applies to you.</p><h2>What WCAG is, in plain English</h2><p>The Web Content Accessibility Guidelines (WCAG) are the international standard for web accessibility, published by the W3C. The <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.w3.org/WAI/standards-guidelines/wcag/\">W3C's WCAG overview</a> explains the structure:</p><ul><li><strong>Four principles:</strong> content must be perceivable, operable, understandable and robust.</li><li><strong>Guidelines</strong> under each principle, such as \"provide text alternatives for non-text content\".</li><li><strong>Testable success criteria</strong> at three levels: A (the minimum), AA and AAA (the strictest).</li></ul><p>The current versions are WCAG 2.0, 2.1 and 2.2. Each later version adds criteria without changing the earlier ones, with one exception: WCAG 2.2 marks the old 4.1.1 Parsing criterion as obsolete. Level AA is the target most organizations and policies aim for, so it is a sensible goal for a small business site.</p><h2>Where accessibility and SEO overlap</h2><h3>Alt text on images</h3><p>Alt text is read aloud by screen readers and shown when an image fails to load. Search engines use it to understand what an image shows. A good alt describes the image in context (\"Plumber fitting a new kitchen tap under a sink\"), while decorative images get an empty <code>alt=\"\"</code> so screen readers skip them.</p><p><strong>Write alt text for the person who cannot see the image, and it will usually serve search engines well too.</strong> Do not stuff keywords into it. Our guide to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text\">writing useful alt text</a> has good and bad examples.</p><h3>Headings and structure</h3><p>Screen reader users often move through a page by jumping from heading to heading, the way sighted visitors skim. A clear H1 followed by logically nested H2s and H3s makes that possible, and it gives search engines a clear outline of the page's topics. See our guide on <a href=\"https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo\">structuring H1, H2 and H3 headings</a> for an outline example.</p><h3>Descriptive link text</h3><p>Screen readers can list every link on a page out of context. A list of ten \"click here\" and \"read more\" links is useless. Search engines also use anchor text to understand what the linked page is about.</p><p>Compare \"To book a boiler service, <em>click here</em>\" with \"<em>Book a boiler service</em> online\". The second tells both the visitor and Google where the link goes. Our guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/orphan-pages-internal-linking\">internal linking and anchor text</a> covers the SEO side in more depth.</p><h3>Page titles</h3><p>WCAG requires pages to have titles that describe their topic or purpose. The title is the first thing a screen reader announces and the text that identifies the browser tab. It is also usually the headline of your search result. A unique, descriptive title per page serves all three.</p><h3>The lang attribute</h3><p>The <code>lang</code> attribute on the <code>&lt;html&gt;</code> element (for example <code>&lt;html lang=\"en\"&gt;</code>) tells screen readers which language to pronounce the page in. Without it, a French page might be read with English pronunciation. Google says it uses the visible content to work out a page's language and <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites\">does not use the lang attribute</a> for that, so this one is mainly for people. It is still a one-line fix.</p><h3>Captions and transcripts</h3><p>Captions make video usable for deaf and hard-of-hearing visitors, and for anyone watching with the sound off. A transcript on the page also gives search engines indexable text about what the video covers, which they cannot easily get from the audio.</p><h3>Semantic HTML and real links</h3><p>Native elements carry meaning that assistive technology understands: <code>&lt;nav&gt;</code>, <code>&lt;main&gt;</code>, <code>&lt;button&gt;</code>, and links that are real <code>&lt;a href&gt;</code> elements. A <code>&lt;div&gt;</code> with a click handler cannot be reached with the keyboard by default and is not announced as a link or button by screen readers, and it is also a link Google cannot reliably follow. Our guide to <a href=\"https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering\">JavaScript SEO and crawlable links</a> explains the search side.</p><h3>Contrast and readability</h3><p>WCAG's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html\">minimum contrast criterion</a> asks for a contrast ratio of at least 4.5:1 for normal text and 3:1 for large text. Low-contrast text is not a ranking problem, but pale grey text on white is hard for everyone to read, especially on a phone outdoors. People who cannot read your content will not stay to act on it.</p><h2>Automated testing vs manual testing</h2><p>Automated tools are the right place to start. They are fast, they cover many pages, and they catch common, objective problems such as missing alt attributes, missing form labels, empty links and insufficient contrast.</p><p>The most widely used engine is axe-core, an open-source library from Deque that runs rules against the rendered page. Even its makers are upfront about the limits: the <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://github.com/dequelabs/axe-core\">axe-core project page</a> says it finds on average 57% of WCAG issues automatically, and flags some results as needing manual review.</p><p><strong>Automated tools catch part of the problem, not all of it.</strong> The W3C's guidance on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.w3.org/WAI/test-evaluate/tools/selecting/\">choosing evaluation tools</a> says tools cannot check all accessibility aspects automatically and that human judgment is required. A tool can confirm an image has alt text. It cannot tell whether \"image1\" is a useful description, whether your focus order makes sense, or whether your error messages are understandable.</p><h3>Run an automated check across the whole site</h3><p>Testing one page in a browser extension misses template problems that repeat across hundreds of pages. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> can run axe-core on rendered pages during a crawl, and also flags missing alt text, missing <code>lang</code> attributes, non-sequential headings and non-descriptive or empty anchor text, so you can see which issues are site-wide.</p><h3>Then test with a keyboard</h3><ol><li>Put the mouse aside and press Tab from the top of the page.</li><li>Check that every link, button and form field can be reached, in a logical order.</li><li>Check that you can always see where the focus is.</li><li>Open and close menus, dialogs and accordions with Enter, Space and Escape.</li><li>Make sure you never get stuck inside a component.</li></ol><h3>Then try a screen reader</h3><p>Free options are built in or easy to get: VoiceOver on macOS and iOS, TalkBack on Android, and NVDA on Windows. Spend ten minutes on your most important page. Jump through the headings, open the links list, and try to complete one task, such as sending a contact form. You will quickly hear what an automated report cannot tell you.</p><p>Finally, zoom the browser to 200% and check that the content still reads and nothing is cut off or overlapping.</p><h2>An accessible website checklist for SEO-minded owners</h2><ul><li>Every meaningful image has descriptive alt text; decorative images have empty alt.</li><li>One clear H1 per page, with headings nested in order.</li><li>Link text describes the destination; no bare \"click here\".</li><li>Every page has a unique, descriptive title.</li><li>The <code>&lt;html&gt;</code> element has the correct <code>lang</code> attribute.</li><li>Videos have captions, and important videos have transcripts.</li><li>Navigation, buttons and links use real HTML elements.</li><li>Text meets WCAG contrast ratios.</li><li>Everything works with a keyboard, with visible focus.</li><li>Forms have visible labels and clear error messages.</li></ul><h2>The bottom line</h2><p>Accessibility and SEO overlap because both depend on clear, well-structured pages: meaningful alt text, logical headings, descriptive links, good titles and real HTML. Google does not reward accessibility as a ranking factor in itself, but the same fixes make your content easier for search engines to understand and for every visitor to use.</p><p>Start with an automated scan to find the obvious, repeated problems, then test with a keyboard and a screen reader, because tools only catch part of what matters. Fix issues at the template level so every page benefits.</p><p><strong>Your next step:</strong> put your mouse away and try to complete your most important task, such as booking or contacting you, using only the keyboard, then note every point where you got stuck or lost focus.</p>",
+  "faqs": [
+    {
+      "question": "Is accessibility a Google ranking factor?",
+      "answer": "Google does not list accessibility as a ranking factor. Many accessibility improvements, such as descriptive alt text, clear headings and crawlable links, also help Google understand your content, so the two often improve together."
+    },
+    {
+      "question": "What WCAG level should a small business website aim for?",
+      "answer": "Level AA is the target most organizations and policies use, and it is a sensible goal for most sites. It includes the Level A criteria plus requirements such as minimum text contrast. Check which laws apply in your country, since some set specific requirements."
+    },
+    {
+      "question": "Can an accessibility overlay or plugin make my site compliant?",
+      "answer": "No tool can fix everything automatically. A script cannot know what your photos show, whether your link text makes sense, or whether a form is understandable. Use tools to find problems, then fix them in your site's HTML and content."
+    },
+    {
+      "question": "Which free screen readers can I test with?",
+      "answer": "VoiceOver is built into macOS and iOS, TalkBack is built into Android, and NVDA is a free screen reader for Windows. Spending a few minutes navigating your key pages with one of them shows problems that automated tests miss."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained",
+      "anchor": "Core Web Vitals and page speed"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text",
+      "anchor": "writing useful alt text"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo",
+      "anchor": "structuring H1, H2 and H3 headings"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/orphan-pages-internal-linking",
+      "anchor": "internal linking and anchor text"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering",
+      "anchor": "JavaScript SEO and crawlable links"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://www.w3.org/WAI/standards-guidelines/wcag/",
+      "anchor": "W3C's WCAG overview",
+      "supports": "WCAG is the W3C international standard; four principles; success criteria at levels A, AA and AAA; versions 2.0, 2.1 and 2.2 where later versions add criteria without changing existing ones."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites",
+      "anchor": "does not use the lang attribute",
+      "supports": "Google uses visible content to determine page language and does not use code-level language information such as lang attributes."
+    },
+    {
+      "url": "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+      "anchor": "minimum contrast criterion",
+      "supports": "WCAG minimum contrast: 4.5:1 for normal text and 3:1 for large text."
+    },
+    {
+      "url": "https://github.com/dequelabs/axe-core",
+      "anchor": "axe-core project page",
+      "supports": "Deque states axe-core finds on average 57% of WCAG issues automatically and marks some results as incomplete for manual review."
+    },
+    {
+      "url": "https://www.w3.org/WAI/test-evaluate/tools/selecting/",
+      "anchor": "choosing evaluation tools",
+      "supports": "Evaluation tools cannot check all accessibility aspects automatically; human judgment is required."
+    }
+  ],
+  "editor_notes": [
+    "Add a short recording or screenshot of a screen reader's links list on a page full of 'click here' links versus descriptive links.",
+    "Add results from an automated axe-core scan of a real site, showing which issues repeated across templates.",
+    "Describe what you found in your own keyboard-only test of a site, such as a menu or dialog that trapped focus."
+  ],
+  "image_idea": "A spider web strung between a magnifying glass, a keyboard key and a speaker, all connected by the same strands."
+}

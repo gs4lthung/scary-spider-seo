@@ -1,4 +1,4 @@
-import { uploadImage } from "@/app/admin/media-actions";
+import { uploadImageFile } from "@/lib/upload-image";
 
 // Images added to the post body are inserted into the editor as local blob
 // URLs and only uploaded to R2 when the post is saved. `pendingImages` maps
@@ -18,9 +18,7 @@ export async function resolvePendingImageUploads(html: string, pending: PendingI
   const uploads = [...new Set(blobUrls)].map(async (url) => {
     const file = fileByUrl.get(url);
     if (!file) return null;
-    const formData = new FormData();
-    formData.set("file", file);
-    const result = await uploadImage(formData);
+    const result = await uploadImageFile(file);
     if ("error" in result) throw new Error(result.error);
     return { from: url, to: result.url };
   });

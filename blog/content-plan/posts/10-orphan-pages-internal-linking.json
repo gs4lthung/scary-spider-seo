@@ -1,0 +1,81 @@
+{
+  "id": 10,
+  "title": "Orphan Pages and Internal Linking: A Simple Plan That Works",
+  "slug": "orphan-pages-internal-linking",
+  "category": "Technical SEO",
+  "excerpt": "Orphan pages have no internal links pointing to them, so visitors and crawlers miss them. Learn how to find them and an internal linking routine to stop new ones.",
+  "meta_title": "Orphan Pages: How to Find and Fix Them With Internal Links",
+  "meta_description": "Find orphan pages by comparing your sitemap with a crawl, then fix them with a simple internal linking plan: click depth, topic hubs, and better anchors.",
+  "key_takeaways": [
+    "An orphan page has no internal links pointing to it, so visitors and crawlers that follow links cannot reach it.",
+    "Find orphan pages by comparing a list of known URLs, such as your sitemap and CMS export, against the URLs a crawl can reach.",
+    "A sitemap helps discovery but does not replace internal links, which signal importance and context.",
+    "Keep important pages within about three clicks of the home page and give key pages links from several relevant pages.",
+    "Prevent new orphans by linking every new page to its hub and adding links to it from two or three older pages on publish day."
+  ],
+  "content_html": "<p>You spend a week on a detailed guide, publish it, and it shows up in your XML sitemap. A month later it has almost no impressions. You check your site and realize nothing links to it: not the menu, not the blog index past page one, not a single related post.</p><p>That guide is one of your orphan pages. It exists, search engines may even know about it, but your own site gives no sign that it matters.</p><p>This post explains what orphan pages are, how to find them by comparing a crawl with your sitemap, and how to fix them. It also covers the wider internal linking habits that stop new orphans appearing: click depth, weakly linked pages, hub and spoke linking, and anchor text.</p><h2>What orphan pages are and why they hurt</h2><p>An orphan page is a page on your site that no other page on your site links to. Visitors cannot reach it by clicking around, and a crawler that starts at your home page will never find it.</p><p>Google is clear that links matter here. Its link guidance says <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/links-crawlable\">every page you care about should have a link</a> from at least one other page on your site. A sitemap helps, but Google's own sitemap documentation notes that listing a URL <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview\">does not guarantee it will be crawled and indexed</a>.</p><p><strong>Internal links do two jobs a sitemap cannot: they tell search engines how important a page is, and the anchor text tells them what it is about.</strong> An orphan gets neither. If a page you care about is not making it into search results at all, our guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages\">fixing pages Google is not indexing</a> walks through every likely cause, orphaning included.</p><h3>How pages become orphans</h3><ul><li>A page is removed from the main menu during a redesign, and nothing else pointed to it.</li><li>Campaign landing pages are built for ads or email and never linked from the site.</li><li>Old blog posts drop off the paginated blog index and are only reachable through page 14.</li><li>Links are built with JavaScript click handlers instead of real <code>&lt;a href&gt;</code> elements, so crawlers cannot follow them.</li><li>Pages are created in the CMS, published, and forgotten.</li></ul><h2>How to find orphan pages</h2><p>You cannot find orphan pages with a crawl alone, because a crawl only sees pages that are linked. <strong>The method is to compare a list of every URL you know exists against the list of URLs a crawl can reach.</strong></p><ol><li><strong>Build the \"known URLs\" list.</strong> Combine your XML sitemap, an export of published pages from your CMS, and the landing pages from your analytics or the Search Console Performance report.</li><li><strong>Crawl the site from the home page</strong>, following internal links only.</li><li><strong>Compare the two lists.</strong> Any URL that is known but was not reached by the crawl is an orphan candidate. In a spreadsheet, a simple <code>MATCH</code> or <code>XLOOKUP</code> between the two columns does the job.</li><li><strong>Check each candidate by hand.</strong> Some will be deliberate, such as a thank-you page after a form.</li></ol><p>Some crawlers do the comparison for you. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> can seed the crawl from your sitemap and flag orphan pages (URLs in the sitemap that have no internal links), along with deep pages and pages that have only one inlink.</p><p>While you are comparing lists, look at the opposite gap too. Indexable pages missing from the sitemap, and sitemap URLs that redirect or return errors, both point to a sitemap that needs work. Our guide on how to <a href=\"https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide\">audit your XML sitemap</a> walks through that cleanup.</p><h2>Decide what to do with each orphan page</h2><p>Not every orphan deserves to be rescued. Sort each one into a bucket:</p><ul><li><strong>Valuable and current:</strong> add internal links to it from relevant pages (the rest of this post covers how).</li><li><strong>Outdated, but has backlinks or traffic:</strong> merge it into a better page and 301 redirect the old URL. If you are unsure which redirect to use, read about <a href=\"https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects\">choosing between 301 and 302 redirects</a>.</li><li><strong>Deliberately unlinked</strong> (thank-you pages, ad landing pages): leave it unlinked, consider noindex, and take it out of the sitemap.</li><li><strong>No value at all:</strong> delete it, let it return 404 or 410, and remove it from the sitemap.</li></ul><p>Example: say you run a bakery site with 40 pages and find six orphans. Two are seasonal cake pages from past years, one is a catering menu the menu redesign dropped, and three are form confirmation pages. The catering menu gets linked from the home page and the contact page. The seasonal pages get merged into one evergreen \"seasonal cakes\" page. The confirmation pages stay as they are.</p><h2>Click depth: how far a page is from your home page</h2><p>Click depth is the number of clicks it takes to reach a page from the home page. The home page is depth 0, pages in the main menu are depth 1, and so on.</p><p>Google does not publish a depth limit. Still, a page buried six clicks deep usually has fewer internal links pointing to it and is harder for both people and crawlers to reach. <strong>A practical rule is to keep your important pages within about three clicks of the home page.</strong></p><p>The usual cause of deep pages is pagination. If your blog index shows ten posts per page, a post from two years ago may only be reachable at <code>/blog/page/15/</code>, which can leave it more than ten clicks from the home page.</p><p>Ways to bring pages closer to the surface:</p><ul><li>Add category or topic pages that list related posts, and link them from the menu.</li><li>Link to important older posts from newer ones in the body text.</li><li>Build hub pages that link to every post on a topic (more on this below).</li><li>Add a short \"related posts\" block, curated by hand where it matters.</li></ul><h2>Pages with only one internal link</h2><p>A page with a single inlink is one edit away from becoming an orphan. If that link lives on a page you later delete or rewrite, the page drops off the map.</p><p>Search Console's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://support.google.com/webmasters/answer/9049606?hl=en\">Links report</a> shows which of your pages are the most linked from within your own site. Sort the other way in your crawl data and you will see the weakly linked ones. Product pages, service pages, and cornerstone guides should never be in that bottom group.</p><p><strong>Action:</strong> for every page that brings in leads or sales, aim for links from several relevant pages, not just one.</p><h2>Use hub and spoke linking to organize topics</h2><p>Hub and spoke linking (often called a topic cluster) is the simplest internal linking strategy that scales. You write one broad hub page on a topic and several focused spoke pages on subtopics. The hub links to every spoke, every spoke links back to the hub, and spokes link to each other where it helps the reader.</p><p>This blog uses the same pattern. Our <a href=\"https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist\">technical SEO audit checklist</a> is the hub for the technical cluster, and each step links out to a deeper guide on that step.</p><p>Example for the bakery: a hub page on wedding cakes links to spokes on pricing, flavors, delivery, and tasting appointments. Each spoke links back to the hub and to the pricing page. A new visitor can move through the topic in any order, and a crawler finds every page within two clicks of the hub.</p><p>If you are newer to how links fit into SEO as a whole, our <a href=\"https://blog.scaryspiderseo.com/dont-let-your-website-turn-invisible-a-beginner-guide\">beginner's guide to how search works</a> covers the basics first.</p><h2>Anchor text best practices for internal links</h2><p>Anchor text is the clickable text of a link. Google's guidance is that good anchor text is descriptive, reasonably concise, and relevant to the page it points to. A useful test: read the anchor on its own, out of context. If you cannot tell what the linked page is about, rewrite it.</p><table><thead><tr><th>Weak anchor</th><th>Better anchor</th></tr></thead><tbody><tr><td>click here</td><td>see our wedding cake prices</td></tr><tr><td>read more</td><td>how to store a fruit cake</td></tr><tr><td>this page</td><td>book a tasting appointment</td></tr></tbody></table><p>Two cautions. First, do not cram keywords into every anchor; natural variation reads better and keyword stuffing is against Google's spam policies. Second, use real <code>&lt;a href=\"...\"&gt;</code> links. Google can only reliably follow links that are anchor elements with an <code>href</code> attribute.</p><h2>A repeatable process for every new page</h2><p>Orphan pages are far easier to prevent than to find later. Run this short routine every time you publish:</p><ol><li><strong>Pick the hub.</strong> Decide which topic hub the new page belongs to, and add a link to it from the hub.</li><li><strong>Link out from the new page</strong> to the hub and to two or three closely related pages, using descriptive anchors.</li><li><strong>Link in from older pages.</strong> Search your own site for the topic (for example, <code>site:yourdomain.com wedding cake</code>) and add a contextual link from two or three relevant existing pages.</li><li><strong>Check the sitemap</strong> includes the new URL, which most CMS plugins handle automatically.</li><li><strong>Recrawl monthly</strong> and review orphan pages, deep pages, and pages with a single inlink.</li></ol><p>Step 3 is the one most people skip, and it is the one that stops orphan pages from appearing in the first place.</p><h2>The bottom line</h2><p>Orphan pages are pages your own site forgot about. They are easy to find once you compare your sitemap against a crawl, and most can be fixed in minutes by adding a few relevant internal links, merging them, or removing them.</p><p>The lasting fix is a habit: organize content into hubs and spokes, keep important pages within a few clicks of the home page, write anchors that describe the destination, and link new posts from old ones on the day you publish.</p><p><strong>Your next step:</strong> export your sitemap URLs, crawl your site from the home page, and list every URL that appears in the sitemap but not in the crawl. That list is your orphan pages to fix this week.</p>",
+  "faqs": [
+    {
+      "question": "Are orphan pages bad for SEO?",
+      "answer": "They are a missed opportunity rather than a penalty. Without internal links, search engines get no signal that the page matters and no anchor text describing it, and visitors cannot find it. Pages you care about should be linked from at least one other page on your site."
+    },
+    {
+      "question": "Can Google find a page that is only in the sitemap?",
+      "answer": "Yes, Google can discover URLs from a sitemap. However, Google says a sitemap does not guarantee a page will be crawled and indexed, and a page with no internal links looks unimportant compared with well-linked pages."
+    },
+    {
+      "question": "How many internal links should a page have?",
+      "answer": "There is no ideal number. Google says there is no magical count of links per page. Focus on linking each important page from several relevant pages, and keep links where they genuinely help the reader."
+    },
+    {
+      "question": "What is a good click depth for SEO?",
+      "answer": "Google does not set a limit, but a common practical rule is to keep important pages within about three clicks of the home page. Pages that sit much deeper usually have fewer internal links and are slower for people and crawlers to reach."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages",
+      "anchor": "fixing pages Google is not indexing"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide",
+      "anchor": "audit your XML sitemap"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects",
+      "anchor": "choosing between 301 and 302 redirects"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist",
+      "anchor": "technical SEO audit checklist"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/dont-let-your-website-turn-invisible-a-beginner-guide",
+      "anchor": "beginner's guide to how search works"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+      "anchor": "every page you care about should have a link",
+      "supports": "Every page you care about should have a link from at least one other page; good anchor text is descriptive and concise; Google crawls <a> elements with an href."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview",
+      "anchor": "does not guarantee it will be crawled and indexed",
+      "supports": "A sitemap helps discovery but does not guarantee that all URLs in it will be crawled and indexed."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/9049606?hl=en",
+      "anchor": "Links report",
+      "supports": "The Search Console Links report shows the top internally linked pages on your site."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of a crawl comparison showing orphan pages found on a real site, with the URLs anonymized if needed.",
+    "Add your own example of a hub and spoke cluster you built, with how the internal links were laid out.",
+    "Add a screenshot of the Search Console Links report 'Top internally linked pages' table from one of your sites.",
+    "If you have seen an orphan page start getting impressions after internal links were added, describe what you did and the timeline."
+  ],
+  "image_idea": "A small lost spider on a lone web strand far from a large, busy web, with a new silk thread being spun to connect them."
+}

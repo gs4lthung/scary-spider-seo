@@ -1,0 +1,89 @@
+{
+  "id": 6,
+  "title": "Page Not Indexed? Why Google Skips Pages and How to Fix It",
+  "slug": "why-google-is-not-indexing-your-pages",
+  "category": "Technical SEO",
+  "excerpt": "Page not indexed by Google? Learn what each Search Console indexing status means, which ones you can ignore, and a step-by-step process to fix the pages that matter.",
+  "meta_title": "Page Not Indexed by Google? Causes and Fixes",
+  "meta_description": "Page not indexed by Google? Learn crawl vs index, what each Search Console status means, and how to fix robots.txt, noindex, duplicate and quality issues.",
+  "key_takeaways": [
+    "Crawling, indexing and ranking are separate steps, and Google does not guarantee that every crawled page will be indexed.",
+    "Many non-indexed URLs, such as redirects and duplicates, are excluded on purpose and need no action.",
+    "Start with a short list of important pages and inspect each one in the URL Inspection tool.",
+    "Fix technical blocks like robots.txt rules and noindex first, then align canonical signals, then improve thin or poorly linked pages.",
+    "After fixing, test the live URL, request indexing for key pages, and allow up to about two weeks for validation."
+  ],
+  "content_html": "<p>You published a new service page two weeks ago and it still does not show up in Google. You open Search Console and find a long list of URLs under \"Why pages aren't indexed,\" with labels like \"Crawled - currently not indexed\" and \"Duplicate without user-selected canonical.\" You have a <strong>page not indexed</strong> by Google and no clear instruction on what to change.</p>\n<p>This is one of the most common worries for small site owners, and one of the most misunderstood. Some of those statuses are real problems. Many are Google working exactly as intended. The trick is telling them apart.</p>\n<p>This guide explains the difference between crawling, indexing and ranking, walks through the main Page indexing report statuses and what usually causes each one, and gives you a repeatable process to fix the pages that matter.</p>\n\n<h2>Crawl, index, rank: three different steps</h2>\n<p>Google describes Search as <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/fundamentals/how-search-works\">three stages: crawling, indexing and serving results</a>. Crawling is Googlebot downloading your page. Indexing is Google analyzing that page and deciding whether to store it in its index. Serving (ranking) is choosing which indexed pages to show for a search.</p>\n<p><strong>A page can be crawled and still not be indexed, and indexed and still not rank.</strong> Those are separate problems with separate fixes. Google also states plainly that indexing is not guaranteed: not every page it processes will be indexed, and low-quality content is one of the common reasons.</p>\n<p>Say you run a plumbing business with 30 pages. If your \"Boiler repair\" page is indexed but sits on page five, that is a ranking question about content and competition. If it never appears for a search of its exact URL, that is an indexing question, and it is the one this guide covers.</p>\n\n<h2>First, check whether you actually have a problem</h2>\n<p>Not every URL on your site should be indexed. Redirected URLs, filtered category views, internal search results and duplicate versions of pages are supposed to stay out. A non-indexed count in the hundreds can be perfectly healthy if those URLs are all junk variants.</p>\n<p>Google's own <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://support.google.com/webmasters/answer/7440203\">Page indexing report documentation</a> says that if your site has fewer than 500 pages, you probably do not need the report at all. It suggests starting with simple searches instead:</p>\n<ul>\n<li><code>site:example.com</code> to see a sample of what Google has indexed.</li>\n<li><code>site:example.com/services/boiler-repair</code> to check one specific URL.</li>\n</ul>\n<p>What to do: write down the 10 to 20 pages that genuinely matter (home, services, products, top articles). <strong>Those pages are your indexing checklist.</strong> If they are indexed, most other \"not indexed\" entries can wait.</p>\n\n<h2>Use the URL Inspection tool on your important pages</h2>\n<p>For any important page that is missing, the <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://support.google.com/webmasters/answer/9012289\">URL Inspection tool in Search Console</a> is the fastest way to a diagnosis. It shows whether the URL is indexed, which canonical Google selected, whether crawling and indexing are allowed, and when Google last crawled it.</p>\n<p>Two features matter most:</p>\n<ul>\n<li><strong>Test live URL</strong> checks the current version of the page, so you can confirm a fix before asking Google to look again.</li>\n<li><strong>Request indexing</strong> asks Google to crawl the URL. There is a daily limit per property, so save it for important pages after you have fixed something.</li>\n</ul>\n\n<h2>Page not indexed: what each status means and how to fix it</h2>\n<p>Here are the statuses you are most likely to see on a small site, grouped by cause. The labels come from the Page indexing report.</p>\n<table>\n<thead><tr><th>Status</th><th>Usual cause</th><th>First fix to try</th></tr></thead>\n<tbody>\n<tr><td>URL blocked by robots.txt</td><td>A Disallow rule matches the URL</td><td>Remove or narrow the rule if the page should rank</td></tr>\n<tr><td>URL marked 'noindex'</td><td>A meta robots tag or X-Robots-Tag header</td><td>Remove noindex if the page should rank</td></tr>\n<tr><td>Alternate page with proper canonical tag</td><td>The page points to another URL as canonical</td><td>Usually nothing</td></tr>\n<tr><td>Duplicate without user-selected canonical</td><td>Google found a near-identical page and picked the other one</td><td>Add a canonical, or make the pages genuinely different</td></tr>\n<tr><td>Duplicate, Google chose different canonical than user</td><td>Your canonical conflicts with other signals</td><td>Align canonical, links, redirects and sitemap</td></tr>\n<tr><td>Page with redirect</td><td>The URL redirects elsewhere</td><td>Usually nothing; update internal links</td></tr>\n<tr><td>Not found (404), Soft 404, Server error (5xx)</td><td>Missing pages, empty pages, server trouble</td><td>Restore, redirect, or fix the server</td></tr>\n<tr><td>Crawled - currently not indexed</td><td>Google fetched it and decided not to index it, for now</td><td>Improve the page and its internal links</td></tr>\n<tr><td>Discovered - currently not indexed</td><td>Google knows the URL but has not crawled it yet</td><td>Strengthen internal links and sitemap signals</td></tr>\n</tbody>\n</table>\n\n<h3>URL blocked by robots.txt</h3>\n<p>Your robots.txt file tells Googlebot not to fetch the URL. This is the classic leftover from a staging site that launched with <code>Disallow: /</code> still in place. If the page should rank, find the matching rule and remove or narrow it. Our guide on <a href=\"https://blog.scaryspiderseo.com/technical-seo/robots-txt-guide\">writing safe robots.txt rules</a> covers the syntax and the common mistakes.</p>\n<p>Watch for the related warning \"Indexed, though blocked by robots.txt.\" Google can index a blocked URL without its content if other pages link to it, which usually means a poor search result with no description.</p>\n\n<h3>URL marked 'noindex'</h3>\n<p>The page carries a <code>noindex</code> directive, either in a meta robots tag or an <code>X-Robots-Tag</code> HTTP header. That is correct for thank-you pages and internal search results. It is a serious mistake on a service page, and it often comes from a CMS setting like \"Discourage search engines\" or a per-page SEO toggle left on.</p>\n<p>Remove the directive, then use Test live URL to confirm it is gone. If you are unsure which pages deserve a noindex and which should be blocked instead, read <a href=\"https://blog.scaryspiderseo.com/technical-seo/noindex-vs-disallow\">when to use noindex versus disallow</a>.</p>\n\n<h3>Duplicate and canonical statuses</h3>\n<p>Three statuses relate to duplicates. \"Alternate page with proper canonical tag\" means your page correctly points to another URL as the main version, so there is nothing to do. \"Duplicate without user-selected canonical\" means Google found near-identical pages and chose one itself. \"Duplicate, Google chose different canonical than user\" means you declared a canonical but other signals disagreed.</p>\n<p><strong>For the last two, check what Google selected in URL Inspection before changing anything.</strong> Sometimes Google's choice is the better one. If it is not, align every signal: the canonical tag, internal links, redirects and the sitemap should all name the same URL. Learn <a href=\"https://blog.scaryspiderseo.com/technical-seo/canonical-tags-explained\">how canonical tags work</a> and how to <a href=\"https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo\">fix duplicate content that splits signals</a>.</p>\n<p>Say your shop sells a mug in four colors and each color has its own URL with identical text. Google will likely index one and mark the rest as duplicates. Either canonicalize the variants to one page, or give each variant enough unique content to stand on its own.</p>\n\n<h3>Page with redirect, 404, soft 404 and 5xx</h3>\n<p>\"Page with redirect\" is normal for old URLs that now point somewhere else. The fix is only needed if your own links or sitemap still use the old address. If you see \"Redirect error\" instead, you likely have a chain or loop; here is <a href=\"https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects\">how to fix redirect chains</a>.</p>\n<p>A 404 is fine for pages that are truly gone. A soft 404 means the page returns 200 but looks empty or like an error, often a thin category page or an out-of-stock product with no content. Server errors (5xx) mean Googlebot could not get the page at all; check with your host if these appear on pages that load fine for you.</p>\n\n<h3>Crawled - currently not indexed</h3>\n<p>Google fetched the page and chose not to index it, at least for now. Google says the page may or may not be indexed in the future, and that you do not need to resubmit it. <strong>On small sites this status most often points to pages that add little beyond what is already indexed.</strong></p>\n<p>Look honestly at each affected page. Is it thin, a near copy of another page, or missing the detail a searcher would need? Say you have 12 location pages that differ only by town name. Merging them, or adding real local detail such as service areas, local projects and specific contact details, gives Google a reason to index each one.</p>\n\n<h3>Discovered - currently not indexed</h3>\n<p>Google knows the URL exists but has not crawled it yet. Google's report documentation says the typical reason is that crawling was expected to overload the site, so it was rescheduled. On a small site, where server load is rarely the issue, it is still worth checking how the page is linked internally.</p>\n<p>A page that appears only in the sitemap, with no internal links pointing to it, sends a weak signal about its importance. Find these <a href=\"https://blog.scaryspiderseo.com/technical-seo/orphan-pages-internal-linking\">orphan pages and link them</a> from relevant hub pages, and make sure your <a href=\"https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide\">XML sitemap lists only indexable URLs</a> so it points Google at pages worth crawling.</p>\n\n<h2>A repeatable process for fixing indexing problems</h2>\n<ol>\n<li><strong>List your important pages.</strong> Ignore everything else at first.</li>\n<li><strong>Inspect each one</strong> in the URL Inspection tool and note the status and the Google-selected canonical.</li>\n<li><strong>Fix technical blocks first:</strong> robots.txt rules, noindex directives, redirects, 404s and server errors. These are the quickest wins.</li>\n<li><strong>Fix duplicate signals next:</strong> canonical tags, internal links and sitemap entries should all agree.</li>\n<li><strong>Improve quality and linking last:</strong> expand thin pages, merge near duplicates, and add internal links from related pages.</li>\n<li><strong>Test live, then request indexing</strong> for the pages you changed.</li>\n<li><strong>Validate the fix</strong> in the Page indexing report. Google says validation typically takes up to about two weeks, and sometimes longer.</li>\n</ol>\n<p>Steps 3 and 4 are easier with a full crawl of your own site, because Search Console only shows a sample of URLs per status. A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags noindex and X-Robots-Tag directives, canonical problems, orphan pages, and non-indexable URLs in your sitemap across every page it crawls, so you can fix the causes in bulk.</p>\n\n<h2>The bottom line</h2>\n<p>A page not indexed by Google is a symptom, and the Page indexing report tells you which kind. Technical blocks like robots.txt rules and noindex are quick to fix. Duplicate and canonical statuses need consistent signals. \"Crawled\" and \"Discovered\" statuses usually come down to page quality and internal links.</p>\n<p>Do not chase every non-indexed URL. Focus on the pages that should earn traffic, fix the cause, confirm it with a live test, and give Google time to recrawl.</p>\n<p><strong>Your next step:</strong> list your ten most important URLs, run each through the URL Inspection tool today, and write down the status and Google-selected canonical next to each one.</p>",
+  "faqs": [
+    {
+      "question": "How long does it take Google to index a new page?",
+      "answer": "There is no fixed timeframe. Some pages are indexed within days, others take weeks, and some are never indexed. Linking to the page from relevant pages on your site, listing it in your sitemap, and requesting indexing in the URL Inspection tool can help Google find it sooner."
+    },
+    {
+      "question": "Should I keep clicking Request Indexing until the page is indexed?",
+      "answer": "No. Requesting indexing asks Google to crawl the page, but it does not force indexing, and there is a daily limit per property. Request it once after a real change, then work on the cause if the page still is not indexed."
+    },
+    {
+      "question": "Is Crawled - currently not indexed a penalty?",
+      "answer": "No. It means Google fetched the page and decided not to index it for now. It is often a signal that the page adds little compared to other pages, so improving the content and its internal links is the usual fix."
+    },
+    {
+      "question": "Why does Search Console show hundreds of non-indexed URLs on my small site?",
+      "answer": "Most are usually variants that should not be indexed, such as redirects, parameter URLs, tag archives or duplicates. Check whether your important pages are indexed first. If they are, the rest may be harmless."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/robots-txt-guide",
+      "anchor": "writing safe robots.txt rules"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/noindex-vs-disallow",
+      "anchor": "when to use noindex versus disallow"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/canonical-tags-explained",
+      "anchor": "how canonical tags work"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo",
+      "anchor": "fix duplicate content that splits signals"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/301-vs-302-redirects",
+      "anchor": "how to fix redirect chains"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/orphan-pages-internal-linking",
+      "anchor": "orphan pages and link them"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/xml-sitemap-guide",
+      "anchor": "XML sitemap lists only indexable URLs"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/how-search-works",
+      "anchor": "three stages: crawling, indexing and serving results",
+      "supports": "Google Search works in three stages, indexing is not guaranteed, and low-quality content is a common indexing issue."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/7440203",
+      "anchor": "Page indexing report documentation",
+      "supports": "Sites under 500 pages probably do not need the report; definitions of each status; validation typically takes up to about two weeks."
+    },
+    {
+      "url": "https://support.google.com/webmasters/answer/9012289",
+      "anchor": "URL Inspection tool in Search Console",
+      "supports": "The tool shows index status, live tests and request indexing, with a daily limit of requests per property."
+    }
+  ],
+  "editor_notes": [
+    "Add an annotated screenshot of the Page indexing report from a real site, highlighting which statuses needed action and which did not.",
+    "Add a URL Inspection screenshot showing a user-declared canonical that differs from the Google-selected canonical.",
+    "Share a real example of a page that moved from Crawled - currently not indexed to indexed after a content or linking change, with the timeline.",
+    "Add a crawl export showing noindex or canonical issues found on a real audit."
+  ],
+  "image_idea": "A library card catalog where most drawers are open and filled, but a few cards lie on the floor beside the cabinet."
+}

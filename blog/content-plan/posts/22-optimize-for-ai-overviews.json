@@ -1,0 +1,85 @@
+{
+  "id": 22,
+  "title": "AI Overviews SEO: How to Show Up in Google's AI Search",
+  "slug": "optimize-for-ai-overviews",
+  "category": "AI SEO",
+  "excerpt": "What Google has actually said about getting cited in AI Overviews and AI Mode: the one technical requirement, practical steps that help, and the hacks to skip.",
+  "meta_title": "AI Overviews SEO: How to Get Cited in Google AI Search",
+  "meta_description": "AI overviews SEO grounded in Google's own guidance: be indexed and snippet-eligible, answer clearly, add real experience, and skip llms.txt and hacks.",
+  "key_takeaways": [
+    "Google says there are no additional requirements to appear in AI Overviews or AI Mode beyond being indexed and eligible to show with a snippet.",
+    "Google's AI features are rooted in its core ranking systems, so ordinary SEO fundamentals still decide which pages get used.",
+    "Clear early answers, helpful structure and first-hand, non-commodity content give a page the best chance of being cited.",
+    "Google Search does not use llms.txt or other AI text files, and there is no special schema for AI features.",
+    "AI feature traffic is counted in Search Console's Performance report under the Web search type."
+  ],
+  "content_html": "<p>You search for a question your business answers every day, and an AI Overview appears at the top of the results. It cites three websites. None of them is yours, and at least one says something you know is out of date. Welcome to the newest corner of SEO: AI Overviews.</p><p>Then you go looking for advice on how to get cited and find a flood of new acronyms (AEO, GEO), \"AI-ready\" content formats, special files to upload, and services promising to get you cited by chatbots.</p><p>Most of that advice is guesswork. Google has published fairly direct guidance on how its AI features choose sources, and it is less exotic than the sales pitches suggest.</p><p>This guide sticks to what Google has said publicly. You will learn how AI Overviews find content, the one technical requirement that matters, the practical steps that improve your chances, and the \"hacks\" you can safely skip.</p><h2>How Google's AI features choose their sources</h2><p>Google's AI Overviews and AI Mode do not use a separate index of the web. According to Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/fundamentals/ai-optimization-guide\">guide to optimizing for generative AI search</a>, these features are rooted in its core Search ranking and quality systems.</p><p>Two techniques do most of the work:</p><ul><li><strong>Grounding (retrieval-augmented generation):</strong> the system retrieves relevant pages from Google's search index and uses them to build and support the answer, with links back to those pages.</li><li><strong>Query fan-out:</strong> the model runs several related searches behind the scenes. A question like \"how to fix a lawn full of weeds\" might also trigger searches about herbicides or chemical-free weeding.</li></ul><p><strong>In plain English: if a page does not do well in regular Google Search, it is unlikely to be used in an AI answer.</strong> Fan-out can surface pages for related sub-questions, though, which gives a thorough page more than one way in.</p><p>Google also notes that AI Overviews only appear when its systems decide they add something beyond the classic results, so many queries never show one at all.</p><h2>The one requirement: be indexed and snippet-eligible</h2><p>Google's page on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/ai-features\">AI features and your website</a> is clear: to be shown as a supporting link in AI Overviews or AI Mode, a page must be indexed and eligible to be shown in Google Search with a snippet. There are no additional technical requirements.</p><p>That rules out pages that are:</p><ul><li>Blocked from crawling in robots.txt (or by a CDN or firewall that blocks Googlebot).</li><li>Marked <code>noindex</code>.</li><li>Restricted with <code>nosnippet</code>, or with a very low <code>max-snippet</code> value.</li><li>Not indexed for other reasons, such as duplication, weak content or a canonical that points elsewhere.</li></ul><p>So the first job is ordinary technical SEO. Check your key pages in Search Console's URL Inspection tool, and if any of them show as excluded, work through our guide on <a href=\"https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages\">fixing pages Google won't index</a>.</p><p>To check a whole site at once, a free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> can flag noindex directives (including the <code>X-Robots-Tag</code> header), canonical problems and non-200 status codes across every page it crawls.</p><p>If your site relies on JavaScript to load its main content, make sure that content still reaches Google. Our walkthrough on <a href=\"https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering\">how rendering hides content from Google</a> explains how to compare raw and rendered HTML.</p><h2>AI overviews SEO in practice: what to do</h2><p>Once a page is eligible, the factors that decide whether it is used are the same ones that decide whether it ranks: relevance, quality and usefulness. Here is how to apply them.</p><h3>1. Answer the question clearly, early</h3><p>If a page targets a question, answer it in the first paragraph or two, in plain language, before the background and caveats.</p><p>Say you run a garden center and write about when to plant tulip bulbs. A strong opening is: \"Plant tulip bulbs in autumn, roughly six to eight weeks before the ground freezes.\" Then explain soil temperature, regional timing and depth.</p><p>This is good writing for people first. A clear, direct answer is also easy for any system to find and quote accurately.</p><h3>2. Structure the page for readers</h3><p>Google says people appreciate pages organized into sections with clear headings. Use descriptive H2 and H3 headings, numbered lists for steps, and tables for comparisons.</p><p><strong>You do not need to \"chunk\" content into tiny pieces for AI.</strong> Google's guide says its systems can understand multiple topics on a page and pull out the relevant part, and that there is no ideal page length.</p><h3>3. Add something that is not already everywhere</h3><p>Google's AI guidance makes a distinction between commodity content, which repeats common knowledge, and non-commodity content, which adds a unique, expert or first-hand perspective.</p><p>A generic \"7 tips for first-time homebuyers\" list adds little. A page explaining exactly how your team handled a specific type of inspection problem, with photos and numbers, gives AI systems and people something they cannot get elsewhere.</p><p>This is the same idea behind experience in our <a href=\"https://blog.scaryspiderseo.com/ai-seo/eeat-checklist\">practical guide to E-E-A-T signals</a>. If you draft with AI tools, the step that matters most is adding your own knowledge back in, as covered in our guide to <a href=\"https://blog.scaryspiderseo.com/ai-seo/5-steps-to-humanize-ai-content-save-seo\">editing AI drafts into human content</a>.</p><h3>4. Keep facts verifiable</h3><p>AI answers are built from facts pulled from pages. Make yours easy to trust and easy to check:</p><ul><li>Put specific facts (prices, dates, opening hours, specs) in text, not only inside images.</li><li>Link claims to primary sources.</li><li>Show a real, visible updated date and keep it honest.</li><li>Fix outdated pages instead of publishing new ones next to them.</li></ul><h3>5. Use structured data that matches the page</h3><p>Structured data is not required for AI features, and Google says there is no special schema.org markup for them. It is still worth using for rich result eligibility, and it helps describe your content precisely.</p><p>The rule that matters: markup must describe what is visible on the page. Google's <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/structured-data/sd-policies\">general structured data guidelines</a> say not to mark up content that readers cannot see. If you are new to it, start with our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/structured-data-for-beginners\">beginner's guide to schema markup</a>.</p><h3>6. Earn real mentions</h3><p>AI features can reflect what is said about a business across the web, in blogs, videos and forum discussions. Google's guidance also warns that seeking inauthentic mentions is not as helpful as it might seem, because its systems are built to favor quality and block spam.</p><p>The work here is the same as good off-page SEO: be genuinely useful in the places your customers already talk, and give journalists, partners and community members a reason to reference you.</p><h2>What you can safely skip</h2><p>Google's AI optimization guide includes a short \"mythbusting\" list. For Google Search, you can ignore:</p><ul><li><strong>llms.txt and other AI text files.</strong> The <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://llmstxt.org/\">llms.txt proposal</a> is a community convention for a Markdown file that summarizes a site for language models. Google says Google Search does not use these files. Creating one will neither help nor harm your visibility in Google, though other services may use it.</li><li><strong>Chunking content</strong> into small pieces specifically for AI.</li><li><strong>Rewriting pages</strong> in a special style for AI. Google says its systems understand synonyms and meaning, so you do not need every long-tail variation.</li><li><strong>Special schema</strong> for AI features. There is none.</li><li><strong>Mass-producing pages</strong> for every variation of a question. Google says doing this primarily to manipulate rankings or AI answers violates its scaled content abuse policy.</li></ul><p>Treat any service that promises guaranteed AI citations, or claims access to internal Google metrics, with suspicion. Google states that no third-party tool has access to its internal ranking or AI systems.</p><h2>How to measure and control AI visibility</h2><p>Traffic from AI Overviews and AI Mode is counted in Search Console's Performance report, under the \"Web\" search type, alongside your other Google Search clicks. Google's AI optimization guide also points to a Generative AI performance report in Search Console for a closer look.</p><p>A practical routine:</p><ol><li>In the Performance report, filter for your most important question-style queries and note impressions and clicks over time.</li><li>Search those queries yourself, and note whether an AI Overview appears and which sources it links to.</li><li>Compare your page with the cited sources. Is your answer as clear and specific? Is it more up to date?</li><li>Improve the page, then check again after Google has had time to recrawl it.</li></ol><p>If you want to limit what Google shows from a page, the controls are the same as for regular snippets: <code>nosnippet</code>, <code>data-nosnippet</code>, <code>max-snippet</code> or <code>noindex</code>. Use them deliberately, because they also reduce how the page appears in normal results.</p><h2>The bottom line</h2><p>AI overviews SEO is mostly SEO. Google's AI features pull from the same index and lean on the same ranking systems, so a page has to be indexed, snippet-eligible and genuinely useful before it has any chance of being cited.</p><p>The edge comes from content others cannot copy: clear answers, real experience, verifiable facts and structured data that matches what is on the page. Skip the files and formats Google has said it does not use, and spend that time making your best pages better.</p><p><strong>Your next step:</strong> pick the five pages that answer your customers' most common questions, confirm each one is indexed in Search Console, and rewrite each opening paragraph so it answers the question directly in one or two sentences.</p>",
+  "faqs": [
+    {
+      "question": "How do I get my website featured in Google AI Overviews?",
+      "answer": "There is no form to apply and no special markup. Make sure the page is indexed and eligible to show with a snippet, then focus on clear answers, helpful structure and original content. Google chooses sources using its core ranking systems, so the same fundamentals apply."
+    },
+    {
+      "question": "Does Google use llms.txt?",
+      "answer": "No. Google says Google Search does not use llms.txt or similar AI text files, so adding one will neither help nor hurt your visibility in Google. Other AI services may read the file, so creating one is a separate decision."
+    },
+    {
+      "question": "Can I stop my content from appearing in AI Overviews?",
+      "answer": "You can use the same preview controls that apply to regular search snippets, such as nosnippet, data-nosnippet, max-snippet or noindex. These also affect how your page appears in normal search results, so use them carefully."
+    },
+    {
+      "question": "Is GEO different from SEO?",
+      "answer": "Google's view is that optimizing for its generative AI search features is still SEO. Terms like GEO and AEO describe the same goal, and Google recommends evaluating any advice sold under those labels against its official guidance."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages",
+      "anchor": "fixing pages Google won't index"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering",
+      "anchor": "how rendering hides content from Google"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/ai-seo/eeat-checklist",
+      "anchor": "practical guide to E-E-A-T signals"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/ai-seo/5-steps-to-humanize-ai-content-save-seo",
+      "anchor": "editing AI drafts into human content"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/structured-data-for-beginners",
+      "anchor": "beginner's guide to schema markup"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developers.google.com/search/docs/fundamentals/ai-optimization-guide",
+      "anchor": "guide to optimizing for generative AI search",
+      "supports": "AI features are rooted in core Search ranking; RAG and query fan-out; non-commodity content; llms.txt, chunking and special schema are not needed; avoid inauthentic mentions; Generative AI performance report"
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/ai-features",
+      "anchor": "AI features and your website",
+      "supports": "No additional requirements for AI Overviews/AI Mode; page must be indexed and eligible to be shown with a snippet; no AI text files or special schema needed; preview controls; reported in Performance report Web search type"
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/structured-data/sd-policies",
+      "anchor": "general structured data guidelines",
+      "supports": "Do not mark up content that is not visible to readers; markup must represent the main content"
+    },
+    {
+      "url": "https://llmstxt.org/",
+      "anchor": "llms.txt proposal",
+      "supports": "llms.txt is a proposed convention for a Markdown file that helps LLMs use a website"
+    }
+  ],
+  "editor_notes": [
+    "In the measurement section, add a real Search Console screenshot showing AI-related query performance for one of the blog's own pages.",
+    "In step 1, add a before and after opening paragraph from one of the team's own pages that was rewritten to answer the question directly.",
+    "Add a real example of an AI Overview for an SEO query, noting which sources were cited and what they had in common."
+  ],
+  "image_idea": "A small spider sitting at the center of a glowing web whose threads connect to floating index cards, one of them lit up as if selected."
+}

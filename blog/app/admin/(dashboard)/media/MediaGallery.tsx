@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { deleteMediaImage, listMediaImages, type MediaItem } from "@/app/admin/media-actions";
 import { useToast } from "@/components/Toaster";
+import { uploadImageFile } from "@/lib/upload-image";
+import { fileToWebP } from "@/lib/webp";
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,6 +42,56 @@ export function MediaGallery({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Uploads one file at a time (same WebP conversion and /admin/upload path
+  // as the post editor) and prepends each new image to the grid as it lands.
+  async function onFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0 || uploadProgress) return;
+    setError(null);
+    setUploadProgress({ done: 0, total: files.length });
+    const failures: string[] = [];
+    for (const [index, original] of files.entries()) {
+      try {
+        const file = await fileToWebP(original);
+        const result = await uploadImageFile(file);
+        if ("error" in result) {
+          failures.push(`${original.name}: ${result.error}`);
+        } else {
+          const key = result.url.replace("/media/", "");
+          setItems((prev) => [
+            { key, name: file.name, size: file.size, uploaded: new Date().toISOString(), contentType: file.type },
+            ...prev,
+          ]);
+        }
+      } catch {
+        failures.push(`${original.name}: upload failed`);
+      }
+      setUploadProgress({ done: index + 1, total: files.length });
+    }
+    setUploadProgress(null);
+    const uploaded = files.length - failures.length;
+    if (uploaded > 0) toast(uploaded === 1 ? "Image uploaded" : `${uploaded} images uploaded`);
+    if (failures.length > 0) setError(`Some images were not uploaded. ${failures.join(" ")}`);
+  }
+
+  const uploadBar = (
+    <div className="mb-6 flex items-center gap-3">
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onFilesSelected} />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploadProgress !== null}
+        className="rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+      >
+        {uploadProgress ? `Uploading ${uploadProgress.done + 1} of ${uploadProgress.total}...` : "Upload images"}
+      </button>
+      <span className="text-xs text-muted-foreground">JPEG and PNG are converted to WebP. Max 8MB each.</span>
+    </div>
+  );
 
   async function loadMore() {
     if (loading || !cursor) return;
@@ -88,17 +140,26 @@ export function MediaGallery({
     }
   }
 
+  const errorBox = error ? (
+    <p className="mb-4 rounded border border-red-400 bg-red-50 p-3 text-sm text-red-700">{error}</p>
+  ) : null;
+
   if (items.length === 0) {
     return (
-      <p className="py-16 text-center text-sm text-muted-foreground">
-        No images uploaded yet. Add one from a post&apos;s cover image or the editor.
-      </p>
+      <div>
+        {uploadBar}
+        {errorBox}
+        <p className="py-16 text-center text-sm text-muted-foreground">
+          No images uploaded yet. Use Upload images above, or add one from a post&apos;s cover image or the editor.
+        </p>
+      </div>
     );
   }
 
   return (
     <div>
-      {error ? <p className="mb-4 rounded border border-red-400 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+      {uploadBar}
+      {errorBox}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
         {items.map((item) => (

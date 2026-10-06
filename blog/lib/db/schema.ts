@@ -77,10 +77,35 @@ export const users = sqliteTable("users", {
   twitter: text("twitter"),
   linkedin: text("linkedin"),
   facebook: text("facebook"),
+  // Private address for password reset emails (lib/password-reset.ts). Never
+  // shown publicly, unlike `email` above. Stored lowercased.
+  loginEmail: text("login_email").unique(),
+  // Set when the password is reset by email link. Sessions issued before this
+  // moment are rejected by lib/session.ts::getCurrentUser, so a reset signs
+  // out every existing session. Milliseconds, to compare with session exp.
+  passwordChangedAt: integer("password_changed_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+// Single-use password reset links. Only a SHA-256 hash of the token is
+// stored, so a leaked DB row can't be turned back into a working link.
+export const passwordResetTokens = sqliteTable(
+  "password_reset_tokens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("password_reset_tokens_user_id_idx").on(table.userId)],
+);
 
 export const comments = sqliteTable("comments", {
   id: integer("id").primaryKey({ autoIncrement: true }),

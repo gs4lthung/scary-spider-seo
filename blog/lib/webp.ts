@@ -1,5 +1,5 @@
 // Client-side image re-encode: converts an uploaded JPEG/PNG to WebP in the
-// browser (canvas) before it is sent to the `uploadImage` server action, so
+// browser (canvas) before it is POSTed to /admin/upload (lib/upload-image.ts), so
 // R2 only ever stores compact WebP files instead of full-size originals.
 //
 // Why the browser and not the Worker: WebP encoding needs a native codec.

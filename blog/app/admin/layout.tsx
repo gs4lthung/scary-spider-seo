@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ToastProvider } from "@/components/Toaster";
+import { BlockedResponseModal } from "@/components/BlockedResponseModal";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -8,5 +9,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <ToastProvider>{children}</ToastProvider>;
+  return (
+    <ToastProvider>
+      {children}
+      <BlockedResponseModal />
+    </ToastProvider>
+  );
 }

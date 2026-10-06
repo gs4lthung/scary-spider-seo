@@ -1,0 +1,81 @@
+{
+  "id": 12,
+  "title": "How to Write Title Tags That Rank and Get Clicked",
+  "slug": "how-to-write-title-tags",
+  "category": "On-page SEO",
+  "excerpt": "How to write title tags that rank and earn clicks: length in characters and pixels, keyword placement, branding, why Google rewrites titles, and real examples.",
+  "meta_title": "How to Write Title Tags: Length, Format, and Examples",
+  "meta_description": "Learn how to write a title tag that ranks and gets clicks: ideal length in characters and pixels, keyword and brand placement, and why Google rewrites.",
+  "key_takeaways": [
+    "The title tag is the main source of the clickable headline Google shows in search results.",
+    "Google sets no maximum title length but truncates by pixel width, so aim for about 30 to 60 characters with the topic first.",
+    "Put the main keyword near the start, add a specific detail, and keep any brand name short and at the end on inner pages.",
+    "Google rewrites titles that are half-empty, outdated, inaccurate, boilerplate, or unclear, so keep the title accurate and in line with the main heading.",
+    "The title tag and H1 should describe the same topic but can be worded differently for their different audiences."
+  ],
+  "content_html": "<p>Search for your own business and look at the blue headline Google shows for your home page. For many small sites it says something like \"Home\" or just the company name. That headline is usually your title tag, and it is often the first thing a potential customer reads about you.</p><p>The title tag is one of the smallest pieces of SEO work and one of the most visible. A few words decide whether a searcher understands what your page offers and whether they click it or the result below.</p><p>In this guide you will learn what a title tag does, how long it should be (and why pixels matter more than characters), where to put keywords and your brand, why Google sometimes rewrites titles, and how titles differ from H1s. It ends with before and after examples for common page types.</p><h2>What a title tag is and why it matters</h2><p>The title tag is the <code>&lt;title&gt;</code> element in the <code>&lt;head&gt;</code> of a page. As <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/title\">MDN's reference for the title element</a> explains, it defines the document's title, which browsers show in the title bar or the page's tab.</p><pre><code>&lt;title&gt;Wedding Cakes in Bristol: Prices and Flavors - Rosie's Bakery&lt;/title&gt;</code></pre><p>Google uses it as the main source for the clickable headline in search results, which it calls the title link. Google's own documentation says the title link is <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/docs/appearance/title-link\">often the primary piece of information people use</a> to decide which result to click.</p><p><strong>A title has two jobs: tell search engines what the page is about, and persuade a person to click.</strong> The rest of this guide is about doing both at once. For where the title fits among all the other pre-publish checks, see our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">on-page SEO checklist</a>.</p><h2>Title tag length: characters vs pixels</h2><p>Google does not set a maximum. Its documentation says there is no limit on title length, but the title link is truncated in results as needed, typically to fit the device width.</p><p><strong>Truncation happens by pixel width, not by character count.</strong> Letters like W and M take far more space than i and l, so two titles of the same character length can be cut off in different places. On desktop, titles start getting cut at roughly 560 to 600 pixels. That figure comes from observation, not from Google, and it varies by device.</p><p>A practical rule that works for most pages:</p><ul><li><strong>Aim for about 30 to 60 characters.</strong> Under 30 usually wastes space you could use to describe the page. Over 60 risks a truncated title with an ellipsis.</li><li><strong>Put the important words first</strong>, so even a truncated title makes sense.</li><li><strong>Watch out for wide letters and capitals.</strong> A title written in all caps uses more pixels per character and gets cut off sooner.</li></ul><p>Example: \"Emergency Plumber in Leeds: 24/7 Callouts and Fixed Prices\" is 58 characters and front-loads the service and location. If it is truncated, the searcher still knows what you do and where.</p><h2>How to write title tags: keyword first, then the promise</h2><p>Good titles follow a simple pattern: the main topic first, then what makes this page worth clicking, then the brand if there is room.</p><ol><li><strong>Front-load the main keyword.</strong> Put the phrase people search for at or near the start. Searchers scan the first few words of each result.</li><li><strong>Add a specific benefit or detail.</strong> A price range, a location, a number of steps, a year if the content is truly time-bound.</li><li><strong>Write for a person.</strong> The title should read like a sentence fragment a human wrote, not a list of keywords.</li><li><strong>Make every title unique.</strong> Each page on your site should have its own title that describes that page.</li></ol><p><strong>Avoid keyword stuffing.</strong> Google's guidance specifically calls out titles like \"Foobar, foo bar, foobars, foo bars\": repeating variations does not help users and can make your result look spammy.</p><p>Duplicate titles are one of the most common problems a site crawl turns up, usually because a template applies the same title to every page in a section. If you find groups of identical titles, our guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo\">fixing duplicate titles and content</a> explains how to tell whether they are separate pages or the same page on several URLs.</p><h2>Where to put your brand name</h2><p>Google suggests branding titles concisely: include your site name at the beginning or end of each title, separated by a delimiter such as a hyphen, colon, or pipe. On the home page you can say a little more about the business.</p><p>For most small businesses, the brand works best at the end of inner pages. Searchers looking for \"wedding cakes Bristol\" care about the cakes first. On the home page, or for a well-known brand, putting it first is reasonable.</p><p>Keep the brand short. \"Rosie's Bakery\" is fine. \"Rosie's Bakery and Cake Studio, Family Run Since 1998\" eats most of your space on every single page. Google may also drop the site name from the title link when it repeats the site name already shown in the result.</p><h2>Why Google rewrites title tags (and how to reduce it)</h2><p>Google generates title links automatically and does not always use your title tag. When it rolled out its newer title system in 2021, Google said the HTML title tag was still <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://developers.google.com/search/blog/2021/08/update-to-generating-page-titles\">used more than 80% of the time</a>, but it also draws on the main visible heading, other prominent text, and anchor text of links pointing to the page.</p><p>Google's documentation lists the most common reasons it replaces a title:</p><ul><li><strong>Half-empty titles</strong>, such as <code>| Site Name</code> with the page name missing.</li><li><strong>Obsolete titles</strong>, for example a page that says 2024 in the title but 2025 in the visible heading.</li><li><strong>Inaccurate titles</strong> that do not describe what is actually on the page.</li><li><strong>Boilerplate titles</strong> repeated across a set of pages, such as every season page of a TV show sharing one title.</li><li><strong>No clear main title</strong>, where several headings carry the same visual weight.</li><li><strong>Language mismatch</strong> between the title and the page content.</li></ul><p><strong>The best way to reduce rewrites is to make your title tag and your main visible heading agree.</strong> Write an accurate, specific title, keep it current, and make sure the page's main heading clearly says the same thing. Remember that changes are not instant: Google has to recrawl and reprocess the page first.</p><h2>Title tag vs H1: what is the difference?</h2><p>The title tag lives in the <code>&lt;head&gt;</code> and appears in search results and browser tabs. The H1 is the main heading visitors see on the page itself.</p><p>They should describe the same topic, but they do not have to be identical. The title is written to win a click in a list of results, often with the brand added. The H1 is written for someone who has already arrived.</p><table><thead><tr><th></th><th>Title tag</th><th>H1</th></tr></thead><tbody><tr><td>Where it appears</td><td>Search results, browser tab</td><td>On the page</td></tr><tr><td>Audience</td><td>Someone choosing a result</td><td>Someone already reading</td></tr><tr><td>Example</td><td>Wedding Cakes in Bristol: Prices and Flavors - Rosie's Bakery</td><td>Our Wedding Cakes</td></tr></tbody></table><p>Because Google looks at the main visible heading when it builds title links, a vague H1 like \"Welcome\" next to a specific title sends mixed signals. For more on the on-page side, see our guide to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo\">structuring H1 and H2 headings</a>.</p><h2>Before and after title tag examples</h2><p>Here are rewrites for common page types. All are hypothetical, but each shows the same pattern: topic first, specific detail second, short brand last.</p><table><thead><tr><th>Page type</th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>Home page</td><td>Home</td><td>Rosie's Bakery: Custom Cakes and Fresh Bread in Bristol</td></tr><tr><td>Service page</td><td>Services - Smith Plumbing</td><td>Boiler Repair in Leeds: Same-Day Visits - Smith Plumbing</td></tr><tr><td>Product page</td><td>Product 4471</td><td>Waterproof Hiking Jacket for Women, Navy - TrailCo</td></tr><tr><td>Category page</td><td>Shop</td><td>Women's Hiking Jackets: Waterproof and Insulated - TrailCo</td></tr><tr><td>Blog post</td><td>Some Thoughts on Sourdough</td><td>How to Feed a Sourdough Starter (Simple Daily Routine)</td></tr><tr><td>Contact page</td><td>Contact Us</td><td>Contact Rosie's Bakery: Orders, Hours and Directions</td></tr></tbody></table><p>Your title and meta description appear together in results, so write them as a pair. Our guide to <a href=\"https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks\">meta descriptions that get clicks</a> shows how to write the snippet that sits underneath.</p><h2>How to audit the title tags you already have</h2><ol><li><strong>Collect every title.</strong> Crawl your site and export the URL and title of every page.</li><li><strong>Sort by length.</strong> Fix empty titles first, then titles under 30 or over 60 characters.</li><li><strong>Sort alphabetically to find duplicates.</strong> Identical titles sit next to each other.</li><li><strong>Check your top pages in search.</strong> In the Search Console Performance report, find pages with plenty of impressions but few clicks. A weak title is a common cause.</li><li><strong>Rewrite in priority order:</strong> pages that bring in leads or sales first, then high-impression pages, then everything else.</li></ol><p>A free desktop crawler like <a href=\"https://www.scaryspiderseo.com\">Scary Spider SEO</a> flags missing, duplicate, too long, and too short titles (using both character count and pixel width), which turns steps 1 to 3 into a single sortable table.</p><h2>The bottom line</h2><p>A good title tag is specific, unique, front-loaded with the topic, and short enough to survive truncation. Google may still rewrite it, but it uses your title most of the time, and accurate titles that match the page's main heading get rewritten far less.</p><p>Think of each title as the headline of a tiny advert in the search results. If it clearly says what the page offers and why it is worth a click, you have done the job.</p><p><strong>Your next step:</strong> open Search Console, find your five pages with the most impressions and the lowest click-through rate, and rewrite their titles using the topic, detail, brand pattern from this guide.</p>",
+  "faqs": [
+    {
+      "question": "How long should a title tag be?",
+      "answer": "Google has no official limit, but it truncates titles to fit the device width. Around 30 to 60 characters is a reliable range for most pages. Put the most important words first so the title still makes sense if it is cut off."
+    },
+    {
+      "question": "Why is Google showing a different title for my page?",
+      "answer": "Google generates title links automatically and may replace your title tag if it is missing, outdated, inaccurate, repeated across many pages, or does not match the main heading. Fixing those issues and making the title match the visible heading reduces how often it happens."
+    },
+    {
+      "question": "Should the title tag and H1 be the same?",
+      "answer": "They should cover the same topic, but they do not need to be identical. The title is written to win a click in search results and often includes your brand, while the H1 welcomes someone already on the page."
+    },
+    {
+      "question": "Should I put my brand name in the title tag?",
+      "answer": "Usually yes, but keep it short. Google suggests adding the site name at the start or end of the title with a delimiter. For most small business inner pages, placing it at the end keeps the topic in front."
+    },
+    {
+      "question": "How long does it take for a new title tag to show in Google?",
+      "answer": "Google has to recrawl and reprocess the page before it notices the change, which Google says can take from a few days to a few weeks. You can request recrawling of an important page with the URL Inspection tool in Search Console."
+    }
+  ],
+  "internal_links": [
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist",
+      "anchor": "on-page SEO checklist"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo",
+      "anchor": "fixing duplicate titles and content"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo",
+      "anchor": "structuring H1 and H2 headings"
+    },
+    {
+      "url": "https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks",
+      "anchor": "meta descriptions that get clicks"
+    }
+  ],
+  "external_links": [
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/title",
+      "anchor": "MDN's reference for the title element",
+      "supports": "The title element defines the document's title shown in the browser's title bar or the page's tab."
+    },
+    {
+      "url": "https://developers.google.com/search/docs/appearance/title-link",
+      "anchor": "often the primary piece of information people use",
+      "supports": "Title links are often the primary information people use to decide which result to click; no length limit but truncated to fit device width; brand and rewrite guidance."
+    },
+    {
+      "url": "https://developers.google.com/search/blog/2021/08/update-to-generating-page-titles",
+      "anchor": "used more than 80% of the time",
+      "supports": "Google said content from HTML title tags is used for title links more than 80% of the time."
+    }
+  ],
+  "editor_notes": [
+    "Add a screenshot of a real search result where Google rewrote a title, alongside the page's actual title tag.",
+    "Add a before and after title rewrite from one of your own sites, with click-through data from Search Console if you have it.",
+    "Add a screenshot of a crawl report sorted by title length or pixel width to illustrate the audit steps.",
+    "Add your own observation on where titles get truncated on desktop and mobile today, with screenshots."
+  ],
+  "image_idea": "A spider hanging a neatly lettered name plate on the front of its web while passing insects slow down to read it."
+}

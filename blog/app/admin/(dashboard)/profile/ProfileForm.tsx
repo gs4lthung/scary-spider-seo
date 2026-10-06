@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { uploadImage } from "@/app/admin/media-actions";
+import { uploadImageFile } from "@/lib/upload-image";
 import { updateProfile } from "@/app/admin/users-actions";
 import { fileToWebP } from "@/lib/webp";
 
@@ -21,10 +21,13 @@ export function ProfileForm({
     twitter: string | null;
     linkedin: string | null;
     facebook: string | null;
+    loginEmail: string | null;
   };
 }) {
   const [error, formAction, pending] = useActionState(updateProfile, null);
   const [avatarKey, setAvatarKey] = useState(user.avatarKey ?? "");
+  const [loginEmail, setLoginEmail] = useState(user.loginEmail ?? "");
+  const loginEmailChanged = loginEmail.trim().toLowerCase() !== (user.loginEmail ?? "");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,9 +39,7 @@ export function ProfileForm({
     setUploadError(null);
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.set("file", await fileToWebP(file));
-      const result = await uploadImage(formData);
+      const result = await uploadImageFile(await fileToWebP(file));
       if ("error" in result) {
         setUploadError(result.error);
         return;
@@ -111,6 +112,40 @@ export function ProfileForm({
           Profile description
         </label>
         <textarea id="profile-bio" name="bio" rows={4} defaultValue={user.bio ?? ""} className="mt-1 w-full rounded border px-3 py-2" />
+      </div>
+
+      <div>
+        <label htmlFor="profile-login-email" className="block text-sm font-medium">
+          Login email (private)
+        </label>
+        <input
+          id="profile-login-email"
+          name="loginEmail"
+          type="email"
+          value={loginEmail}
+          onChange={(e) => setLoginEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          className="mt-1 w-full rounded border px-3 py-2"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Never shown publicly. Password reset links are sent here, so set it before you need it.
+        </p>
+        {loginEmailChanged ? (
+          <div className="mt-3">
+            <label htmlFor="profile-login-email-password" className="block text-xs font-medium text-muted-foreground">
+              Current password (required to change your login email)
+            </label>
+            <input
+              id="profile-login-email-password"
+              name="currentPassword"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="mt-1 w-full rounded border px-3 py-2"
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded border border-border p-4">

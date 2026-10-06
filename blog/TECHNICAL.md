@@ -162,7 +162,7 @@ Server action files (each `"use server"`):
 | File                             | Mutations                                                |
 | -------------------------------- | -------------------------------------------------------- |
 | `app/admin/posts-actions.ts`     | `createPost`, `updatePost`, `deletePost` (+ R2 cleanup)  |
-| `app/admin/media-actions.ts`     | `uploadImage`, `deleteMediaKeys`                         |
+| `app/admin/media-actions.ts`     | `deleteMediaKeys`, `listMediaImages`, `deleteMediaImage` |
 | `app/admin/categories-actions.ts`| `createCategory`, `renameCategory`, `deleteCategory`     |
 | `app/admin/users-actions.ts`     | `createUser`, `updateUserRole`, `deleteUser` (admin-only)|
 | `app/admin/settings-actions.ts`  | `updateSettings` (admin-only)                            |
@@ -172,30 +172,52 @@ Server action files (each `"use server"`):
 
 ### The critical trap: server action body size
 
-Next.js server actions default to a **1 MB request body limit**. Image uploads
-travel as multipart `FormData` inside a server action, so anything over 1 MB
-was rejected with a 413 before `uploadImage` even ran, leaving the UI stuck
-on "Uploading...". `next.config.ts` now sets
-`experimental.serverActions.bodySizeLimit: "10mb"` (nested under
-`experimental` for this Next version; top-level `serverActions` is rejected as
-an unrecognized key), comfortably above the 8 MB `MAX_BYTES` ceiling in
-`media-actions.ts`. If you ever raise `MAX_BYTES`, raise `bodySizeLimit` to
-match.
+Next.js server actions default to a **1 MB request body limit**.
+`next.config.ts` sets `experimental.serverActions.bodySizeLimit: "10mb"`
+(nested under `experimental` for this Next version; top-level `serverActions`
+is rejected as an unrecognized key) so large post bodies still save. Image
+uploads used to hit this limit as a 413; they no longer go through a server
+action at all (see below).
 
-Client callers wrap `uploadImage` in `try/catch/finally` so a network or
-server failure surfaces as a visible error instead of an infinite spinner.
+### Image uploads are a route handler, not a server action
+
+Cloudflare's free managed WAF ruleset includes "React - Leaking Server
+Functions" (CVE-2025-55183), which inspects server action request bodies.
+Raw image bytes inside a multipart server action body intermittently matched
+it, so some uploads were blocked at the edge with a Cloudflare 403 page
+before reaching the Worker. The Free plan cannot add exceptions to that
+ruleset, so uploads moved to `POST /admin/upload` (`app/admin/upload/route.ts`),
+which receives the raw bytes as the request body and is not a server action
+request. The installed Next/React versions are already patched for the CVE;
+the rule stays on for everything else.
+
+Because a route handler has no built-in server action protections, it does
+its own Origin check (Origin host must equal Host) and DB-backed session
+check (`getCurrentUser`), on top of the `middleware.ts` gate. Do not move
+uploads back into a server action.
+
+Client callers use `uploadImageFile(file)` (`lib/upload-image.ts`) inside
+`try/catch/finally`, so a network or server failure surfaces as a visible
+error instead of an infinite spinner.
+
+`components/BlockedResponseModal.tsx` (mounted in `app/admin/layout.tsx`)
+wraps `window.fetch` and, when a server action or `/admin/upload` request
+comes back non-OK with an HTML body (a Cloudflare block page), shows that
+page plus its Ray ID in a modal.
 
 ## 6. Media pipeline (R2 + WebP)
 
-Uploads (cover image and inline body images) go through the same server
-action, `uploadImage` in `app/admin/media-actions.ts`:
+Uploads (cover image, avatar and inline body images) all go through
+`POST /admin/upload` (`app/admin/upload/route.ts`, storage in
+`storeImage` in `lib/media-upload.ts`):
 
-1. Client converts the file to WebP (see below) and posts it as FormData.
-2. Server validates `file instanceof File`, allowlisted MIME
-   (`png/jpeg/webp/gif/avif`), and `<= 8 MB`.
+1. Client converts the file to WebP (see below) and POSTs the raw bytes with
+   the image type as `Content-Type` and the file name in `X-File-Name`.
+2. Server checks Origin and session, then validates the allowlisted MIME
+   (`png/jpeg/webp/gif/avif`), `<= 8 MB` and the file signature.
 3. Key is `crypto.randomUUID() + "." + file.type.split("/")[1]` (always
    `webp` after conversion, or the original ext for GIF/AVIF passthrough).
-4. `env.MEDIA.put(key, bytes, { httpMetadata: { contentType }, customMetadata: { name: file.name } })`.
+4. `env.MEDIA.put(key, bytes, { httpMetadata: { contentType }, customMetadata: { name } })` (name from `X-File-Name`).
 5. Returns `{ url: "/media/<key>" }`.
 
 The UUID key is the id; the human-readable `name` (the uploaded file name,
@@ -424,8 +446,8 @@ See the root `CLAUDE.md`.
 
 ## 12. Common traps checklist
 
-- Raising `MAX_BYTES` in `media-actions.ts` without raising
-  `serverActions.bodySizeLimit` in `next.config.ts` → 413s on upload.
+- Moving image uploads back into a server action → intermittent Cloudflare
+  403 blocks from the managed "React - Leaking Server Functions" rule.
 - Using `getCloudflareContext()` (sync) in a server action instead of
   `{ async: true }` → "Cloudflare context is not available".
 - Adding `node:` imports to a module imported by `middleware.ts` → edge-runtime

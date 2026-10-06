@@ -5,8 +5,6 @@ import { getDb } from "@/lib/db/client";
 import { posts } from "@/lib/db/schema";
 import { requirePermission, requireUser } from "@/lib/authz";
 
-const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]);
-const MAX_BYTES = 8 * 1024 * 1024;
 type ListedMediaObject = {
   key: string;
   customMetadata?: Record<string, string>;
@@ -15,40 +13,13 @@ type ListedMediaObject = {
   httpMetadata?: { contentType?: string };
 };
 
-function hasImageSignature(bytes: Uint8Array, type: string): boolean {
-  if (type === "image/png") return bytes.length >= 8 && bytes.slice(0, 8).toString() === "137,80,78,71,13,10,26,10";
-  if (type === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  if (type === "image/gif") return new TextDecoder().decode(bytes.slice(0, 6)) === "GIF87a" || new TextDecoder().decode(bytes.slice(0, 6)) === "GIF89a";
-  if (type === "image/webp") return new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" && new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP";
-  if (type === "image/avif") return new TextDecoder().decode(bytes.slice(4, 8)) === "ftyp";
-  return false;
-}
-
 function isMediaKey(key: string): boolean {
   return /^[0-9a-f-]{36}\.(png|jpe?g|webp|gif|avif)$/i.test(key);
 }
 
-export async function uploadImage(formData: FormData): Promise<{ url: string } | { error: string }> {
-  await requireUser();
-  const file = formData.get("file");
-  if (!(file instanceof File)) return { error: "No file provided." };
-  if (!ALLOWED_TYPES.has(file.type)) return { error: "Unsupported image type." };
-  if (file.size > MAX_BYTES) return { error: "Image is larger than 8MB." };
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!hasImageSignature(bytes, file.type)) return { error: "The uploaded file does not match its image type." };
-
-  const { env } = await getCloudflareContext({ async: true });
-  const ext = file.type.split("/")[1];
-  const key = `${crypto.randomUUID()}.${ext}`;
-
-  await env.MEDIA.put(key, bytes, {
-    httpMetadata: { contentType: file.type },
-    // Human-readable name for the media library (the key is the id).
-    customMetadata: { name: file.name },
-  });
-
-  return { url: `/media/${key}` };
-}
+// Uploads are not a server action: they go through the /admin/upload route
+// handler (app/admin/upload/route.ts, lib/media-upload.ts) to stay clear of
+// Cloudflare's managed WAF rule for server action bodies.
 
 // Best-effort R2 cleanup for images no longer referenced by any post
 // (called from posts-actions.ts on update/delete). Never throws: a failed

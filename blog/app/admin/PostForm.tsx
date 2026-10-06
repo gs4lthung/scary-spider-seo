@@ -7,7 +7,7 @@ import type { posts } from "@/lib/db/schema";
 import { TITLE_MIN_LENGTH, TITLE_MAX_LENGTH, META_DESCRIPTION_TARGET_MAX, THIN_CONTENT_WORD_COUNT } from "@/lib/seo-limits";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { MediaPicker } from "@/components/MediaPicker";
-import { uploadImage } from "@/app/admin/media-actions";
+import { uploadImageFile } from "@/lib/upload-image";
 import { fileToWebP } from "@/lib/webp";
 import { resolvePendingImageUploads, type PendingImage } from "@/lib/pending-images";
 import { useUnsavedChangesWarning } from "@/lib/use-unsaved-changes";
@@ -144,10 +144,8 @@ export function PostForm({
     if (!file) return;
     setCoverUploadError(null);
     setCoverUploading(true);
-    const formData = new FormData();
-    formData.set("file", await fileToWebP(file));
     try {
-      const result = await uploadImage(formData);
+      const result = await uploadImageFile(await fileToWebP(file));
       if ("error" in result) {
         setCoverUploadError(result.error);
         return;

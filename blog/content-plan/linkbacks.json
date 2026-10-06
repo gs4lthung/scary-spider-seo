@@ -1,0 +1,200 @@
+[
+  {
+    "source": "E1",
+    "target": 1,
+    "find": "If this foundation is shaky, no matter how brilliant your content is, Google will not prioritize you.",
+    "replace": "If this foundation is shaky, no matter how brilliant your content is, Google will not prioritize you. A <a href=\"https://blog.scaryspiderseo.com/technical-seo/technical-seo-audit-checklist\">step-by-step technical SEO audit</a> shows you where the cracks are."
+  },
+  {
+    "source": "E2",
+    "target": 4,
+    "find": "to catch broken outbound links before your readers do.",
+    "replace": "to catch broken outbound links before your readers do, then follow these steps to <a href=\"https://blog.scaryspiderseo.com/technical-seo/find-and-fix-broken-links\">fix each broken link</a>."
+  },
+  {
+    "source": 1,
+    "target": 6,
+    "find": "What matters is whether any page you want to rank is on that list.",
+    "replace": "What matters is whether any page you want to rank is on that list. If one is, work out <a href=\"https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages\">why Google is not indexing it</a>."
+  },
+  {
+    "source": 3,
+    "target": 6,
+    "find": "That view shows how many of the URLs you asked Google to index actually made it in, and why the rest did not.",
+    "replace": "That view shows how many of the URLs you asked Google to index actually made it in, and why the rest did not. If key pages are missing, use this guide to <a href=\"https://blog.scaryspiderseo.com/technical-seo/why-google-is-not-indexing-your-pages\">diagnose pages that are not indexed</a>."
+  },
+  {
+    "source": 5,
+    "target": 7,
+    "find": "In plain terms, a permanent redirect tends to put the new URL in search results, and a temporary one tends to keep the old URL there.",
+    "replace": "In plain terms, a permanent redirect tends to put the new URL in search results, and a temporary one tends to keep the old URL there. Redirects are one input into <a href=\"https://blog.scaryspiderseo.com/technical-seo/canonical-tags-explained\">how Google picks a canonical URL</a>, alongside canonical tags and sitemaps."
+  },
+  {
+    "source": 2,
+    "target": 8,
+    "find": "so do not block the same URL in robots.txt.",
+    "replace": "so do not block the same URL in robots.txt. Our <a href=\"https://blog.scaryspiderseo.com/technical-seo/noindex-vs-disallow\">noindex vs disallow comparison</a> shows which one to use when."
+  },
+  {
+    "source": 2,
+    "target": 9,
+    "find": "Shops often generate thousands of near-identical URLs from internal search",
+    "replace": "Shops often generate <a href=\"https://blog.scaryspiderseo.com/technical-seo/duplicate-content-seo\">thousands of near-identical URLs</a> from internal search"
+  },
+  {
+    "source": 3,
+    "target": 10,
+    "find": "If it does not, ask whether it should exist at all.",
+    "replace": "If it does not, ask whether it should exist at all. Our <a href=\"https://blog.scaryspiderseo.com/technical-seo/orphan-pages-internal-linking\">plan for fixing orphan pages</a> covers both options."
+  },
+  {
+    "source": 4,
+    "target": 10,
+    "find": "every page that uses that menu repeats the dead end.",
+    "replace": "every page that uses that menu repeats the dead end. Pages that lose their last working internal link become orphans, and <a href=\"https://blog.scaryspiderseo.com/technical-seo/orphan-pages-internal-linking\">a simple internal linking plan</a> keeps that from happening."
+  },
+  {
+    "source": "E1",
+    "target": 11,
+    "find": "and most importantly, your <strong>Content</strong>.",
+    "replace": "and most importantly, your <strong>Content</strong>. Our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">on-page SEO checklist</a> covers what to check on every page before you publish."
+  },
+  {
+    "source": "E3",
+    "target": 11,
+    "find": "On page SEO is about optimizing your own content, HTML, and site architecture.",
+    "replace": "On page SEO is about optimizing your own content, HTML, and site architecture, which our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">12-point on-page checklist</a> breaks down."
+  },
+  {
+    "source": 10,
+    "target": 11,
+    "find": "is the hub for the technical cluster, and each step links out to a deeper guide on that step.",
+    "replace": "is the hub for the technical cluster, and each step links out to a deeper guide on that step. Our <a href=\"https://blog.scaryspiderseo.com/on-page-seo/on-page-seo-checklist\">pre-publish on-page checklist</a> does the same job for on-page topics."
+  },
+  {
+    "source": 9,
+    "target": 12,
+    "find": "Identical titles cause the same problem: when several of your pages show up for one search, nobody can tell them apart.",
+    "replace": "Identical titles cause the same problem: when several of your pages show up for one search, nobody can tell them apart. Our guide on <a href=\"https://blog.scaryspiderseo.com/on-page-seo/how-to-write-title-tags\">how to write distinct title tags</a> shows the fix."
+  },
+  {
+    "source": 9,
+    "target": 13,
+    "find": "rewrite the titles and descriptions for your most important pages by hand",
+    "replace": "rewrite the titles and <a href=\"https://blog.scaryspiderseo.com/on-page-seo/meta-descriptions-that-get-clicks\">meta descriptions</a> for your most important pages by hand"
+  },
+  {
+    "source": "E2",
+    "target": 14,
+    "find": "Perform a formatting audit.",
+    "replace": "Perform a formatting audit, starting with a <a href=\"https://blog.scaryspiderseo.com/on-page-seo/heading-tags-seo\">clear H1, H2 and H3 structure</a>."
+  },
+  {
+    "source": 1,
+    "target": 15,
+    "find": "oversized images, images without width and height attributes",
+    "replace": "oversized images, <a href=\"https://blog.scaryspiderseo.com/on-page-seo/image-seo-alt-text\">images without width and height attributes</a>"
+  },
+  {
+    "source": 3,
+    "target": 16,
+    "find": "such as an update to the main content, structured data or links",
+    "replace": "such as an update to the main content, <a href=\"https://blog.scaryspiderseo.com/on-page-seo/structured-data-for-beginners\">structured data</a> or links"
+  },
+  {
+    "source": 1,
+    "target": 17,
+    "find": "Check the Core Web Vitals report in Search Console for real-user data, and PageSpeed Insights for individual URLs.",
+    "replace": "Check the Core Web Vitals report in Search Console for real-user data, and PageSpeed Insights for individual URLs. If the acronyms are new, start with <a href=\"https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained\">what LCP, INP and CLS measure</a>."
+  },
+  {
+    "source": 15,
+    "target": 17,
+    "find": "one of the Core Web Vitals.",
+    "replace": "one of the <a href=\"https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained\">Core Web Vitals</a>."
+  },
+  {
+    "source": 11,
+    "target": 17,
+    "find": "so the layout does not jump while loading.",
+    "replace": "so the layout does not jump while loading, which feeds directly into <a href=\"https://blog.scaryspiderseo.com/web-performance/core-web-vitals-explained\">Core Web Vitals like CLS</a>."
+  },
+  {
+    "source": 7,
+    "target": 18,
+    "find": "Fix: compare the canonical in the raw HTML with the one in the rendered page. They should match.",
+    "replace": "Fix: compare the canonical in the raw HTML with the one in the rendered page. They should match. Our guide to <a href=\"https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering\">JavaScript rendering and SEO</a> shows how to compare the two."
+  },
+  {
+    "source": 10,
+    "target": 18,
+    "find": "so crawlers cannot follow them.",
+    "replace": "so crawlers cannot follow them. Our <a href=\"https://blog.scaryspiderseo.com/web-performance/javascript-seo-rendering\">JavaScript SEO guide</a> explains why."
+  },
+  {
+    "source": "E1",
+    "target": 19,
+    "find": "Is the interface easy to navigate on a phone (Mobile-friendliness)?",
+    "replace": "Is the interface easy to navigate on a phone (Mobile-friendliness)? Google mainly uses the mobile version of your site for indexing, so work through this <a href=\"https://blog.scaryspiderseo.com/web-performance/mobile-first-indexing-checklist\">mobile-first indexing checklist</a>."
+  },
+  {
+    "source": 14,
+    "target": 20,
+    "find": "Missing or out-of-order headings make that much harder.",
+    "replace": "Missing or out-of-order headings make that much harder. It is one of several places where <a href=\"https://blog.scaryspiderseo.com/accessibility/accessibility-and-seo\">accessibility and SEO overlap</a>."
+  },
+  {
+    "source": 15,
+    "target": 20,
+    "find": "Without it, a blind visitor may hear a file name or nothing at all.",
+    "replace": "Without it, a blind visitor may hear a file name or nothing at all. It is a good example of how <a href=\"https://blog.scaryspiderseo.com/accessibility/accessibility-and-seo\">good accessibility also helps SEO</a>."
+  },
+  {
+    "source": "E2",
+    "target": 21,
+    "find": "This is the most critical step to pass the E-E-A-T test.",
+    "replace": "This is the most critical step to <a href=\"https://blog.scaryspiderseo.com/ai-seo/eeat-checklist\">pass the E-E-A-T test</a>."
+  },
+  {
+    "source": 11,
+    "target": 21,
+    "find": "These signals help readers decide whether to trust you.",
+    "replace": "These signals help readers decide whether to trust you. Our <a href=\"https://blog.scaryspiderseo.com/ai-seo/eeat-checklist\">E-E-A-T checklist</a> shows how to add them to every page."
+  },
+  {
+    "source": 11,
+    "target": 22,
+    "find": "make sure the main keyword and the main answer appear in the first paragraph or two.",
+    "replace": "make sure the main keyword and the main answer appear in the first paragraph or two. Answering early also helps if you want to <a href=\"https://blog.scaryspiderseo.com/ai-seo/optimize-for-ai-overviews\">show up in AI Overviews</a>."
+  },
+  {
+    "source": "E3",
+    "target": 23,
+    "find": "Find broken links on industry blogs and offer",
+    "replace": "Find <a href=\"https://blog.scaryspiderseo.com/offpage-seo/broken-link-building\">broken links on industry blogs</a> and offer"
+  },
+  {
+    "source": "E4",
+    "target": 23,
+    "find": "Earning links and authority is no longer just about sending emails.",
+    "replace": "Earning links and authority is no longer just about sending emails. Even <a href=\"https://blog.scaryspiderseo.com/offpage-seo/broken-link-building\">broken link building outreach</a> lands better when the people you email already know your name."
+  },
+  {
+    "source": 4,
+    "target": 23,
+    "find": "is a link building technique in its own right",
+    "replace": "is a <a href=\"https://blog.scaryspiderseo.com/offpage-seo/broken-link-building\">link building technique</a> in its own right"
+  },
+  {
+    "source": "E3",
+    "target": 24,
+    "find": "Inconsistent data confuses search engines and hurts your local rankings.",
+    "replace": "Inconsistent data confuses search engines and hurts your local rankings. Our <a href=\"https://blog.scaryspiderseo.com/offpage-seo/local-seo-basics\">local SEO basics guide</a> covers citations, reviews and your Business Profile in more depth."
+  },
+  {
+    "source": 16,
+    "target": 24,
+    "find": "For local visibility, your Google Business Profile usually",
+    "replace": "For local visibility, <a href=\"https://blog.scaryspiderseo.com/offpage-seo/local-seo-basics\">your Google Business Profile</a> usually"
+  }
+]
