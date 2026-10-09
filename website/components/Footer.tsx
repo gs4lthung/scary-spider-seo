@@ -63,10 +63,16 @@ export function Footer() {
 
         <div className="flex flex-col gap-2 pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} Scary Spider SEO</span>
-          <a href="https://sellwithboost.com" target="_blank" rel="noopener noreferrer" className="self-start sm:self-auto">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="https://sellwithboost.com/badge/listing.svg" alt="Listed on Sell With boost" className="h-10 w-auto" />
-          </a>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <a href="https://sellwithboost.com" target="_blank" rel="noopener noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="https://sellwithboost.com/badge/listing.svg" alt="Listed on Sell With boost" className="h-10 w-auto" />
+            </a>
+            <a href="https://smolspot.com/projects/scary-spider-seo?utm_source=badge" target="_blank" rel="noopener noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="https://smolspot.com/smolspot/images/badges/featured-on-light.svg" alt="Featured on Smol Spot" className="h-11 w-auto" />
+            </a>
+          </div>
           <span className="font-mono tracking-wide">Crawl. Inspect. Fix.</span>
         </div>
       </div>
