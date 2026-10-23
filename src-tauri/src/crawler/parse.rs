@@ -242,10 +242,13 @@ fn resolve_url(base: &Url, href: &str) -> Option<Url> {
     {
         return None;
     }
-    base.join(href).ok().map(|mut u| {
-        u.set_fragment(None);
-        u
-    })
+    base.join(href)
+        .ok()
+        .filter(|u| matches!(u.scheme(), "http" | "https"))
+        .map(|mut u| {
+            u.set_fragment(None);
+            u
+        })
 }
 
 fn is_same_site(base: &Url, other: &Url) -> bool {
@@ -351,6 +354,91 @@ pub fn content_simhash(text: &str) -> String {
 
 /// Counts subresources (see `MIXED_CONTENT_SEL`) that resolve to `http:` when the page
 /// itself was served over `https:`.
+static BASE_SEL: LazyLock<Selector> = LazyLock::new(|| Selector::parse("base[href]").unwrap());
+
+/// The URL relative links resolve against: the first `<base href>` (itself resolved
+/// against the page URL), or the page URL when there is none, as the HTML spec says.
+fn document_base(document: &Html, page_url: &Url) -> Url {
+    document
+        .select(&BASE_SEL)
+        .next()
+        .and_then(|b| b.value().attr("href"))
+        .and_then(|href| page_url.join(href.trim()).ok())
+        .filter(|u| matches!(u.scheme(), "http" | "https"))
+        .unwrap_or_else(|| page_url.clone())
+}
+
+/// Elements whose start and end separate words even when the markup has no whitespace
+/// between them (`<p>a</p><p>b</p>` is two words, `Hel<b>lo</b>` is one).
+const BLOCK_ELEMENTS: &[&str] = &[
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "br",
+    "dd",
+    "details",
+    "dialog",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "img",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "option",
+    "p",
+    "pre",
+    "section",
+    "summary",
+    "table",
+    "td",
+    "th",
+    "tr",
+    "ul",
+];
+
+/// The visible text of `element`, with a space only where a block element starts or ends,
+/// so inline tags inside a word do not split it into several words.
+fn element_text(element: ElementRef) -> String {
+    let mut text = String::new();
+    // An explicit stack, not recursion: crawled HTML can nest arbitrarily deep. `true`
+    // marks the end of a block element.
+    let mut stack = vec![(*element, false)];
+    while let Some((node, block_end)) = stack.pop() {
+        if block_end {
+            text.push(' ');
+            continue;
+        }
+        match node.value() {
+            scraper::Node::Text(t) => text.push_str(t),
+            scraper::Node::Element(e) => {
+                if BLOCK_ELEMENTS.contains(&e.name()) {
+                    text.push(' ');
+                    stack.push((node, true));
+                }
+                stack.extend(node.children().rev().map(|child| (child, false)));
+            }
+            _ => {}
+        }
+    }
+    text
+}
+
 fn count_mixed_content(document: &Html, base: &Url) -> usize {
     if base.scheme() != "https" {
         return 0;
@@ -401,6 +489,9 @@ pub fn parse_page(body: &str, base: &Url) -> ParsedPage {
 /// Parses `body` once and extracts every signal from it, custom extraction rules included.
 pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> ParsedPage {
     let mut html = Html::parse_document(body);
+    // Relative URLs resolve against `<base href>`; which site a link belongs to is still
+    // decided by the page's own URL (`base`).
+    let doc_base = document_base(&html, base);
 
     // Custom extraction runs on the full document, before <script>, <style>, <noscript>
     // and <template> are stripped below, so a rule can extract JSON-LD or inline code.
@@ -471,17 +562,29 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
         }
         if name == "description" {
             meta_description_count += 1;
-            meta_description = meta
-                .value()
-                .attr("content")
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty());
+            // The first non-empty description is the one shown; a later empty duplicate
+            // does not erase it.
+            if meta_description.is_none() {
+                meta_description = meta
+                    .value()
+                    .attr("content")
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty());
+            }
         } else if name == "robots" {
-            meta_robots = meta
+            // Google combines every robots meta tag and applies the most restrictive, so
+            // all of them are kept (comma-joined, like one tag's directive list).
+            if let Some(content) = meta
                 .value()
                 .attr("content")
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty());
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                meta_robots = Some(match meta_robots.take() {
+                    Some(previous) => format!("{previous}, {content}"),
+                    None => content.to_string(),
+                });
+            }
         } else if name == "viewport" {
             viewport = meta
                 .value()
@@ -512,7 +615,7 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
         .and_then(|e| e.value().attr("href"))
         .map(str::trim);
     let canonical = canonical_href
-        .and_then(|href| resolve_url(base, href))
+        .and_then(|href| resolve_url(&doc_base, href))
         .map(|u| u.to_string());
     // Google asks for absolute canonical URLs; a relative one resolves against whatever
     // URL the page was reached on, so a duplicate URL canonicalises to itself.
@@ -537,7 +640,7 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
             *slot = link
                 .value()
                 .attr("href")
-                .and_then(|href| resolve_url(base, href));
+                .and_then(|href| resolve_url(&doc_base, href));
         }
     }
 
@@ -557,7 +660,7 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
         .select(&HREFLANG_SEL)
         .filter_map(|e| {
             let lang = e.value().attr("hreflang")?.trim();
-            let href = resolve_url(base, e.value().attr("href")?)?;
+            let href = resolve_url(&doc_base, e.value().attr("href")?)?;
             (!lang.is_empty()).then(|| HreflangLink {
                 lang: lang.to_string(),
                 href: href.to_string(),
@@ -569,7 +672,7 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
     let body_text = html
         .select(&BODY_SEL)
         .next()
-        .map(|b| b.text().collect::<Vec<_>>().join(" "))
+        .map(element_text)
         .unwrap_or_default();
     let word_count = body_text.split_whitespace().count();
     let content_hash = hash_content(&body_text);
@@ -583,7 +686,7 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
     let mut unsafe_cross_origin_links = 0;
     for a in html.select(&A_SEL) {
         if let Some(href) = a.value().attr("href") {
-            if let Some(joined) = resolve_url(base, href) {
+            if let Some(joined) = resolve_url(&doc_base, href) {
                 if is_same_site(base, &joined) {
                     if has_rel_value(a.value().attr("rel"), "nofollow") {
                         internal_nofollow_count += 1;
@@ -619,7 +722,7 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
     let mut images_missing_dimensions = 0;
     for img in html.select(&IMG_SEL) {
         if let Some(src) = img.value().attr("src") {
-            if let Some(joined) = resolve_url(base, src) {
+            if let Some(joined) = resolve_url(&doc_base, src) {
                 let alt_attr = img.value().attr("alt");
                 if alt_attr.is_none() {
                     missing_alt_count += 1;
@@ -970,6 +1073,56 @@ mod tests {
         assert_eq!(page.h2_values.len(), MAX_HEADINGS);
         assert_eq!(page.heading_levels.len(), MAX_HEADING_LEVELS);
         assert_eq!(page.h1.as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn inline_tags_do_not_split_words_but_blocks_do() {
+        let page = parse(
+            "<body><p>Hel<b>lo</b> wor<em>ld</em></p><p>next</p><div>block</div>a<br>b</body>",
+        );
+        assert_eq!(page.word_count, 6, "{:?}", page.body_text);
+        assert!(page.body_text.contains("Hello world"));
+    }
+
+    #[test]
+    fn links_resolve_against_base_href() {
+        let page = parse(
+            r#"<head><base href="/app/"></head><body><a href="x">x</a><img src="i.png" alt="i"></body>"#,
+        );
+        assert_eq!(
+            strings(&page.internal_links),
+            vec!["https://example.com/app/x"]
+        );
+        assert_eq!(page.images[0].0.as_str(), "https://example.com/app/i.png");
+    }
+
+    #[test]
+    fn non_http_schemes_are_not_links() {
+        let page = parse(
+            r#"<a href="ftp://example.com/f">f</a><a href="sms:123">s</a><a href="whatsapp://send">w</a><a href="/ok">ok</a>"#,
+        );
+        assert_eq!(
+            strings(&page.internal_links),
+            vec!["https://example.com/ok"]
+        );
+        assert!(page.external_links.is_empty());
+    }
+
+    #[test]
+    fn every_robots_meta_tag_is_kept() {
+        let page = parse(
+            r#"<meta name="robots" content="noindex"><meta name="robots" content="index, follow">"#,
+        );
+        assert_eq!(page.meta_robots.as_deref(), Some("noindex, index, follow"));
+    }
+
+    #[test]
+    fn a_later_empty_meta_description_does_not_erase_the_first() {
+        let page = parse(
+            r#"<meta name="description" content="Real"><meta name="description" content="">"#,
+        );
+        assert_eq!(page.meta_description.as_deref(), Some("Real"));
+        assert_eq!(page.meta_description_count, 2);
     }
 
     #[test]
