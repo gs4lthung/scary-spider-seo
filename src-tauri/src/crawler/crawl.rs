@@ -151,12 +151,11 @@ fn emit_site_info<R: Runtime>(
     let _ = app.emit("crawl://site_info", info);
 }
 
-/// The crawl loop's in-progress frontier state, captured when a crawl is stopped with
-/// pages still queued so a later `run_crawl` call for the same `start_url` can carry on
-/// instead of starting over. Not a complete pause/resume of everything in flight: page
-/// fetches already dispatched at the moment of cancellation are aborted and their URLs
-/// are not re-queued (a small, bounded loss — at most `concurrency` URLs), but the bulk
-/// of the frontier (whatever hadn't been dispatched yet) is preserved exactly.
+/// The crawl loop's in-progress state, captured when a crawl is stopped with work left
+/// so a later `run_crawl` call for the same `start_url` can carry on instead of starting
+/// over. Page fetches in flight when the crawl stopped are put back at the front of the
+/// frontier, and resource checks in flight are kept in `pending_resources`, so nothing
+/// the stopped crawl had started is lost.
 pub struct CrawlResumeState {
     pub start_url: String,
     pub frontier: VecDeque<(Url, usize, bool)>,
@@ -164,6 +163,8 @@ pub struct CrawlResumeState {
     pub scheduled_count: usize,
     pub crawled_count: usize,
     pub linked_urls: HashSet<String>,
+    /// Link and image checks that were still running, re-queued when the crawl resumes.
+    pub pending_resources: Vec<ResourceResult>,
 }
 
 pub struct CrawlState {
@@ -1202,10 +1203,12 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
 
     // Continuing a stopped crawl seeds the frontier/visited/linked-urls from where it left
     // off instead of restarting at just `start_url` — see `CrawlResumeState`.
+    let mut resumed_resources = Vec::new();
     let (mut visited, mut frontier, mut scheduled_count, mut crawled_count, mut linked_urls) =
         match resume {
             Some(mut r) => {
                 let dropped = retain_in_scope(&mut r.frontier, &mut r.visited, &scope, &start_url);
+                resumed_resources = std::mem::take(&mut r.pending_resources);
                 (
                     r.visited,
                     r.frontier,
@@ -1262,6 +1265,28 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
 
     let mut page_tasks: JoinSet<Option<PageFetchOutcome>> = JoinSet::new();
     let mut resource_tasks: JoinSet<()> = JoinSet::new();
+    // Requested URL -> its frontier entry, for every page fetch dispatched but not yet
+    // finished: put back on the frontier if the crawl is stopped mid-fetch.
+    let mut in_flight: HashMap<String, (Url, usize, bool)> = HashMap::new();
+
+    // Checks a stopped crawl had started run again, against the same source pages.
+    for pending in resumed_resources {
+        let Ok(url) = Url::parse(&pending.url) else {
+            continue;
+        };
+        queue_resource_check(
+            &resource_ctx,
+            &mut resource_tasks,
+            ResourceCandidate {
+                url,
+                kind: pending.resource_type,
+                source_page: pending.source_page,
+                alt_text: pending.alt_text,
+                is_internal: pending.is_internal,
+                is_insecure: pending.is_insecure,
+            },
+        );
+    }
 
     let mut last_dispatch: Option<Instant> = None;
 
@@ -1367,6 +1392,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
                 let task_cancel = cancel.clone();
                 let robots_client = client.clone();
                 let robots_agent = config.user_agent.clone();
+                in_flight.insert(url.to_string(), (url.clone(), depth, via_sitemap));
                 page_tasks.spawn(async move {
                     tokio::select! {
                         _ = wait_for_cancellation(task_cancel) => None,
@@ -1416,6 +1442,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
                     let _ = app.emit("crawl://error", format!("Page fetch task failed: {error}"));
                 }
                 if let Some(Ok(Some(outcome))) = res {
+                    in_flight.remove(&outcome.result.url);
                     crawled_count += 1;
                     let PageFetchOutcome { result, discovered_internal, discovered_external, discovered_images, site_tech } = outcome;
                     // The start page's outcome completes site info, with or without
@@ -1518,42 +1545,50 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
     emit_site_info(&app, &mut pending_site_info, None);
 
     let cancelled = cancel.load(Ordering::SeqCst);
-    // Read before the frontier may move into the resume state below.
-    let queued_at_end = frontier.len();
+    let mut pending_resources: Vec<ResourceResult> = Vec::new();
     if cancelled {
         page_tasks.abort_all();
         resource_tasks.abort_all();
         while page_tasks.join_next().await.is_some() {}
         while resource_tasks.join_next().await.is_some() {}
 
-        // Aborted resource tasks leave their optimistic "Checking" entries behind.
-        // Remove those entries so a resumed crawl can schedule them again.
-        let pending_resources: Vec<String> = resources
+        // Aborted resource tasks leave their optimistic "Checking" entries behind. They
+        // are removed here and kept for the resume state, which checks them again.
+        let checking: Vec<String> = resources
             .iter()
             .filter(|entry| entry.value().status_text == "Checking")
             .map(|entry| entry.key().clone())
             .collect();
-        for key in pending_resources {
-            resources.remove(&key);
+        for key in checking {
+            if let Some((_, pending)) = resources.remove(&key) {
+                pending_resources.push(pending);
+            }
+        }
+        // Aborted page fetches go back to the front of the frontier, still marked visited
+        // and scheduled, so a resumed crawl fetches them first.
+        for (_, entry) in in_flight.drain() {
+            frontier.push_front(entry);
         }
     }
+    // Read before the frontier may move into the resume state below.
+    let queued_at_end = frontier.len();
 
-    // Only worth resuming if the frontier still has unfetched URLs — if it was empty when
-    // stopped, the crawl had nothing left to do anyway. (Pages whose fetch was already
-    // in flight at the moment of cancellation are aborted above and not re-queued here —
-    // see `CrawlResumeState`'s doc comment.)
-    let resume = if cancelled && !frontier.is_empty() && !list_mode {
-        Some(CrawlResumeState {
-            start_url: config.start_url.clone(),
-            frontier,
-            visited,
-            scheduled_count,
-            crawled_count,
-            linked_urls: linked_urls.clone(),
-        })
-    } else {
-        None
-    };
+    // Only worth resuming if pages or resource checks are left (in-flight ones were put
+    // back above); otherwise the crawl had nothing left to do anyway.
+    let resume =
+        if cancelled && (!frontier.is_empty() || !pending_resources.is_empty()) && !list_mode {
+            Some(CrawlResumeState {
+                start_url: config.start_url.clone(),
+                frontier,
+                visited,
+                scheduled_count,
+                crawled_count,
+                linked_urls: linked_urls.clone(),
+                pending_resources,
+            })
+        } else {
+            None
+        };
     if let Ok(mut slot) = resume_slot.lock() {
         *slot = resume;
     } else {

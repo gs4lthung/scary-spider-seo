@@ -460,6 +460,39 @@ async fn site_info_still_reports_technologies() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn resumed_crawl_rechecks_interrupted_resources() {
+    let site = FixtureServer::start().await;
+    let start = site.url("/");
+    let image = site.url("/img/ok.png");
+    // A resource check that was still running when the first run was stopped.
+    let resume = CrawlResumeState {
+        start_url: start.clone(),
+        frontier: Default::default(),
+        visited: [start.clone()].into(),
+        scheduled_count: 1,
+        crawled_count: 1,
+        linked_urls: Default::default(),
+        pending_resources: vec![ResourceResult {
+            url: image.clone(),
+            resource_type: super::types::ResourceType::Image,
+            source_page: start.clone(),
+            alt_text: Some("ok".to_string()),
+            status: None,
+            status_text: "Checking".to_string(),
+            is_internal: true,
+            is_insecure: false,
+            error: None,
+            content_length: None,
+        }],
+    };
+    let (out, _) = crawl_resumable(&start, json!({}), Some(resume), false).await;
+    let checked = out.resource(&image);
+    assert_eq!(checked.status, Some(200));
+    assert_eq!(checked.source_page, start);
+    assert!(out.pages.is_empty(), "no page is fetched again");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn resumed_crawl_sends_no_site_info() {
     let site = FixtureServer::start().await;
     let start = site.url("/");
@@ -472,6 +505,7 @@ async fn resumed_crawl_sends_no_site_info() {
         scheduled_count: 2,
         crawled_count: 1,
         linked_urls: Default::default(),
+        pending_resources: Vec::new(),
     };
     let (out, _) = crawl_resumable(&start, json!({ "maxDepth": 1 }), Some(resume), false).await;
     assert_eq!(out.urls(), vec![queued.as_str()]);
