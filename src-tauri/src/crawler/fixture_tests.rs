@@ -406,10 +406,14 @@ async fn crawls_every_linked_page_exactly_once() {
         "/h1-and-images.html",
         "/headings.html",
         "/loop-a",
+        // Queued as `/loop-a`'s redirect target; `/loop-a` is already visited, so the
+        // loop is crawled once from each end.
+        "/loop-b",
         "/missing-title.html",
         "/multi-meta.html",
         "/near-dup-a.html",
         "/near-dup-b.html",
+        "/new-page.html",
         "/nofollow.html",
         "/noindex.html",
         "/old-page",
@@ -1268,6 +1272,14 @@ async fn follows_and_reports_redirects() {
     );
     assert_eq!(moved.redirect_chain, vec![site.url("/old-page")]);
     assert_eq!(moved.indexability, "Redirected");
+    // The redirect has no content of its own: the destination's title and hash belong to
+    // the destination's own row, so they are not reported twice as duplicates.
+    assert_eq!(moved.title, None);
+    assert_eq!(moved.content_hash, "");
+    let target = out.page(&site.url("/new-page.html"));
+    assert_eq!(target.status, Some(200));
+    assert!(target.redirect_chain.is_empty());
+    assert!(target.title.is_some());
 
     let looped = out.page(&site.url("/loop-a"));
     assert_eq!(looped.status, Some(301));

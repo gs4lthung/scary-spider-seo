@@ -4,6 +4,19 @@ use crate::crawler::types::{
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 
+/// Neutralizes a crawled value that a spreadsheet would run as a formula (CSV injection):
+/// a cell starting with `=`, `+`, `-`, `@`, tab or carriage return gets a leading `'`, as
+/// OWASP recommends. Page titles, anchors and alt text come from the crawled site, so a
+/// hostile page could otherwise plant `=HYPERLINK(...)` in the user's export.
+fn safe_cell<S: AsRef<str>>(value: S) -> String {
+    let value = value.as_ref();
+    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        format!("'{value}")
+    } else {
+        value.to_string()
+    }
+}
+
 /// Ids with an entry on at least one page, in the order they first appear (each page's ids
 /// sorted shorter first, so `ex2` comes before `ex10`).
 fn ids_in_page_order<'a, V: 'a>(
@@ -261,7 +274,13 @@ pub fn export_pages_csv(
                 .map(|values| values.join(" | "))
                 .unwrap_or_default()
         });
-        wtr.write_record(fixed.into_iter().chain(custom).chain(extracted))?;
+        wtr.write_record(
+            fixed
+                .into_iter()
+                .chain(custom)
+                .chain(extracted)
+                .map(safe_cell),
+        )?;
     }
 
     wtr.flush()?;
@@ -289,21 +308,24 @@ pub fn export_resources_csv(
     ])?;
 
     for r in resources {
-        wtr.write_record([
-            r.url.clone(),
-            match r.resource_type {
-                ResourceType::Link => "Link".to_string(),
-                ResourceType::Image => "Image".to_string(),
-            },
-            r.source_page.clone(),
-            r.status.map(|s| s.to_string()).unwrap_or_default(),
-            r.status_text.clone(),
-            r.is_internal.to_string(),
-            r.alt_text.clone().unwrap_or_default(),
-            r.is_insecure.to_string(),
-            r.content_length.map(|n| n.to_string()).unwrap_or_default(),
-            r.error.clone().unwrap_or_default(),
-        ])?;
+        wtr.write_record(
+            [
+                r.url.clone(),
+                match r.resource_type {
+                    ResourceType::Link => "Link".to_string(),
+                    ResourceType::Image => "Image".to_string(),
+                },
+                r.source_page.clone(),
+                r.status.map(|s| s.to_string()).unwrap_or_default(),
+                r.status_text.clone(),
+                r.is_internal.to_string(),
+                r.alt_text.clone().unwrap_or_default(),
+                r.is_insecure.to_string(),
+                r.content_length.map(|n| n.to_string()).unwrap_or_default(),
+                r.error.clone().unwrap_or_default(),
+            ]
+            .map(safe_cell),
+        )?;
     }
 
     wtr.flush()?;
@@ -322,12 +344,15 @@ pub fn export_links_csv(
 
     for p in pages {
         for link in &p.outlinks {
-            wtr.write_record([
-                p.url.as_str(),
-                link.url.as_str(),
-                link.anchor.as_str(),
-                if link.nofollow { "true" } else { "false" },
-            ])?;
+            wtr.write_record(
+                [
+                    p.url.as_str(),
+                    link.url.as_str(),
+                    link.anchor.as_str(),
+                    if link.nofollow { "true" } else { "false" },
+                ]
+                .map(safe_cell),
+            )?;
         }
     }
 
@@ -338,6 +363,20 @@ pub fn export_links_csv(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formula_cells_are_neutralized() {
+        assert_eq!(
+            safe_cell("=HYPERLINK(\"http://evil\",\"x\")"),
+            "'=HYPERLINK(\"http://evil\",\"x\")"
+        );
+        assert_eq!(safe_cell("@SUM(1+1)"), "'@SUM(1+1)");
+        assert_eq!(safe_cell("+1"), "'+1");
+        assert_eq!(safe_cell("-1"), "'-1");
+        assert_eq!(safe_cell("Plain title"), "Plain title");
+        assert_eq!(safe_cell("https://x.com/a=b"), "https://x.com/a=b");
+        assert_eq!(safe_cell(""), "");
+    }
     use crate::crawler::types::LinkRef;
 
     fn link(url: &str, anchor: &str, nofollow: bool) -> LinkRef {

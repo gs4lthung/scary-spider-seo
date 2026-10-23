@@ -475,6 +475,34 @@ async fn fetch_and_parse(
         ..PageResult::default()
     };
 
+    // A redirected URL is reported as a redirect, like Screaming Frog: the body belongs
+    // to the destination, so parsing it here would give this URL the destination's
+    // title, meta and content hash (and every redirect a false duplicate). The
+    // destination is queued as its own URL when it stays on the requested host; one on
+    // another host is external, so its links are never followed as internal. The start
+    // page keeps the full path below, since its destination is where the site really
+    // starts (http to https, apex to www) and site info reads its HTML.
+    if redirect_url.is_some() && !detect_site_tech {
+        let elapsed = started.elapsed().as_millis() as u64;
+        let indexability = indexability_for(
+            status,
+            None,
+            None,
+            x_robots_tag.as_deref(),
+            &url,
+            &final_url,
+        );
+        let mut outcome = empty_outcome(PageResult {
+            indexability,
+            response_time_ms: elapsed,
+            ..base
+        });
+        if final_url.host_str() == url.host_str() {
+            outcome.discovered_internal.push(final_url);
+        }
+        return outcome;
+    }
+
     if !is_html && (browser.is_none() || content_type.is_some()) {
         let elapsed = started.elapsed().as_millis() as u64;
         let indexability = indexability_for(
@@ -722,6 +750,9 @@ async fn fetch_and_parse(
         error: None,
     };
 
+    // A redirected start page is parsed as its destination (see above), which is still
+    // queued as its own URL so it gets a row of its own.
+    let redirect_target = (final_url.as_str() != url.as_str()).then_some(final_url);
     PageFetchOutcome {
         result,
         discovered_internal: parsed
@@ -729,6 +760,7 @@ async fn fetch_and_parse(
             .into_iter()
             .chain(pagination_links)
             .chain(hreflang_targets)
+            .chain(redirect_target)
             .collect(),
         discovered_external: parsed.external_links,
         discovered_images: parsed.images,
@@ -1008,7 +1040,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
     let start_robots_key = robots_key(&start_url);
     let mut robots_by_origin: HashMap<String, RobotsCell> = HashMap::new();
     if config.respect_robots {
-        let rules = RobotsRules::fetch(&client, &start_url).await;
+        let rules = RobotsRules::fetch(&client, &start_url, &config.user_agent).await;
         robots_by_origin.insert(start_robots_key.clone(), Arc::new(OnceCell::from(rules)));
     }
 
@@ -1267,7 +1299,7 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
                 let detect_site_tech = pending_site_info.is_some() && is_start_page(&url);
 
                 if let Some(robots) = robots {
-                    if !robots.is_allowed(url.path()) {
+                    if !robots.is_url_allowed(&url) {
                         // A blocked start page is never fetched, so there is nothing
                         // to detect technologies from.
                         if detect_site_tech {
@@ -1320,15 +1352,16 @@ pub(crate) async fn run_crawl_with_progress_interval<R: Runtime>(
                 let analysis = analysis.clone();
                 let task_cancel = cancel.clone();
                 let robots_client = client.clone();
+                let robots_agent = config.user_agent.clone();
                 page_tasks.spawn(async move {
                     tokio::select! {
                         _ = wait_for_cancellation(task_cancel) => None,
                         outcome = async {
                             if let Some(cell) = pending_robots {
                                 let rules = cell
-                                    .get_or_init(|| RobotsRules::fetch(&robots_client, &url))
+                                    .get_or_init(|| RobotsRules::fetch(&robots_client, &url, &robots_agent))
                                     .await;
-                                if !rules.is_allowed(url.path()) {
+                                if !rules.is_url_allowed(&url) {
                                     return empty_outcome(robots_blocked_result(&url, depth));
                                 }
                             }
