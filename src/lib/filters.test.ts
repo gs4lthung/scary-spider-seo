@@ -52,6 +52,7 @@ import {
   getSitemapUsed,
   getTitlePixelWidth,
   hasHeadingLevelSkip,
+  isContentPage,
   isNon200LinkTarget,
   isNonDescriptiveAnchor,
   ingestDuplicateValue,
@@ -192,6 +193,51 @@ describe("getDuplicateMetaSet", () => {
     const dupes = getDuplicateMetaSet(pages);
     expect(dupes.has("Same desc")).toBe(true);
     expect(dupes.has("Other desc")).toBe(false);
+  });
+});
+
+describe("content pages (isContentPage)", () => {
+  const redirect = { redirectChain: ["https://example.com/old"], redirectUrl: "https://example.com/new" };
+
+  it("is an HTML 2xx page that was not redirected", () => {
+    expect(isContentPage(makePage())).toBe(true);
+    expect(isContentPage(makePage({ status: 404 }))).toBe(false);
+    expect(isContentPage(makePage({ htmlSizeBytes: 0, contentType: "application/pdf" }))).toBe(false);
+    expect(isContentPage(makePage({ status: null, htmlSizeBytes: 0 }))).toBe(false);
+    expect(isContentPage(makePage(redirect))).toBe(false);
+  });
+
+  it("keeps a redirect from duplicating its destination's title, meta, H1 and content", () => {
+    // A crawl saved before redirects were stored without content: the redirect row still
+    // carries the destination's signals.
+    const shared = { title: "Target", metaDescription: "Target desc", h1: "Target", contentHash: "h" };
+    const pages = [makePage({ url: "https://example.com/old", ...shared, ...redirect }), makePage({ url: "https://example.com/new", ...shared })];
+    expect(getDuplicateTitleSet(pages).size).toBe(0);
+    expect(getDuplicateMetaSet(pages).size).toBe(0);
+    expect(getDuplicateContentSet(pages).size).toBe(0);
+    expect(getDuplicateH1Set(pages).size).toBe(0);
+  });
+
+  it("does not report non-HTML, error or blocked URLs as missing a title, meta description or H1", () => {
+    const pdf = makePage({ title: null, metaDescription: null, h1Count: 0, htmlSizeBytes: 0, contentType: "application/pdf" });
+    const gone = makePage({ status: 404, title: null, metaDescription: null, h1Count: 0 });
+    for (const key of ["missingTitle", "missingMeta", "h1Issues"] as const) {
+      expect(filterPages([pdf, gone], key, emptyFilterContext())).toHaveLength(0);
+    }
+  });
+
+  it("reports a robots-blocked URL as blocked rather than as an error", () => {
+    const blocked = makePage({ status: null, statusText: "Blocked", htmlSizeBytes: 0, indexability: "Non-Indexable (robots.txt)" });
+    expect(filterPages([blocked], "4xx5xx", emptyFilterContext())).toHaveLength(0);
+    expect(filterPages([blocked], "blockedByRobots", emptyFilterContext())).toHaveLength(1);
+    expect(filterPages([makePage({ status: null, error: "timeout" })], "4xx5xx", emptyFilterContext())).toHaveLength(1);
+  });
+
+  it("only reports missing HSTS when the response headers were read", () => {
+    const https = { url: "https://example.com/", hsts: false };
+    expect(filterPages([makePage({ ...https, securityHeadersCaptured: true })], "missingHsts", emptyFilterContext())).toHaveLength(1);
+    expect(filterPages([makePage({ ...https, securityHeadersCaptured: false })], "missingHsts", emptyFilterContext())).toHaveLength(0);
+    expect(filterPages([makePage({ ...https, securityHeadersCaptured: false, status: null, htmlSizeBytes: 0 })], "missingHsts", emptyFilterContext())).toHaveLength(0);
   });
 });
 
@@ -544,9 +590,18 @@ describe("getPageIssueKeys", () => {
   });
 
   it("returns every applicable issue key for a page with many problems", () => {
+    const page = makePage({ title: null, metaDescription: null, h1Count: 0, canonicalCount: 2 });
+    const keys = getPageIssueKeys(page, emptyFilterContext());
+    expect(keys).toEqual(expect.arrayContaining(["missingTitle", "missingMeta", "h1Issues", "multipleCanonical"]));
+  });
+
+  it("reports an error page as an error, not as a page missing its title, meta and H1", () => {
     const page = makePage({ status: 404, title: null, metaDescription: null, h1Count: 0 });
     const keys = getPageIssueKeys(page, emptyFilterContext());
-    expect(keys).toEqual(expect.arrayContaining(["4xx5xx", "missingTitle", "missingMeta", "h1Issues"]));
+    expect(keys).toContain("4xx5xx");
+    expect(keys).not.toEqual(expect.arrayContaining(["missingTitle"]));
+    expect(keys).not.toContain("missingMeta");
+    expect(keys).not.toContain("h1Issues");
   });
 
   it("stays in sync with filterPages for every issue key (single source of truth)", () => {
@@ -866,6 +921,7 @@ describe("issue registry", () => {
     const pages = [
       at("clean", { hreflangValues: ["en"], discoveredViaSitemap: false, contentHash: "unique", title: "Unique" }),
       at("gone", { status: 404 }),
+      at("blocked", { status: null, htmlSizeBytes: 0, indexability: "Non-Indexable (robots.txt)" }),
       at("hreflang-en", {
         hreflangLinks: [
           { lang: "en", href: "https://example.com/hreflang-en" },

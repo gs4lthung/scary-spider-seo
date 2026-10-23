@@ -63,10 +63,21 @@ export function isNonDescriptiveAnchor(anchor: string): boolean {
   return NON_DESCRIPTIVE_ANCHORS.has(normalized);
 }
 
+/**
+ * Whether a crawled URL is a page with content of its own: an HTML response with a 2xx status
+ * that was not redirected. Content checks (missing title, duplicates, H1s) only apply to these,
+ * like Screaming Frog: a PDF, a 404 or a robots-blocked URL has no title to be missing, and a
+ * redirect's body belongs to its destination (crawls saved before redirects were stored without
+ * content still carry it, so the redirect chain is checked too).
+ */
+export function isContentPage(p: PageResult): boolean {
+  return p.htmlSizeBytes > 0 && is2xx(p) && p.redirectChain.length === 0;
+}
+
 export function getDuplicateTitleSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
   for (const p of pages) {
-    if (p.title) counts.set(p.title, (counts.get(p.title) ?? 0) + 1);
+    if (p.title && isContentPage(p)) counts.set(p.title, (counts.get(p.title) ?? 0) + 1);
   }
   const duplicates = new Set<string>();
   for (const [title, count] of counts) {
@@ -78,7 +89,7 @@ export function getDuplicateTitleSet(pages: PageResult[]): Set<string> {
 export function getDuplicateContentSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
   for (const p of pages) {
-    if (p.contentHash) counts.set(p.contentHash, (counts.get(p.contentHash) ?? 0) + 1);
+    if (p.contentHash && isContentPage(p)) counts.set(p.contentHash, (counts.get(p.contentHash) ?? 0) + 1);
   }
   const duplicates = new Set<string>();
   for (const [hash, count] of counts) {
@@ -90,7 +101,7 @@ export function getDuplicateContentSet(pages: PageResult[]): Set<string> {
 export function getDuplicateMetaSet(pages: PageResult[]): Set<string> {
   const counts = new Map<string, number>();
   for (const p of pages) {
-    if (p.metaDescription) counts.set(p.metaDescription, (counts.get(p.metaDescription) ?? 0) + 1);
+    if (p.metaDescription && isContentPage(p)) counts.set(p.metaDescription, (counts.get(p.metaDescription) ?? 0) + 1);
   }
   const duplicates = new Set<string>();
   for (const [desc, count] of counts) {
@@ -107,7 +118,7 @@ export const firstH2 = (p: PageResult): string | null => p.h2Values[0] ?? null;
 
 function getDuplicateSet(pages: PageResult[], value: (p: PageResult) => string | null): Set<string> {
   const tracker = createDuplicateTracker();
-  for (const p of pages) ingestDuplicateValue(tracker, value(p));
+  for (const p of pages) if (isContentPage(p)) ingestDuplicateValue(tracker, value(p));
   return tracker.duplicates;
 }
 
@@ -185,6 +196,10 @@ function pageDirectives(p: PageResult): Set<string> {
  * (`robots_blocked_result` in crawl.rs: no status, no error). */
 const ROBOTS_BLOCKED_INDEXABILITY = "Non-Indexable (robots.txt)";
 
+/** Whether the crawler skipped this URL because robots.txt disallows it. */
+export const isRobotsBlocked = (p: PageResult) =>
+  p.status === null && p.indexability === ROBOTS_BLOCKED_INDEXABILITY;
+
 /**
  * Whether links to this crawled page count as links to a non-200 page: it answered an error
  * status, gave no response, or redirected (marked by its chain, since the crawler stores the
@@ -192,7 +207,7 @@ const ROBOTS_BLOCKED_INDEXABILITY = "Non-Indexable (robots.txt)";
  * is unknown rather than an error.
  */
 export function isNon200LinkTarget(p: PageResult): boolean {
-  if (p.status === null && p.indexability === ROBOTS_BLOCKED_INDEXABILITY) return false;
+  if (isRobotsBlocked(p)) return false;
   return p.status !== 200 || p.redirectChain.length > 0;
 }
 
@@ -267,7 +282,7 @@ function hreflangHrefs(p: PageResult): Set<string> {
 /** A crawled hreflang target that Google cannot use: it answered non-200, redirected, or is not
  * indexable. A robots-blocked target was never requested, so it is unknown rather than an error. */
 export function isHreflangTargetError(target: PageResult): boolean {
-  if (target.status === null && target.indexability === ROBOTS_BLOCKED_INDEXABILITY) return false;
+  if (isRobotsBlocked(target)) return false;
   return isNon200LinkTarget(target) || target.indexability !== "Indexable";
 }
 
@@ -727,7 +742,17 @@ export const ISSUE_DEFS = [
     group: "response",
     crossPage: false,
     tone: "bad",
-    test: (p) => p.status === null || p.status >= 400,
+    // A robots-blocked URL was never requested, so it is `blockedByRobots`, not an error.
+    test: (p) => (p.status === null ? !isRobotsBlocked(p) : p.status >= 400),
+  }),
+  pageIssue({
+    key: "blockedByRobots",
+    label: "Blocked by robots.txt",
+    group: "indexing",
+    crossPage: false,
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: isRobotsBlocked,
   }),
   pageIssue({
     key: "missingTitle",
@@ -735,7 +760,7 @@ export const ISSUE_DEFS = [
     group: "content",
     crossPage: false,
     section: "Titles",
-    test: (p) => !p.title,
+    test: (p) => isContentPage(p) && !p.title,
   }),
   pageIssue({
     key: "duplicateTitles",
@@ -743,7 +768,7 @@ export const ISSUE_DEFS = [
     group: "content",
     crossPage: true,
     section: "Titles",
-    test: (p, ctx) => !!p.title && ctx.duplicateTitles.has(p.title),
+    test: (p, ctx) => !!p.title && isContentPage(p) && ctx.duplicateTitles.has(p.title),
   }),
   pageIssue({
     key: "titleTooShort",
@@ -804,7 +829,7 @@ export const ISSUE_DEFS = [
     group: "content",
     crossPage: false,
     section: "Content",
-    test: (p) => !p.metaDescription,
+    test: (p) => isContentPage(p) && !p.metaDescription,
   }),
   pageIssue({
     key: "duplicateMeta",
@@ -812,7 +837,7 @@ export const ISSUE_DEFS = [
     group: "content",
     crossPage: true,
     section: "Content",
-    test: (p, ctx) => !!p.metaDescription && ctx.duplicateMeta.has(p.metaDescription),
+    test: (p, ctx) => !!p.metaDescription && isContentPage(p) && ctx.duplicateMeta.has(p.metaDescription),
   }),
   pageIssue({
     key: "metaTooLong",
@@ -862,7 +887,7 @@ export const ISSUE_DEFS = [
     crossPage: false,
     section: "Content",
     // Missing (0) and multiple (>1) H1s in one issue.
-    test: (p) => p.h1Count !== 1,
+    test: (p) => isContentPage(p) && p.h1Count !== 1,
   }),
   pageIssue({
     key: "h1TooLong",
@@ -880,7 +905,7 @@ export const ISSUE_DEFS = [
     section: "Content",
     test: (p, ctx) => {
       const h1 = firstH1(p);
-      return !!h1 && ctx.duplicateH1s.has(h1);
+      return !!h1 && isContentPage(p) && ctx.duplicateH1s.has(h1);
     },
   }),
   pageIssue({
@@ -907,7 +932,7 @@ export const ISSUE_DEFS = [
     section: "Content",
     test: (p, ctx) => {
       const h2 = firstH2(p);
-      return !!h2 && ctx.duplicateH2s.has(h2);
+      return !!h2 && isContentPage(p) && ctx.duplicateH2s.has(h2);
     },
   }),
   pageIssue({
@@ -932,7 +957,7 @@ export const ISSUE_DEFS = [
     group: "content",
     crossPage: true,
     section: "Content",
-    test: (p, ctx) => !!p.contentHash && ctx.duplicateContent.has(p.contentHash),
+    test: (p, ctx) => !!p.contentHash && isContentPage(p) && ctx.duplicateContent.has(p.contentHash),
   }),
   pageIssue({
     key: "nearDuplicateContent",
@@ -1383,7 +1408,7 @@ export const ISSUE_DEFS = [
     crossPage: false,
     tone: "warn",
     section: "Security",
-    test: (p) => p.url.startsWith("https:") && !p.hsts,
+    test: (p) => hasSecurityHeaders(p) && p.url.startsWith("https:") && !p.hsts,
   }),
   pageIssue({
     key: "mixedContent",

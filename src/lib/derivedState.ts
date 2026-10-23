@@ -11,6 +11,7 @@ import {
   firstH2,
   ingestCustomSearchPage,
   ingestDuplicateValue,
+  isContentPage,
   ingestHreflangPage,
   ingestNon200LinkSources,
 } from "./filters";
@@ -80,11 +81,14 @@ export function createDerivedTrackers(): DerivedTrackers {
 }
 
 function ingestPage(t: DerivedTrackers, p: PageResult): void {
-  ingestDuplicateValue(t.duplicateTitles, p.title);
-  ingestDuplicateValue(t.duplicateContent, p.contentHash);
-  ingestDuplicateValue(t.duplicateMeta, p.metaDescription);
-  ingestDuplicateValue(t.duplicateH1s, firstH1(p));
-  ingestDuplicateValue(t.duplicateH2s, firstH2(p));
+  // Only pages with content of their own count toward duplicates (see `isContentPage`).
+  if (isContentPage(p)) {
+    ingestDuplicateValue(t.duplicateTitles, p.title);
+    ingestDuplicateValue(t.duplicateContent, p.contentHash);
+    ingestDuplicateValue(t.duplicateMeta, p.metaDescription);
+    ingestDuplicateValue(t.duplicateH1s, firstH1(p));
+    ingestDuplicateValue(t.duplicateH2s, firstH2(p));
+  }
   t.canonicalStatusMap.set(p.url, p.status);
   t.pageByUrl.set(p.url, p);
   if (p.discoveredViaSitemap) t.sitemapUsed = true;

@@ -18,6 +18,16 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
     },
   },
+  blockedByRobots: {
+    title: "Internal URL blocked by robots.txt",
+    problem:
+      "The site links to this URL, but robots.txt tells crawlers not to fetch it, so Google cannot read its content, follow its links or see a noindex on it. A blocked URL can still be indexed without a description if other pages link to it.",
+    fix: "If the page should rank, remove or narrow the Disallow rule that matches it. If it should stay out of search, allow crawling and use a noindex meta tag or X-Robots-Tag instead, since Google has to fetch a page to see its noindex. Also stop linking to URLs you deliberately block.",
+    source: {
+      label: "Google Search Central: Introduction to robots.txt",
+      url: "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+    },
+  },
   missingTitle: {
     title: "Missing page title",
     problem: "Without a <title> element Google has to auto-generate a title for search results, and it usually picks something worse than what you'd write yourself.",
