@@ -1412,6 +1412,12 @@ async fn seeds_orphans_from_the_sitemap() {
     let orphan = with.page(&site.url("/orphan.html"));
     assert!(orphan.discovered_via_sitemap);
     assert!(!with.page(&site.url("/dup-a.html")).discovered_via_sitemap);
+    // A second sitemap that only robots.txt declares (`Sitemap:` line) is read too.
+    assert!(
+        with.page(&site.url("/in-extra-sitemap.html"))
+            .discovered_via_sitemap
+    );
+    assert_eq!(site.request_count("GET", "/sitemap-extra.xml"), 1);
 
     // Sitemap audits: a noindex URL and a 404 URL, both listed only in the sitemap.
     let noindex = with.page(&site.url("/noindex-in-sitemap.html"));

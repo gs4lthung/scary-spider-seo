@@ -1,2 +1,5 @@
 User-agent: *
 Disallow: /private/
+
+Sitemap: {{ORIGIN}}/sitemap.xml
+Sitemap: {{ORIGIN}}/sitemap-extra.xml
