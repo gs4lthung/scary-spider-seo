@@ -37,6 +37,18 @@ export const JS_RAW_WORD_RATIO = 0.5;
 /** A rendered page with more than this many internal links beyond its raw HTML's count
  * gets its links from JavaScript. */
 export const JS_ADDED_LINKS_THRESHOLD = 5;
+/** A page with more internal outlinks than this (repeats included) has "high internal outlinks".
+ * Screaming Frog 24.3's default, measured by crawling pages with 1,000 and 1,001 links. */
+export const HIGH_INTERNAL_OUTLINKS = 1000;
+/** A page with more external outlinks than this (repeats included) has "high external outlinks".
+ * Screaming Frog 24.3's default, measured by crawling pages with 10 and 11 links. */
+export const HIGH_EXTERNAL_OUTLINKS = 10;
+/** Title or H1 wording of an error page served with a 200 status (a "soft 404"). */
+export const SOFT_404_PATTERN =
+  /\b(?:404|page not found|not found|page (?:does not|doesn't) exist|no longer (?:exists|available))\b/i;
+/** Query parameters Google Analytics and Google Ads add for campaign tracking, as Screaming Frog
+ * flags them (`fbclid` is not one). */
+const GA_TRACKING_PARAM = /^(?:utm_.+|_ga|_gl|gclid)$/i;
 
 /** Anchor texts that say nothing about the target (compared lowercase, after trimming
  * punctuation and collapsing whitespace, by `isNonDescriptiveAnchor`). */
@@ -620,6 +632,33 @@ function urlParts(p: PageResult): UrlParts | null {
  * reported once (as 4xx/5xx) rather than again for its shape. */
 const isLiveUrl = (p: PageResult) => p.status !== null && p.status >= 200 && p.status < 400;
 
+/** Hosts that only resolve on the visitor's own machine. */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
+
+export function isLocalHost(host: string | null): boolean {
+  return host !== null && (LOCAL_HOSTS.has(host) || host.endsWith(".localhost"));
+}
+
+/** Whether a path repeats one of its segments (`/shop/shoes/shop/`), as Screaming Frog's
+ * "Repetitive Path" does: the repeat need not be adjacent. */
+export function hasRepetitivePath(path: string): boolean {
+  const seen = new Set<string>();
+  for (const segment of path.split("/")) {
+    if (!segment) continue;
+    if (seen.has(segment)) return true;
+    seen.add(segment);
+  }
+  return false;
+}
+
+/** Whether a query string carries a Google Analytics or Google Ads tracking parameter. */
+export function hasGaTrackingParams(query: string): boolean {
+  for (const name of new URLSearchParams(query).keys()) {
+    if (GA_TRACKING_PARAM.test(name)) return true;
+  }
+  return false;
+}
+
 /** Runs `test` on the path plus query of a live page's URL (never the host). */
 function urlIssue(test: (parts: UrlParts) => boolean): (p: PageResult) => boolean {
   return (p) => {
@@ -960,6 +999,15 @@ export const ISSUE_DEFS = [
     test: (p, ctx) => !!p.contentHash && isContentPage(p) && ctx.duplicateContent.has(p.contentHash),
   }),
   pageIssue({
+    key: "soft404",
+    label: "Soft 404 pages",
+    group: "content",
+    crossPage: false,
+    tone: "warn",
+    section: "Content",
+    test: (p) => isContentPage(p) && (SOFT_404_PATTERN.test(p.title ?? "") || SOFT_404_PATTERN.test(p.h1 ?? "")),
+  }),
+  pageIssue({
     key: "nearDuplicateContent",
     label: "Near-duplicate content",
     group: "content",
@@ -1250,6 +1298,41 @@ export const ISSUE_DEFS = [
     test: (p, ctx) => ctx.non200LinkSources.has(p.url),
   }),
   pageIssue({
+    key: "noInternalOutlinks",
+    label: "No internal outlinks",
+    group: "links",
+    crossPage: false,
+    tone: "warn",
+    section: "Links",
+    test: (p) => isContentPage(p) && p.internalLinkCount === 0,
+  }),
+  pageIssue({
+    key: "highInternalOutlinks",
+    label: `Over ${HIGH_INTERNAL_OUTLINKS.toLocaleString("en")} internal outlinks`,
+    group: "links",
+    crossPage: false,
+    section: "Links",
+    test: (p) => isContentPage(p) && p.internalLinkCount > HIGH_INTERNAL_OUTLINKS,
+  }),
+  pageIssue({
+    key: "highExternalOutlinks",
+    label: `Over ${HIGH_EXTERNAL_OUTLINKS} external outlinks`,
+    group: "links",
+    crossPage: false,
+    section: "Links",
+    test: (p) => isContentPage(p) && p.externalLinkCount > HIGH_EXTERNAL_OUTLINKS,
+  }),
+  resourceIssue({
+    key: "outlinksToLocalhost",
+    label: "Links to localhost",
+    group: "links",
+    crossPage: false,
+    tone: "bad",
+    section: "Links",
+    // A site crawled on localhost (a dev server) links to localhost by design.
+    test: (r) => r.resourceType === "link" && isLocalHost(hostOf(r.url)) && !isLocalHost(hostOf(r.sourcePage)),
+  }),
+  pageIssue({
     key: "slowResponse",
     label: `Slow response (>${SLOW_RESPONSE_THRESHOLD_MS}ms)`,
     group: "response",
@@ -1400,6 +1483,15 @@ export const ISSUE_DEFS = [
     section: "Security",
     test: (p) => p.insecureLinkCount > 0,
     resourceTest: (r) => !!r.isInsecure,
+  }),
+  pageIssue({
+    key: "httpUrl",
+    label: "Page served over HTTP",
+    group: "technical",
+    crossPage: false,
+    tone: "bad",
+    section: "Security",
+    test: (p) => isContentPage(p) && p.url.startsWith("http:"),
   }),
   pageIssue({
     key: "missingHsts",
@@ -1567,6 +1659,45 @@ export const ISSUE_DEFS = [
     tone: "warn",
     section: "URL",
     test: urlIssue(({ path }) => path.includes("//")),
+  }),
+  pageIssue({
+    key: "urlRepetitivePath",
+    label: "Repetitive path in URL",
+    group: "technical",
+    crossPage: false,
+    section: "URL",
+    test: urlIssue(({ path }) => hasRepetitivePath(path)),
+  }),
+  pageIssue({
+    key: "urlContainsSpace",
+    label: "Space in URL",
+    group: "technical",
+    crossPage: false,
+    tone: "warn",
+    section: "URL",
+    test: urlIssue(({ path, query }) => /%20| /.test(path + query)),
+  }),
+  pageIssue({
+    key: "urlGaTracking",
+    label: "GA tracking parameters in URL",
+    group: "technical",
+    crossPage: false,
+    tone: "warn",
+    section: "URL",
+    // Internal links with campaign parameters split one page into many URLs and overwrite
+    // the visitor's real traffic source.
+    test: urlIssue(({ query }) => hasGaTrackingParams(query)),
+  }),
+  pageIssue({
+    key: "urlInternalSearch",
+    label: "Internal search URL",
+    group: "technical",
+    crossPage: false,
+    tone: "warn",
+    section: "URL",
+    // Screaming Frog's rule: a URL with a query string that mentions "search" (`/search?q=`,
+    // `?search=`); a clean `/search/shoes` path is not a search results URL by this rule.
+    test: urlIssue(({ path, query }) => query.length > 0 && /search/i.test(path + query)),
   }),
 ] as const;
 

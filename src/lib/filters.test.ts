@@ -53,6 +53,9 @@ import {
   getTitlePixelWidth,
   hasHeadingLevelSkip,
   isContentPage,
+  isLocalHost,
+  HIGH_EXTERNAL_OUTLINKS,
+  HIGH_INTERNAL_OUTLINKS,
   isNon200LinkTarget,
   isNonDescriptiveAnchor,
   ingestDuplicateValue,
@@ -238,6 +241,64 @@ describe("content pages (isContentPage)", () => {
     expect(filterPages([makePage({ ...https, securityHeadersCaptured: true })], "missingHsts", emptyFilterContext())).toHaveLength(1);
     expect(filterPages([makePage({ ...https, securityHeadersCaptured: false })], "missingHsts", emptyFilterContext())).toHaveLength(0);
     expect(filterPages([makePage({ ...https, securityHeadersCaptured: false, status: null, htmlSizeBytes: 0 })], "missingHsts", emptyFilterContext())).toHaveLength(0);
+  });
+});
+
+describe("Screaming Frog parity checks (measured against SF 24.3)", () => {
+  const ctx = emptyFilterContext();
+  const hits = (key: FilterKey, overrides: Partial<PageResult>) => filterPages([makePage(overrides)], key, ctx).length === 1;
+
+  it("flags content pages without internal outlinks", () => {
+    expect(hits("noInternalOutlinks", { internalLinkCount: 0 })).toBe(true);
+    expect(hits("noInternalOutlinks", { internalLinkCount: 1 })).toBe(false);
+    expect(hits("noInternalOutlinks", { internalLinkCount: 0, status: 404 })).toBe(false);
+  });
+
+  it("flags more than 1,000 internal and more than 10 external outlinks", () => {
+    expect(hits("highInternalOutlinks", { internalLinkCount: HIGH_INTERNAL_OUTLINKS })).toBe(false);
+    expect(hits("highInternalOutlinks", { internalLinkCount: HIGH_INTERNAL_OUTLINKS + 1 })).toBe(true);
+    expect(hits("highExternalOutlinks", { externalLinkCount: HIGH_EXTERNAL_OUTLINKS })).toBe(false);
+    expect(hits("highExternalOutlinks", { externalLinkCount: HIGH_EXTERNAL_OUTLINKS + 1 })).toBe(true);
+  });
+
+  it("flags 200 pages whose title or H1 reads like an error page", () => {
+    expect(hits("soft404", { title: "Page not found" })).toBe(true);
+    expect(hits("soft404", { h1: "404 - Page Not Found" })).toBe(true);
+    expect(hits("soft404", { title: "Sorry, this product no longer exists" })).toBe(true);
+    expect(hits("soft404", { title: "Running shoes for trail and road" })).toBe(false);
+    expect(hits("soft404", { title: "Page not found", status: 404 })).toBe(false);
+  });
+
+  it("flags content pages served over plain HTTP", () => {
+    expect(hits("httpUrl", { url: "http://example.com/a" })).toBe(true);
+    expect(hits("httpUrl", { url: "https://example.com/a" })).toBe(false);
+  });
+
+  it("matches Screaming Frog's URL rules", () => {
+    const url = (key: FilterKey, path: string) => hits(key, { url: `https://example.com${path}` });
+    expect(url("urlRepetitivePath", "/a/b/a/b/page.html")).toBe(true);
+    expect(url("urlRepetitivePath", "/shop/shoes/shop/page.html")).toBe(true);
+    expect(url("urlRepetitivePath", "/shop/shoes/page.html")).toBe(false);
+    expect(url("urlContainsSpace", "/dir%20with%20space.html")).toBe(true);
+    expect(url("urlContainsSpace", "/plus+sign.html")).toBe(false);
+    for (const query of ["utm_source=news", "_ga=2.1", "_gl=1", "gclid=abc"]) {
+      expect(url("urlGaTracking", `/p.html?${query}`), query).toBe(true);
+    }
+    expect(url("urlGaTracking", "/p.html?fbclid=abc")).toBe(false);
+    expect(url("urlInternalSearch", "/search?q=shoes")).toBe(true);
+    expect(url("urlInternalSearch", "/p.html?search=shoes")).toBe(true);
+    expect(url("urlInternalSearch", "/search/shoes")).toBe(false);
+    expect(url("urlInternalSearch", "/?s=shoes")).toBe(false);
+  });
+
+  it("flags links to localhost unless the crawled site is itself on localhost", () => {
+    const link = (url: string, sourcePage: string) =>
+      filterResources([makeResource({ url, sourcePage, resourceType: "link" })], "outlinksToLocalhost", ctx).length;
+    expect(link("http://localhost:3000/a", "https://example.com/")).toBe(1);
+    expect(link("http://127.0.0.1/a", "https://example.com/")).toBe(1);
+    expect(link("http://localhost:3000/a", "http://localhost:3000/")).toBe(0);
+    expect(link("https://example.com/a", "https://example.com/")).toBe(0);
+    expect(isLocalHost("app.localhost")).toBe(true);
   });
 });
 
@@ -1028,8 +1089,17 @@ describe("issue registry", () => {
           { url: "https://example.com/redirect-to-404", anchor: "Old page", nofollow: false, isImageLink: false },
         ],
       }),
+      at("dead-end", { internalLinkCount: 0 }),
+      at("mega-menu", { internalLinkCount: HIGH_INTERNAL_OUTLINKS + 1, externalLinkCount: HIGH_EXTERNAL_OUTLINKS + 1 }),
+      at("missing", { title: "Page not found" }),
+      makePage({ url: "http://example.com/plain-http" }),
+      at("shop/shoes/shop/boots"),
+      at("dir%20name"),
+      at("landing?utm_source=newsletter"),
+      at("search?q=boots"),
     ];
     const resources = [
+      makeResource({ url: "http://localhost:3000/dev", resourceType: "link", isInternal: false }),
       makeResource(),
       makeResource({ url: "https://example.com/missing.png", status: 404 }),
       makeResource({ url: "https://example.com/timeout.png", status: null, error: "timeout" }),

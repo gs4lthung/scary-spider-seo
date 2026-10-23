@@ -894,4 +894,104 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
     },
   },
+  soft404: {
+    title: "Soft 404 page",
+    problem:
+      "The page answers 200 OK but its title or H1 reads like an error page (\"Page not found\", \"404\"). Google treats these as soft 404s: it drops them from the index anyway, wastes crawl budget fetching them, and reports them in Search Console.",
+    fix: "If the content is gone, return a real 404 or 410 status. If it moved, 301-redirect to the replacement. If the page is valid and the wording is a false alarm, change the title or H1 so it no longer reads like an error.",
+    source: {
+      label: "Google Search Central: Soft 404 errors",
+      url: "https://developers.google.com/search/docs/crawling-indexing/http-network-errors#soft-404-errors",
+    },
+  },
+  noInternalOutlinks: {
+    title: "Page has no internal outlinks",
+    problem:
+      "The page links to nothing else on the site, so it is a dead end for visitors and for crawlers: link equity that reaches it stops there. It is often a sign that links are only added by JavaScript, or that navigation is missing from a template.",
+    fix: "Add contextual links to related pages and make sure the site navigation renders in the HTML. If links come from JavaScript, check them with JavaScript rendering on, and prefer real <a href> links Google can follow.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  highInternalOutlinks: {
+    title: "Over 1,000 internal outlinks",
+    problem:
+      "A page with this many links (mega menus, tag clouds, faceted filters) splits its link value across all of them, buries the links that matter and can be slow to render and crawl.",
+    fix: "Trim navigation to the most important sections, paginate or collapse long lists, and remove repeated links in headers and footers. Keep the links that help visitors reach important pages.",
+    source: {
+      label: "Google Search Central: Link best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+    },
+  },
+  highExternalOutlinks: {
+    title: "Over 10 external outlinks",
+    problem:
+      "Many links to other sites send visitors away and, when they are paid, user-generated or low quality, can look like a link scheme. This is a review prompt, not always a problem: resource pages legitimately link out a lot.",
+    fix: "Check that each external link is useful and still works. Mark paid links rel=\"sponsored\" and user-generated ones rel=\"ugc\", and remove links that no longer help the reader.",
+    source: {
+      label: "Google Search Central: Qualify your outbound links to Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links",
+    },
+  },
+  outlinksToLocalhost: {
+    title: "Link to localhost",
+    problem:
+      "The link points to localhost or 127.0.0.1, which only exists on the visitor's own computer, so it is broken for every real visitor and crawler. It usually leaks from a development or staging environment.",
+    fix: "Replace the link with the production URL or a relative path, and check the CMS or build settings (site URL, base URL) that inserted the development host.",
+    source: {
+      label: "MDN: What is a URL?",
+      url: "https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_URL",
+    },
+  },
+  httpUrl: {
+    title: "Page served over HTTP",
+    problem:
+      "The page loads over plain HTTP, so it can be read or altered in transit, browsers mark it \"Not secure\", and Google prefers the HTTPS version of a page when both exist.",
+    fix: "Serve the site over HTTPS, 301-redirect every HTTP URL to its HTTPS version, update internal links and canonicals to HTTPS, and then add an HSTS header.",
+    source: {
+      label: "Google Search Central: Secure your site with HTTPS",
+      url: "https://developers.google.com/search/docs/crawling-indexing/https",
+    },
+  },
+  urlRepetitivePath: {
+    title: "Repetitive path in URL",
+    problem:
+      "A folder name appears more than once in the path (/shop/shoes/shop/). This is often a relative-link bug that keeps nesting URLs, which can create endless crawl paths and duplicate pages.",
+    fix: "Find the link that produced the URL (see its inlinks) and make it root-relative (/shop/...) or absolute. Redirect the repeated URLs to the correct page.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlContainsSpace: {
+    title: "Space in URL",
+    problem:
+      "The URL contains a space, encoded as %20. Spaces are easy to break when a URL is copied, shared or typed, and they make URLs harder to read.",
+    fix: "Use hyphens to separate words in URLs, then 301-redirect the old URL to the new one and update internal links.",
+    source: {
+      label: "Google Search Central: URL structure best practices for Google",
+      url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+    },
+  },
+  urlGaTracking: {
+    title: "GA tracking parameters in URL",
+    problem:
+      "An internal link carries utm_, _ga, _gl or gclid parameters. Each variant is a separate URL to crawl, and clicking it starts a new session in Google Analytics that overwrites how the visitor really arrived.",
+    fix: "Remove tracking parameters from internal links. Use them only on links from other sites, emails and ads, and give the page a canonical pointing to the clean URL.",
+    source: {
+      label: "Google Analytics Help: URL builders and campaign parameters",
+      url: "https://support.google.com/analytics/answer/10917952",
+    },
+  },
+  urlInternalSearch: {
+    title: "Internal search URL",
+    problem:
+      "The crawl reached an on-site search results page. These pages are endless (one per query), thin, and Google advises against letting them be crawled or indexed.",
+    fix: "Stop linking to search result URLs, and block them from crawling with a robots.txt Disallow rule (or keep them out of the index with noindex).",
+    source: {
+      label: "Google Search Central: Spam policies (thin content and search results)",
+      url: "https://developers.google.com/search/docs/essentials/spam-policies",
+    },
+  },
 };
