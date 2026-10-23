@@ -237,6 +237,11 @@ fn respond(root: &std::path::Path, origin: &str, method: &str, path: &str) -> Ve
         "/old-page" => return redirect("/new-page.html"),
         "/redirect-to-gone" => return redirect("/gone.html"),
         "/start-redirect" => return redirect("/"),
+        // Refuses HEAD like some servers and CDNs do, while GET works.
+        "/img/head-refused.png" if head => return http_response("404 Not Found", &[], b"", head),
+        "/img/head-refused.png" => {
+            return http_response("200 OK", &[("Content-Type", "image/png")], b"\x89PNG", head)
+        }
         "/loop-a" => return redirect("/loop-b"),
         "/loop-b" => return redirect("/loop-a"),
         "/img/ok.png" | "/img/decorative.png" | "/img/logo.png" => {
@@ -1207,6 +1212,17 @@ async fn directive_and_canonical_fixtures() {
         Some(site.url("/old-page").as_str())
     );
     assert!(out.page(&site.url("/old-page")).redirect_url.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resource_refusing_head_is_checked_with_get() {
+    let site = FixtureServer::start().await;
+    let url = url::Url::parse(&site.url("/img/head-refused.png")).unwrap();
+    let check = super::crawl::check_resource(&reqwest::Client::new(), &url).await;
+    assert_eq!(check.status, Some(200));
+    assert!(check.error.is_none());
+    assert_eq!(site.request_count("HEAD", "/img/head-refused.png"), 1);
+    assert_eq!(site.request_count("GET", "/img/head-refused.png"), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]

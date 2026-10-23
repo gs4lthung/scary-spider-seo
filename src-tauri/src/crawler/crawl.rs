@@ -392,22 +392,31 @@ async fn fetch_and_parse(
     } else {
         Method::GET
     };
-    let followed = match fetch_following_redirects(client, url.clone(), request_method).await {
-        Ok(f) => f,
-        Err(e) => {
-            let elapsed = started.elapsed().as_millis() as u64;
-            return empty_outcome(PageResult {
-                url: url.to_string(),
-                depth,
-                status_text: "Error".to_string(),
-                indexability: "Non-Indexable (Error)".to_string(),
-                response_time_ms: elapsed,
-                error: Some(e.to_string()),
-                is_minified: true,
-                ..PageResult::default()
-            });
+    let mut followed =
+        match fetch_following_redirects(client, url.clone(), request_method.clone()).await {
+            Ok(f) => f,
+            Err(e) => {
+                let elapsed = started.elapsed().as_millis() as u64;
+                return empty_outcome(PageResult {
+                    url: url.to_string(),
+                    depth,
+                    status_text: "Error".to_string(),
+                    indexability: "Non-Indexable (Error)".to_string(),
+                    response_time_ms: elapsed,
+                    error: Some(e.to_string()),
+                    is_minified: true,
+                    ..PageResult::default()
+                });
+            }
+        };
+
+    // A server that refuses HEAD (403, 404, 405, 501) would otherwise be recorded with
+    // that error status, though the page itself is fine: ask again with GET.
+    if request_method == Method::HEAD && followed.response.status().as_u16() >= 400 {
+        if let Ok(retried) = fetch_following_redirects(client, url.clone(), Method::GET).await {
+            followed = retried;
         }
-    };
+    }
 
     let resp = followed.response;
     // Headers of the final response, like the auto-following probe this replaces saw.
@@ -772,10 +781,10 @@ async fn fetch_and_parse(
 }
 
 /// Outcome of a resource status check.
-struct ResourceCheck {
-    status: Option<u16>,
+pub(super) struct ResourceCheck {
+    pub(super) status: Option<u16>,
     status_text: String,
-    error: Option<String>,
+    pub(super) error: Option<String>,
     content_length: Option<u64>,
 }
 
@@ -811,11 +820,13 @@ fn header_content_length(headers: &reqwest::header::HeaderMap) -> Option<u64> {
         .ok()
 }
 
-async fn check_resource(client: &Client, url: &Url) -> ResourceCheck {
+/// Checks a link or image with HEAD, retrying with GET when HEAD fails or answers an
+/// error: many servers refuse HEAD (403, 404, 405, 501) while serving GET fine, and a
+/// HEAD-only error would be reported as a broken link.
+pub(super) async fn check_resource(client: &Client, url: &Url) -> ResourceCheck {
     match client.head(url.clone()).send().await {
         Ok(resp) => {
-            let status = resp.status();
-            if status.as_u16() == 405 || status.as_u16() == 501 {
+            if resp.status().as_u16() >= 400 {
                 match client.get(url.clone()).send().await {
                     Ok(r2) => ResourceCheck::from_response(&r2),
                     Err(e) => ResourceCheck::failed(e.to_string()),
