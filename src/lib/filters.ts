@@ -999,6 +999,15 @@ export const ISSUE_DEFS = [
     test: (p, ctx) => !!p.contentHash && isContentPage(p) && ctx.duplicateContent.has(p.contentHash),
   }),
   pageIssue({
+    key: "loremIpsum",
+    label: "Lorem ipsum placeholder",
+    group: "content",
+    crossPage: false,
+    tone: "bad",
+    section: "Content",
+    test: (p) => isContentPage(p) && p.hasLoremIpsum,
+  }),
+  pageIssue({
     key: "soft404",
     label: "Soft 404 pages",
     group: "content",
@@ -1092,6 +1101,15 @@ export const ISSUE_DEFS = [
     section: "Canonical & Indexing",
     // A redirected URL is reported by its destination, not for a canonical of its own.
     test: (p) => hasHtml(p) && is2xx(p) && !p.redirectUrl && !p.canonical,
+  }),
+  pageIssue({
+    key: "canonicalIsRelative",
+    label: "Relative canonical URL",
+    group: "indexing",
+    crossPage: false,
+    tone: "warn",
+    section: "Canonical & Indexing",
+    test: (p) => isContentPage(p) && p.canonicalIsRelative,
   }),
   pageIssue({
     key: "canonicalised",
@@ -1492,6 +1510,14 @@ export const ISSUE_DEFS = [
     tone: "bad",
     section: "Security",
     test: (p) => isContentPage(p) && p.url.startsWith("http:"),
+  }),
+  pageIssue({
+    key: "unsafeCrossOriginLinks",
+    label: "Unsafe cross-origin links",
+    group: "technical",
+    crossPage: false,
+    section: "Security",
+    test: (p) => isContentPage(p) && p.unsafeCrossOriginLinks > 0,
   }),
   pageIssue({
     key: "missingHsts",

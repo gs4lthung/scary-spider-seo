@@ -80,6 +80,12 @@ pub struct ParsedPage {
     pub word_count: usize,
     pub canonical: Option<String>,
     pub canonical_count: usize,
+    /// The first canonical's href as written is relative (not `http(s)://...`).
+    pub canonical_is_relative: bool,
+    /// External `<a target="_blank">` links without `rel="noopener"` or `noreferrer`.
+    pub unsafe_cross_origin_links: usize,
+    /// The body text contains "lorem ipsum" placeholder copy.
+    pub has_lorem_ipsum: bool,
     pub internal_links: Vec<Url>,
     /// Internal links with anchor text and rel flags, in document order, capped
     /// at `MAX_OUTLINKS_PER_PAGE`.
@@ -501,11 +507,20 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
 
     let canonical_links: Vec<_> = html.select(&CANONICAL_SEL).collect();
     let canonical_count = canonical_links.len();
-    let canonical = canonical_links
+    let canonical_href = canonical_links
         .first()
         .and_then(|e| e.value().attr("href"))
+        .map(str::trim);
+    let canonical = canonical_href
         .and_then(|href| resolve_url(base, href))
         .map(|u| u.to_string());
+    // Google asks for absolute canonical URLs; a relative one resolves against whatever
+    // URL the page was reached on, so a duplicate URL canonicalises to itself.
+    let canonical_is_relative = canonical.is_some()
+        && canonical_href.is_some_and(|href| {
+            let lower = href.to_ascii_lowercase();
+            !lower.starts_with("http://") && !lower.starts_with("https://")
+        });
 
     let mut pagination_next = None;
     let mut pagination_prev = None;
@@ -559,11 +574,13 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
     let word_count = body_text.split_whitespace().count();
     let content_hash = hash_content(&body_text);
     let content_simhash = content_simhash(&body_text);
+    let has_lorem_ipsum = body_text.to_ascii_lowercase().contains("lorem ipsum");
 
     let mut internal_links = Vec::new();
     let mut internal_outlinks = Vec::new();
     let mut external_links = Vec::new();
     let mut internal_nofollow_count = 0;
+    let mut unsafe_cross_origin_links = 0;
     for a in html.select(&A_SEL) {
         if let Some(href) = a.value().attr("href") {
             if let Some(joined) = resolve_url(base, href) {
@@ -576,6 +593,19 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
                     }
                     internal_links.push(joined);
                 } else {
+                    // A new tab opened without noopener can reach back through
+                    // `window.opener` (older browsers don't imply noopener).
+                    let new_tab = a
+                        .value()
+                        .attr("target")
+                        .is_some_and(|t| t.trim().eq_ignore_ascii_case("_blank"));
+                    let rel = a.value().attr("rel");
+                    if new_tab
+                        && !has_rel_value(rel, "noopener")
+                        && !has_rel_value(rel, "noreferrer")
+                    {
+                        unsafe_cross_origin_links += 1;
+                    }
                     external_links.push(joined);
                 }
             }
@@ -643,6 +673,9 @@ pub fn parse_page_with(body: &str, base: &Url, extraction: &Extraction) -> Parse
         word_count,
         canonical,
         canonical_count,
+        canonical_is_relative,
+        unsafe_cross_origin_links,
+        has_lorem_ipsum,
         internal_links,
         internal_outlinks,
         external_links,
@@ -937,6 +970,39 @@ mod tests {
         assert_eq!(page.h2_values.len(), MAX_HEADINGS);
         assert_eq!(page.heading_levels.len(), MAX_HEADING_LEVELS);
         assert_eq!(page.h1.as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn relative_canonicals_are_flagged() {
+        assert!(parse(r#"<link rel="canonical" href="/page">"#).canonical_is_relative);
+        assert!(parse(r#"<link rel="canonical" href="//example.com/page">"#).canonical_is_relative);
+        assert!(
+            !parse(r#"<link rel="canonical" href="https://example.com/page">"#)
+                .canonical_is_relative
+        );
+        assert!(
+            !parse(r#"<link rel="canonical" href=" HTTPS://example.com/page">"#)
+                .canonical_is_relative
+        );
+        assert!(!parse("<p>No canonical</p>").canonical_is_relative);
+    }
+
+    #[test]
+    fn unsafe_new_tab_links_are_counted() {
+        let page = parse(
+            r#"<a href="https://other.com/a" target="_blank">a</a>
+               <a href="https://other.com/b" target="_BLANK" rel="noopener">b</a>
+               <a href="https://other.com/c" target="_blank" rel="nofollow noreferrer">c</a>
+               <a href="https://other.com/d">d</a>
+               <a href="/internal" target="_blank">internal</a>"#,
+        );
+        assert_eq!(page.unsafe_cross_origin_links, 1);
+    }
+
+    #[test]
+    fn lorem_ipsum_is_detected_in_body_text() {
+        assert!(parse("<p>Lorem Ipsum dolor sit amet</p>").has_lorem_ipsum);
+        assert!(!parse("<p>Real product copy</p>").has_lorem_ipsum);
     }
 
     #[test]

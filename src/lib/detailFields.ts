@@ -103,6 +103,9 @@ export function pageDetailFields(
     { label: "Open Graph Tags", value: page.hasOpenGraph ? "Yes" : "No" },
     { label: "Twitter Card Tags", value: page.hasTwitterCard ? "Yes" : "No" },
     { label: "Canonical Tag Count", value: page.canonicalCount },
+    { label: "Canonical Is Relative", value: page.canonicalIsRelative ? "Yes" : "No" },
+    { label: "Unsafe Cross-Origin Links", value: page.unsafeCrossOriginLinks },
+    { label: "Lorem Ipsum Placeholder", value: page.hasLoremIpsum ? "Yes" : "No" },
     { label: "Discovered Via Sitemap", value: page.discoveredViaSitemap ? "Yes" : "No" },
     {
       label: "Redirect Chain",

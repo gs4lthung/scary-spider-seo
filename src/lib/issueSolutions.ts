@@ -894,6 +894,36 @@ export const ISSUE_SOLUTIONS: Record<IssueKey, IssueSolution> = {
       url: "https://developers.google.com/search/docs/crawling-indexing/url-structure",
     },
   },
+  loremIpsum: {
+    title: "Lorem ipsum placeholder text",
+    problem:
+      "The page still contains \"lorem ipsum\" filler copy from a template or design mockup. It looks unfinished to visitors and gives Google meaningless text to index for this page.",
+    fix: "Replace the placeholder with real content, or keep the page out of production until it is ready. Check shared templates and widgets, since placeholder text there shows up on many pages at once.",
+    source: {
+      label: "Google Search Central: Creating helpful, reliable, people-first content",
+      url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+    },
+  },
+  canonicalIsRelative: {
+    title: "Canonical uses a relative URL",
+    problem:
+      "The rel=\"canonical\" href is relative (/page or page.html), so it resolves against whichever URL the page was reached on. A duplicate URL, a staging host or an http copy then points its canonical at itself instead of the preferred URL.",
+    fix: "Write the canonical as an absolute URL including the protocol and host, for example https://www.example.com/page.",
+    source: {
+      label: "Google Search Central: How to specify a canonical URL",
+      url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+    },
+  },
+  unsafeCrossOriginLinks: {
+    title: "Unsafe cross-origin links",
+    problem:
+      "An external link opens in a new tab (target=\"_blank\") without rel=\"noopener\" or \"noreferrer\". In older browsers the opened page can use window.opener to redirect your page to a phishing copy, and it shares your page's process, which can slow it down.",
+    fix: "Add rel=\"noopener\" (or rel=\"noopener noreferrer\" if you don't want to send the referrer) to every external link that uses target=\"_blank\".",
+    source: {
+      label: "MDN: rel=noopener",
+      url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noopener",
+    },
+  },
   soft404: {
     title: "Soft 404 page",
     problem:

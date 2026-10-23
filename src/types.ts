@@ -152,6 +152,12 @@ export interface PageResult {
   hasOpenGraph: boolean;
   hasTwitterCard: boolean;
   canonicalCount: number;
+  /** The first canonical's href was written as a relative URL. False for crawls saved before it existed. */
+  canonicalIsRelative: boolean;
+  /** External `target="_blank"` links without `rel="noopener"`/`noreferrer`. 0 for crawls saved before it existed. */
+  unsafeCrossOriginLinks: number;
+  /** The body text contains "lorem ipsum" placeholder copy. */
+  hasLoremIpsum: boolean;
   discoveredViaSitemap: boolean;
   redirectChain: string[];
   structuredDataTypes: string[];

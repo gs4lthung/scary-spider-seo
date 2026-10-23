@@ -300,6 +300,15 @@ pub struct PageResult {
     pub has_twitter_card: bool,
     #[serde(default)]
     pub canonical_count: usize,
+    /// The first canonical's href was written as a relative URL.
+    #[serde(default)]
+    pub canonical_is_relative: bool,
+    /// External `target="_blank"` links without `rel="noopener"`/`noreferrer`.
+    #[serde(default)]
+    pub unsafe_cross_origin_links: usize,
+    /// The body text contains "lorem ipsum" placeholder copy.
+    #[serde(default)]
+    pub has_lorem_ipsum: bool,
     #[serde(default)]
     pub discovered_via_sitemap: bool,
     #[serde(default)]

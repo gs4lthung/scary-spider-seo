@@ -134,6 +134,9 @@ function makePage(overrides: Partial<PageResult> = {}): PageResult {
     hasOpenGraph: true,
     hasTwitterCard: true,
     canonicalCount: 1,
+    canonicalIsRelative: false,
+    unsafeCrossOriginLinks: 0,
+    hasLoremIpsum: false,
     discoveredViaSitemap: true,
     redirectChain: [],
     structuredDataTypes: ["Article"],
@@ -267,6 +270,15 @@ describe("Screaming Frog parity checks (measured against SF 24.3)", () => {
     expect(hits("soft404", { title: "Sorry, this product no longer exists" })).toBe(true);
     expect(hits("soft404", { title: "Running shoes for trail and road" })).toBe(false);
     expect(hits("soft404", { title: "Page not found", status: 404 })).toBe(false);
+  });
+
+  it("flags lorem ipsum, relative canonicals and unsafe new-tab links on content pages", () => {
+    expect(hits("loremIpsum", { hasLoremIpsum: true })).toBe(true);
+    expect(hits("loremIpsum", { hasLoremIpsum: false })).toBe(false);
+    expect(hits("canonicalIsRelative", { canonicalIsRelative: true })).toBe(true);
+    expect(hits("canonicalIsRelative", { canonicalIsRelative: true, status: 404 })).toBe(false);
+    expect(hits("unsafeCrossOriginLinks", { unsafeCrossOriginLinks: 1 })).toBe(true);
+    expect(hits("unsafeCrossOriginLinks", { unsafeCrossOriginLinks: 0 })).toBe(false);
   });
 
   it("flags content pages served over plain HTTP", () => {
@@ -1097,6 +1109,9 @@ describe("issue registry", () => {
       at("dir%20name"),
       at("landing?utm_source=newsletter"),
       at("search?q=boots"),
+      at("placeholder", { hasLoremIpsum: true }),
+      at("relative-canonical", { canonicalIsRelative: true }),
+      at("new-tab", { unsafeCrossOriginLinks: 2 }),
     ];
     const resources = [
       makeResource({ url: "http://localhost:3000/dev", resourceType: "link", isInternal: false }),

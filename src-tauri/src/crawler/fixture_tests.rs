@@ -423,6 +423,7 @@ async fn crawls_every_linked_page_exactly_once() {
         "/product.html",
         "/redirect-to-gone",
         "/secure-headers.html",
+        "/sf-parity.html",
         "/title-equals-h1.html",
     ]
     .iter()
@@ -960,7 +961,7 @@ async fn extracts_on_page_signals() {
     assert_eq!(home.structured_data_types, vec!["WebSite"]);
     assert!(home.structured_data_errors.is_empty());
     assert_eq!(home.indexability, "Indexable");
-    assert_eq!(home.internal_link_count, 27);
+    assert_eq!(home.internal_link_count, 28);
     assert_eq!(home.external_link_count, 1);
 
     let bare = out.page(&site.url("/missing-title.html"));
@@ -1206,6 +1207,27 @@ async fn directive_and_canonical_fixtures() {
         Some(site.url("/old-page").as_str())
     );
     assert!(out.page(&site.url("/old-page")).redirect_url.is_some());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn captures_screaming_frog_parity_signals() {
+    let site = FixtureServer::start().await;
+    let out = crawl(&site.url("/"), json!({})).await;
+
+    let parity = out.page(&site.url("/sf-parity.html"));
+    assert!(parity.canonical_is_relative);
+    assert_eq!(
+        parity.canonical.as_deref(),
+        Some(site.url("/sf-parity.html").as_str())
+    );
+    assert!(parity.has_lorem_ipsum);
+    assert_eq!(parity.unsafe_cross_origin_links, 1);
+
+    // The home page's canonical is absolute and its copy is real.
+    let home = out.page(&site.url("/"));
+    assert!(!home.canonical_is_relative);
+    assert!(!home.has_lorem_ipsum);
+    assert_eq!(home.unsafe_cross_origin_links, 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
