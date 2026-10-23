@@ -29,6 +29,7 @@ Scope: the desktop app only (`src/`, `src-tauri/`). Goal: close the audit gap wi
 | M2 | `M2-new-signals.md` | New raw signals collected by the Rust crawler, with their filters |
 | M3 | `M3-workflows.md` | Larger workflows: include/exclude, list mode, custom search and extraction, crawl comparison, raw vs rendered |
 | M4 | `M4-optimization.md` | Code structure and performance for large crawls |
+| M5 | `M5-sf-parity.md` | Second Screaming Frog parity pass, from a black-box comparison with SF 24.3 (`docs/research/screaming-frog/`) |
 
 ## 4. Tasks
 
@@ -61,6 +62,17 @@ Scope: the desktop app only (`src/`, `src-tauri/`). Goal: close the audit gap wi
 | T4.4 | Stream saved crawls instead of cloning and pretty-printing | none |
 | T4.5 | Synthetic large-site fixture and crawl throughput budget | none |
 | T4.6 | Reuse the start page response for site info | T4.5 |
+| T5.1 | Issue type and priority | none |
+| T5.2 | XML sitemap export | none |
+| T5.3 | Character encoding from `<meta charset>` | none |
+| T5.4 | SEO elements outside `<head>` | none |
+| T5.5 | HTML validation of the document structure | T5.4 |
+| T5.6 | Image alt text audits | none |
+| T5.7 | Pagination audits | none |
+| T5.8 | Inlink audits | none |
+| T5.9 | Redirect and canonical chain reports | none |
+| T5.10 | Readability | none |
+| T5.11 | Sitemap source audits | none |
 
 ## 5. Dependency graph
 
@@ -89,6 +101,7 @@ T1.1 --> T3.6
 T1.1 --> T4.1
 T4.1 --> T4.2
 T4.5 --> T4.6
+T5.4 --> T5.5
 ```
 
 ## 6. Out of scope

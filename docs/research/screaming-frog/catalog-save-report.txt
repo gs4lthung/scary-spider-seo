@@ -1,0 +1,65 @@
+The option '--save-report' supports the following arguments:
+
+Crawl Overview
+Issues Overview
+Segments Overview
+Redirects:All Redirects
+Redirects:Redirect Chains
+Redirects:Redirect & Canonical Chains
+Redirects:Redirects to Error
+Canonicals:Canonical Chains
+Canonicals:Non-Indexable Canonicals
+Pagination:Non-200 Pagination URLs
+Pagination:Unlinked Pagination URLs
+Hreflang:All hreflang URLs
+Hreflang:Non-200 hreflang URLs
+Hreflang:Unlinked hreflang URLs
+Hreflang:Missing Return Links
+Hreflang:Inconsistent Language & Region Return Links
+Hreflang:Non Canonical Return Links
+Hreflang:Noindex Return Links
+Insecure Content
+SERP Summary
+Orphan Pages
+Structured Data:Validation Errors & Warnings Summary
+Structured Data:Validation Errors & Warnings
+Structured Data:Parse Errors
+Structured Data:Google Rich Results Features Summary
+Structured Data:Google Rich Results Features
+Javascript:Javascript Console Log Summary
+PageSpeed:PageSpeed Opportunities Summary
+PageSpeed:CSS Coverage Summary
+PageSpeed:JavaScript Coverage Summary
+PageSpeed:Minify CSS
+PageSpeed:Minify JavaScript
+PageSpeed:Reduce Unused CSS
+PageSpeed:Reduce Unused JavaScript
+PageSpeed:Reduce JavaScript Execution Time
+PageSpeed:Minimize Main-Thread Work
+PageSpeed:Avoid Enormous Network Payloads
+PageSpeed:User Timing Marks and Measures
+PageSpeed:Layout Shift Culprits
+PageSpeed:Optimize DOM Size
+PageSpeed:Font Display
+PageSpeed:Improve Image Delivery
+PageSpeed:Legacy JavaScript
+PageSpeed:Render Blocking Requests
+PageSpeed:Use Efficient Cache Lifetimes
+PageSpeed:LCP Request Discovery
+PageSpeed:LCP Breakdown
+PageSpeed:Forced Reflow
+PageSpeed:3rd Parties
+PageSpeed:Duplicated JavaScript
+PageSpeed:Network Dependency Tree:Preconnect Candidates
+PageSpeed:Network Dependency Tree:Critical Path Latency
+PageSpeed:Document Request Latency:Number of Redirects
+PageSpeed:Document Request Latency:Server Responds Quickly
+PageSpeed:Document Request Latency:Applies Text Compression
+Mobile:Viewport Not Set
+Mobile:Target Size
+Mobile:Content Not Sized Correctly
+Mobile:Illegible Font Size
+Accessibility:Accessibility Violations Summary
+HTTP Headers:HTTP Header Summary
+Cookies:Cookie Summary
+

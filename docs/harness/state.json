@@ -321,6 +321,118 @@
       "attempts": 1,
       "note": "83ad26b",
       "updatedAt": "2026-09-26T08:03:07.461Z"
+    },
+    "T5.1": {
+      "title": "Issue type and priority",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.266Z"
+    },
+    "T5.2": {
+      "title": "XML sitemap export",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.3": {
+      "title": "Character encoding from <meta charset>",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.4": {
+      "title": "SEO elements outside <head>",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.5": {
+      "title": "HTML validation of the document structure",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [
+        "T5.4"
+      ],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.6": {
+      "title": "Image alt text audits",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.7": {
+      "title": "Pagination audits",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.8": {
+      "title": "Inlink audits",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.9": {
+      "title": "Redirect and canonical chain reports",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.10": {
+      "title": "Readability",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
+    },
+    "T5.11": {
+      "title": "Sitemap source audits",
+      "milestone": 5,
+      "plan": "docs/plan/M5-sf-parity.md",
+      "deps": [],
+      "status": "pending",
+      "attempts": 0,
+      "note": "",
+      "updatedAt": "2026-10-23T03:52:42.267Z"
     }
   }
 }
